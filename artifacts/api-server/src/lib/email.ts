@@ -54,6 +54,9 @@ import {
   sendWhatsappText,
   sendWhatsappTemplate,
   uploadWhatsappDocument,
+  diagnoseWhatsappChannel,
+  whatsappTemplateReadiness,
+  whatsappProviderDiagnostics,
   whatsappSendFailureDisposition,
   WhatsappProviderSendError,
   type WhatsappButton,
@@ -62,12 +65,14 @@ import {
 import { getChannelByDealerId } from "./whatsapp-channel";
 import {
   recordWhatsappMessage,
+  updateWhatsappMessageBody,
   updateWhatsappDeliveryStatus,
 } from "./whatsapp-log";
 import { normalizeWhatsappPhone } from "./whatsapp-phone";
 import {
   SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT,
   SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE,
+  renderServiceAppointmentConfirmedBody,
 } from "./service-appointment-whatsapp";
 
 // ---------------------------------------------------------------------------
@@ -1606,6 +1611,79 @@ export type WhatsappOutboxDisposition =
   | "blocked";
 
 /**
+ * Explicit recovery is deliberately narrower than normal queue retries. A
+ * row can only be replayed when Meta definitively rejected it before issuing
+ * a message id; accepted and uncertain requests must never be sent again.
+ */
+export function isDefinitivelyRejectedWhatsapp(
+  row: Pick<
+    EmailLog,
+    "status" | "deliveryStatus" | "providerMessageId" | "lastError" | "payload"
+  >,
+): boolean {
+  if (
+    row.status !== "failed" ||
+    row.deliveryStatus !== "failed" ||
+    row.providerMessageId != null
+  ) {
+    return false;
+  }
+  if (row.payload?.whatsappExplicitRetry === "true") return false;
+  // The persisted outcome always describes the most recent provider handoff.
+  // Do not let a previous 4xx string authorize a resend after that handoff
+  // became uncertain.
+  if (row.payload?.whatsappProviderOutcome != null) {
+    return row.payload.whatsappProviderOutcome === "rejected";
+  }
+  // Compatibility for rows written before provider outcomes were persisted.
+  // The Graph helper only emits this prefix after receiving a non-2xx HTTP
+  // response, so a 4xx request is a demonstrated rejection, not a timeout.
+  return /^WhatsApp Graph API 4\d{2}\b/.test(row.lastError ?? "");
+}
+
+/**
+ * Rebuild the customer-visible transcript from the immutable template and the
+ * original, queued parameter values. Older failed rows may contain the body
+ * rendered by the pre-approval copy; an explicit retry must never replay that
+ * stale text. Returning null fails closed when a legacy row cannot prove that
+ * it carries the exact server-owned template and all required parameters.
+ */
+function canonicalServiceAppointmentRetryPayload(
+  row: Pick<EmailLog, "payload">,
+): { body: string; bodyParametersJson: string } | null {
+  const payload = row.payload ?? {};
+  if (
+    payload.whatsappTemplateName !== SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name ||
+    payload.whatsappTemplateLanguage !== SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.language
+  ) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(
+      payload.whatsappTemplateBodyParametersJson ?? "null",
+    ) as unknown;
+  } catch {
+    return null;
+  }
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length !== SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT ||
+    parsed.some(
+      (parameter) =>
+        typeof parameter !== "string" || parameter.trim().length === 0,
+    )
+  ) {
+    return null;
+  }
+  const bodyParameters = parsed as string[];
+  return {
+    body: renderServiceAppointmentConfirmedBody(bodyParameters),
+    bodyParametersJson: JSON.stringify(bodyParameters),
+  };
+}
+
+/**
  * Translate a deduped outbox row into an honest API result. A retryable failed
  * row is still active; terminal failures and cancellations are blocked.
  */
@@ -1650,6 +1728,47 @@ export async function isWhatsappOptedOut(
       Boolean(conversation.optedOutAt) &&
       normalizeWhatsappPhone(conversation.phone) === digits,
   );
+}
+
+/**
+ * Policy checks used before an explicit operator retry. The worker repeats
+ * these checks immediately before handoff; doing both prevents a retry button
+ * from appearing to recover a message that policy now forbids.
+ */
+export async function whatsappRetryPolicyError(opts: {
+  dealerId: number;
+  recipient: string;
+  customerId: number | null;
+  kind: WhatsappKind;
+}): Promise<string | null> {
+  const digits = normalizeWhatsappPhone(opts.recipient);
+  if (!digits) return "The recipient phone number is not a valid WhatsApp number.";
+  if (await isWhatsappOptedOut(opts.dealerId, digits)) {
+    return "Recipient has opted out of WhatsApp (STOP).";
+  }
+  const leadId = await validatedOutboxLeadId(opts.dealerId, null, undefined);
+  if (await controlledImportLeadSuppressesEmail(opts.dealerId, leadId)) {
+    return "suppressed: controlled reviewed-import lead communication is disabled";
+  }
+  const legacyDisposition = await legacyOutboxReviewDisposition(
+    {
+      channel: "whatsapp",
+      customerId: opts.customerId,
+      dealerId: opts.dealerId,
+      leadId,
+      payload: {},
+      recipient: digits,
+      template: opts.kind,
+      createdAt: new Date(),
+    },
+    leadId,
+  );
+  if (legacyDisposition === "cancel_ambiguous") {
+    return "cancelled: legacy outbox lead identity was ambiguous";
+  }
+  return legacyDisposition === "allow"
+    ? null
+    : "suppressed: controlled reviewed-import lead communication is disabled";
 }
 
 const WHATSAPP_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -2091,6 +2210,79 @@ export async function claimWhatsappOutboxItem(
   return claimed ?? null;
 }
 
+/**
+ * Requeue exactly one terminal Meta rejection for an operator-requested retry.
+ * This intentionally preserves the dedupe key and starts at attempt 2, so the
+ * worker gets one—and only one—new provider handoff. The conditional update
+ * consumes the retry marker atomically: concurrent and sequential clicks
+ * cannot produce another replay after the one recovery handoff.
+ */
+export async function retryRejectedWhatsappOutboxItem(opts: {
+  id: number;
+  dealerId: number;
+}): Promise<EmailLog | null> {
+  const [candidate] = await db
+    .select()
+    .from(emailLogsTable)
+    .where(
+      and(
+        eq(emailLogsTable.id, opts.id),
+        eq(emailLogsTable.dealerId, opts.dealerId),
+        eq(emailLogsTable.channel, "whatsapp"),
+      ),
+    )
+    .limit(1);
+  if (!candidate) return null;
+  const canonicalPayload = canonicalServiceAppointmentRetryPayload(candidate);
+  if (!canonicalPayload) return null;
+  const originalBodyParametersJson =
+    candidate.payload?.whatsappTemplateBodyParametersJson;
+  if (!originalBodyParametersJson) return null;
+
+  const [retried] = await db
+    .update(emailLogsTable)
+    .set({
+      status: "queued",
+      attempts: MAX_ATTEMPTS - 1,
+      deliveryStatus: "queued",
+      lastError: null,
+      nextAttemptAt: new Date(),
+      payload: sql`${emailLogsTable.payload} || ${JSON.stringify({
+        whatsappExplicitRetry: "true",
+        body: canonicalPayload.body,
+        whatsappTemplateBodyParametersJson: canonicalPayload.bodyParametersJson,
+      })}::jsonb`,
+    })
+    .where(
+      and(
+        eq(emailLogsTable.id, opts.id),
+        eq(emailLogsTable.dealerId, opts.dealerId),
+        eq(emailLogsTable.channel, "whatsapp"),
+        eq(emailLogsTable.status, "failed"),
+        eq(emailLogsTable.deliveryStatus, "failed"),
+        isNull(emailLogsTable.providerMessageId),
+        sql`${emailLogsTable.payload}->>'whatsappTemplateName' = ${SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name}`,
+        sql`${emailLogsTable.payload}->>'whatsappTemplateLanguage' = ${SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.language}`,
+        sql`${emailLogsTable.payload}->>'whatsappTemplateBodyParametersJson' = ${originalBodyParametersJson}`,
+        sql`coalesce(${emailLogsTable.payload}->>'whatsappExplicitRetry', 'false') <> 'true'`,
+        sql`(
+          coalesce(${emailLogsTable.payload}->>'whatsappProviderOutcome', '') = 'rejected'
+          or coalesce(${emailLogsTable.lastError}, '') ~ '^WhatsApp Graph API 4[0-9]{2}\\y'
+        )`,
+      ),
+    )
+    .returning();
+  if (retried) {
+    await updateWhatsappMessageBody({
+      dealerId: opts.dealerId,
+      outboxId: retried.id,
+      body: canonicalPayload.body,
+    });
+    setTimeout(() => void processQueue(), 50);
+  }
+  return retried ?? null;
+}
+
 /** Mark an item failed and schedule its next retry with exponential backoff. */
 async function markFailed(
   item: EmailLog,
@@ -2116,6 +2308,23 @@ async function markFailed(
     )
     .returning({ id: emailLogsTable.id });
   if (!failed) return;
+  const whatsappProviderOutcome =
+    item.channel !== "whatsapp"
+      ? null
+      : message.startsWith("WhatsApp Graph API 4") ||
+          message.startsWith("WhatsApp Graph API 429")
+        ? "rejected"
+        : message.startsWith("Provider request outcome is unknown")
+          ? "uncertain"
+          : null;
+  if (whatsappProviderOutcome) {
+    await db
+      .update(emailLogsTable)
+      .set({
+        payload: sql`${emailLogsTable.payload} || ${JSON.stringify({ whatsappProviderOutcome })}::jsonb`,
+      })
+      .where(eq(emailLogsTable.id, item.id));
+  }
   if (item.channel === "whatsapp") {
     await updateWhatsappDeliveryStatus({
       dealerId: item.dealerId,
@@ -2192,6 +2401,19 @@ async function markFailed(
   } catch (err) {
     logger.error({ err, id: item.id }, "terminal-failure cascade failed");
   }
+}
+
+/**
+ * A preflight GET can fail before any provider handoff begins. Keep the
+ * explicit retry's attempt budget intact while backing off the same outbox
+ * row. In particular, attempts=2 means one authorized handoff remains; a
+ * timeout here must not spend it.
+ */
+async function deferClaimedOutboxItem(
+  item: EmailLog,
+  message: string,
+): Promise<void> {
+  await markFailed(item, item.attempts, message, "processing");
 }
 
 /** Shared per-item recovery used when a claimed row cannot complete a
@@ -2415,6 +2637,32 @@ async function processWhatsappQueue(): Promise<void> {
           "WhatsApp is not configured or is paused for this dealership.",
         );
       }
+      if (isServiceAppointmentTemplate) {
+        const diagnostic = await diagnoseWhatsappChannel({
+          accessToken: dealerChannel.accessToken,
+          phoneNumberId: dealerChannel.phoneNumberId,
+          wabaId: dealerChannel.wabaId,
+          templateName: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name,
+          approvedTemplateLanguage: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.language,
+          approvedTemplateBody: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.body,
+          approvedTemplateHeader: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.header,
+          approvedTemplateParameterCount:
+            SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT,
+        });
+        const templateReadiness = whatsappTemplateReadiness(diagnostic);
+        if (templateReadiness === "unavailable") {
+          throw new WhatsappProviderSendError(
+            "The approved service appointment template readiness check is temporarily unavailable; no provider handoff was attempted.",
+            "preflight_unavailable",
+          );
+        }
+        if (templateReadiness !== "ready") {
+          throw new WhatsappProviderSendError(
+            "The approved service appointment template is not ready for delivery. Reconcile its Meta header, body, placeholders, and locale before sending.",
+            "terminal_rejection",
+          );
+        }
+      }
       const body = item.payload?.body ?? "";
       let approvedBodyParameters: string[] | null = null;
       if (isServiceAppointmentTemplate) {
@@ -2524,6 +2772,9 @@ async function processWhatsappQueue(): Promise<void> {
           ),
           lastError:
             "Awaiting the provider response or a correlated delivery receipt.",
+          // A previous definitive rejection must not authorize this fresh
+          // handoff. Its outcome is unknown until Meta responds to this one.
+          payload: sql`${emailLogsTable.payload} - 'whatsappProviderOutcome'`,
         })
         .where(
           and(
@@ -2617,7 +2868,33 @@ async function processWhatsappQueue(): Promise<void> {
       );
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const baseMessage = err instanceof Error ? err.message : String(err);
+      const providerDiagnostics = whatsappProviderDiagnostics(err);
+      const diagnosticDetails = providerDiagnostics
+        ? [
+            providerDiagnostics.httpStatus != null
+              ? `HTTP ${providerDiagnostics.httpStatus}`
+              : null,
+            providerDiagnostics.code != null
+              ? `code ${providerDiagnostics.code}`
+              : null,
+            providerDiagnostics.subcode != null
+              ? `subcode ${providerDiagnostics.subcode}`
+              : null,
+            providerDiagnostics.traceId
+              ? `trace ${providerDiagnostics.traceId}`
+              : null,
+            providerDiagnostics.correlationId
+              ? `correlation ${providerDiagnostics.correlationId}`
+              : null,
+          ].filter((detail): detail is string => Boolean(detail))
+        : [];
+      // The transport's diagnostic allowlist excludes Meta's free-form error
+      // body, recipient and request payload. Persist only those safe values so
+      // operators can correlate a rejection without exposing customer data.
+      const message = diagnosticDetails.length
+        ? `${baseMessage} (${diagnosticDetails.join(", ")})`
+        : baseMessage;
       const disposition = whatsappSendFailureDisposition(err);
       if (
         sendStarted &&
@@ -2630,7 +2907,10 @@ async function processWhatsappQueue(): Promise<void> {
           );
         await db
           .update(emailLogsTable)
-          .set({ lastError: uncertainty })
+          .set({
+            lastError: uncertainty,
+            payload: sql`${emailLogsTable.payload} || '{"whatsappProviderOutcome":"uncertain"}'::jsonb`,
+          })
           .where(
             and(
               eq(emailLogsTable.id, item.id),
@@ -2649,7 +2929,9 @@ async function processWhatsappQueue(): Promise<void> {
         );
         continue;
       }
-      if (!sendStarted && disposition !== "terminal_rejection") {
+      if (!sendStarted && disposition === "preflight_unavailable") {
+        await deferClaimedOutboxItem(item, message);
+      } else if (!sendStarted && disposition !== "terminal_rejection") {
         // Includes provenance/consent lookups before Meta hand-off. Keep the
         // claim retryable rather than permanently leaving it `processing`.
         await recoverClaimedOutboxItem(item, message, "processing");
@@ -2661,7 +2943,14 @@ async function processWhatsappQueue(): Promise<void> {
           sendStarted ? "sending" : "processing",
         );
       }
-      logger.error({ err, id: item.id }, "whatsapp send failed");
+      logger[
+        disposition === "preflight_unavailable" ? "warn" : "error"
+      ](
+        { err, id: item.id },
+        disposition === "preflight_unavailable"
+          ? "whatsapp template preflight unavailable; delivery deferred"
+          : "whatsapp send failed",
+      );
     }
   }
 }

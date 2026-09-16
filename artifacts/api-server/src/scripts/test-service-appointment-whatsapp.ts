@@ -27,7 +27,7 @@ assert.equal(bodyParameters.length, 8);
 const body = renderServiceAppointmentConfirmedBody(bodyParameters);
 assert.equal(
   body,
-  "Hi Alex Mensah, your service appointment at Main Service Centre is confirmed. Booking reference RO-00042, Service maintenance, Date August 14, 2026, Time 9:00 AM, Vehicle 2025 BYD Seal, Registration PXX 1234. Please arrive 10 minutes before your appointment. Reply to this message if you need assistance or would like to reschedule. Thank you for choosing Main Service Centre.",
+  "Hi Alex Mensah, your service appointment at Main Service Centre is confirmed.\n\nBooking reference: RO-00042\nService: maintenance\nDate: August 14, 2026\nTime: 9:00 AM\nVehicle: 2025 BYD Seal\nRegistration: PXX 1234\n\nPlease arrive 10 minutes before your appointment. Reply to this message if you need assistance or would like to reschedule.\n\nThank you. We look forward to welcoming you for your vehicle care.",
 );
 
 const payload = whatsappTemplateMessagePayload({
@@ -39,7 +39,7 @@ assert.deepEqual(payload, {
   type: "template",
   template: {
     name: "service_appointment_confirmed",
-    language: { code: "en" },
+      language: { code: "en" },
     components: [
       {
         type: "body",

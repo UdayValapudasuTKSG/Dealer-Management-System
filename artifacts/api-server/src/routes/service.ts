@@ -41,6 +41,7 @@ import {
   jobCardTechnicianNotesTable,
   externalJobCardPartsTable,
   tasksTable,
+  emailLogsTable,
   collisionClaimsTable,
   collisionSettlementsTable,
   collisionSupplementsTable,
@@ -65,6 +66,7 @@ import {
   ConfirmServiceAppointmentParams,
   ConfirmServiceAppointmentBody,
   ConfirmServiceAppointmentResponse,
+  GetServiceAppointmentConfirmationDeliveryResponse,
   ListServiceOrderOnboardingMediaParams,
   ListServiceOrderOnboardingMediaResponse,
   ReadServiceOrderOnboardingMediaParams,
@@ -154,7 +156,10 @@ import {
 import {
   enqueueEmail,
   enqueueWhatsapp,
+  isDefinitivelyRejectedWhatsapp,
+  retryRejectedWhatsappOutboxItem,
   notifyUser,
+  whatsappRetryPolicyError,
   whatsappOutboxDisposition,
 } from "../lib/email";
 import { generalManagers } from "../lib/notify-matrix";
@@ -166,9 +171,14 @@ import { logger } from "../lib/logger";
 import { coordinateCollisionClaim } from "../lib/collision-coordinator";
 import { effectiveServiceReminderRecipient } from "../lib/service-booking-contact";
 import { getChannelByDealerId } from "../lib/whatsapp-channel";
+import {
+  diagnoseWhatsappChannel,
+  isApprovedWhatsappTemplateReady,
+} from "../lib/whatsapp";
 import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
 import {
   renderServiceAppointmentConfirmedBody,
+  SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT,
   SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE,
 } from "../lib/service-appointment-whatsapp";
 
@@ -197,6 +207,116 @@ function toDateString(value: unknown): string | undefined {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   if (typeof value === "string") return value.slice(0, 10);
   return undefined;
+}
+
+function serviceAppointmentConfirmationDelivery(
+  row:
+    | {
+        status: string;
+        deliveryStatus: string | null;
+        recipient: string;
+        attempts: number;
+        lastError: string | null;
+        providerMessageId: string | null;
+        sentAt: Date | null;
+        deliveredAt: Date | null;
+        readAt: Date | null;
+        payload: Record<string, string>;
+      }
+    | undefined,
+) {
+  if (!row) {
+    return {
+      state: "not_queued",
+      recipient: null,
+      attempts: 0,
+      lastError: null,
+      providerMessageId: null,
+      sentAt: null,
+      deliveredAt: null,
+      readAt: null,
+      canRetry: false,
+    };
+  }
+  const state =
+    row.deliveryStatus === "read"
+      ? "read"
+      : row.deliveryStatus === "delivered"
+        ? "delivered"
+        : row.deliveryStatus === "accepted" || row.status === "sent"
+          ? "accepted"
+          : row.deliveryStatus === "failed" || row.status === "failed"
+            ? "failed"
+            : row.deliveryStatus === "cancelled" || row.status === "cancelled"
+              ? "cancelled"
+              : "queued";
+  return {
+    state,
+    recipient: row.recipient,
+    attempts: row.attempts,
+    lastError: row.lastError,
+    providerMessageId: row.providerMessageId,
+    sentAt: row.sentAt,
+    deliveredAt: row.deliveredAt,
+    readAt: row.readAt,
+    canRetry: isDefinitivelyRejectedWhatsapp(row),
+  };
+}
+
+function hasValidServiceAppointmentTemplatePayload(
+  payload: Record<string, string>,
+): boolean {
+  if (
+    payload.whatsappTemplateName !==
+    SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name
+  ) {
+    return false;
+  }
+  try {
+    const bodyParameters = JSON.parse(
+      payload.whatsappTemplateBodyParametersJson ?? "null",
+    ) as unknown;
+    return (
+      Array.isArray(bodyParameters) &&
+      bodyParameters.length ===
+        SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT &&
+      bodyParameters.every(
+        (parameter) => typeof parameter === "string" && parameter.trim(),
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Read-only preflight. A confirmation is never queued/replayed until the
+ * dealer's actual Meta template exactly matches the immutable approved
+ * contract; this blocks rather than guessing a locale or changing wording. */
+async function serviceAppointmentTemplateReadinessError(
+  dealerId: number,
+): Promise<string | null> {
+  const channel = await getChannelByDealerId(dealerId);
+  if (!channel?.wabaId) {
+    return "WhatsApp is not configured with a WABA for this dealership";
+  }
+  try {
+    const diagnostic = await diagnoseWhatsappChannel({
+      accessToken: channel.accessToken,
+      phoneNumberId: channel.phoneNumberId,
+      wabaId: channel.wabaId,
+      templateName: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name,
+      approvedTemplateLanguage: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.language,
+      approvedTemplateBody: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.body,
+      approvedTemplateHeader: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.header,
+      approvedTemplateParameterCount:
+        SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT,
+    });
+    return isApprovedWhatsappTemplateReady(diagnostic)
+      ? null
+      : "The approved WhatsApp appointment template is not ready. Reconcile its Meta header, body, placeholders, and locale before sending.";
+  } catch {
+    return "The approved WhatsApp appointment template could not be verified safely. No customer message was queued.";
+  }
 }
 
 async function customerEmail(
@@ -1084,6 +1204,10 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
+  if (!technicianOwnsOrder(res, order)) {
+    res.status(404).json({ error: "Service order not found" });
+    return;
+  }
   const contact = await customerEmail(order.customerId, order.dealerId);
 
   // Existing unconfirmed bookings retain the email reminder behavior.  The
@@ -1119,10 +1243,11 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
     res.status(422).json({ error: "Customer has no WhatsApp phone on file" });
     return;
   }
-  if (!(await getChannelByDealerId(order.dealerId))) {
-    res.status(422).json({
-      error: "WhatsApp is not configured or is paused for this dealership",
-    });
+  const templateReadinessError = await serviceAppointmentTemplateReadinessError(
+    order.dealerId,
+  );
+  if (templateReadinessError) {
+    res.status(422).json({ error: templateReadinessError });
     return;
   }
 
@@ -1206,6 +1331,208 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.get(
+  "/service-orders/:id/appointment-confirmation",
+  async (req, res): Promise<void> => {
+    const params = ConfirmServiceAppointmentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const [order] = await db
+      .select({
+        id: serviceOrdersTable.id,
+        technicianUserId: serviceOrdersTable.technicianUserId,
+      })
+      .from(serviceOrdersTable)
+      .where(
+        and(
+          eq(serviceOrdersTable.id, params.data.id),
+          eq(serviceOrdersTable.dealerId, dealerId),
+        ),
+      )
+      .limit(1);
+    if (!order || !technicianOwnsOrder(res, order)) {
+      res.status(404).json({ error: "Service order not found" });
+      return;
+    }
+    const [card] = await db
+      .select({ scheduledAt: jobCardsTable.scheduledAt })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.serviceOrderId, order.id),
+          eq(jobCardsTable.dealerId, dealerId),
+        ),
+      )
+      .limit(1);
+    if (!card?.scheduledAt) {
+      res.json(
+        GetServiceAppointmentConfirmationDeliveryResponse.parse(
+          serviceAppointmentConfirmationDelivery(undefined),
+        ),
+      );
+      return;
+    }
+    const [row] = await db
+      .select({
+        status: emailLogsTable.status,
+        deliveryStatus: emailLogsTable.deliveryStatus,
+        recipient: emailLogsTable.recipient,
+        attempts: emailLogsTable.attempts,
+        lastError: emailLogsTable.lastError,
+        providerMessageId: emailLogsTable.providerMessageId,
+        sentAt: emailLogsTable.sentAt,
+        deliveredAt: emailLogsTable.deliveredAt,
+        readAt: emailLogsTable.readAt,
+        payload: emailLogsTable.payload,
+      })
+      .from(emailLogsTable)
+      .where(
+        and(
+          eq(emailLogsTable.dealerId, dealerId),
+          eq(emailLogsTable.channel, "whatsapp"),
+          eq(emailLogsTable.template, "service.appointment.confirmed"),
+          eq(
+            emailLogsTable.dedupeKey,
+            `svc:${order.id}:appointment-confirmed:${card.scheduledAt.getTime()}`,
+          ),
+        ),
+      )
+      .orderBy(desc(emailLogsTable.id))
+      .limit(1);
+    res.json(
+      GetServiceAppointmentConfirmationDeliveryResponse.parse(
+        serviceAppointmentConfirmationDelivery(row),
+      ),
+    );
+  },
+);
+
+router.post(
+  "/service-orders/:id/appointment-confirmation/retry",
+  async (req, res): Promise<void> => {
+    const params = ConfirmServiceAppointmentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const [order] = await db
+      .select()
+      .from(serviceOrdersTable)
+      .where(
+        and(
+          eq(serviceOrdersTable.id, params.data.id),
+          eq(serviceOrdersTable.dealerId, dealerId),
+        ),
+      )
+      .limit(1);
+    if (!order || !technicianOwnsOrder(res, order)) {
+      res.status(404).json({ error: "Service order not found" });
+      return;
+    }
+    const [card] = await db
+      .select({ scheduledAt: jobCardsTable.scheduledAt })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.serviceOrderId, order.id),
+          eq(jobCardsTable.dealerId, dealerId),
+        ),
+      )
+      .limit(1);
+    if (order.status !== "acknowledged" || !card?.scheduledAt) {
+      res.status(409).json({
+        error:
+          "This appointment confirmation cannot be retried because the booking or schedule changed.",
+      });
+      return;
+    }
+    const contact = await customerEmail(order.customerId, dealerId);
+    const recipient = normalizeWhatsappPhone(
+      order.customerPhoneSnapshot || contact.phone || "",
+    );
+    if (!recipient) {
+      res.status(422).json({ error: "Customer has no WhatsApp phone on file" });
+      return;
+    }
+    if (
+      contact.phone &&
+      normalizeWhatsappPhone(contact.phone) !== recipient
+    ) {
+      res.status(409).json({
+        error:
+          "The customer WhatsApp number changed after this confirmation failed. Review the appointment before sending a new confirmation.",
+      });
+      return;
+    }
+    const templateReadinessError =
+      await serviceAppointmentTemplateReadinessError(dealerId);
+    if (templateReadinessError) {
+      res.status(422).json({ error: templateReadinessError });
+      return;
+    }
+    const policyError = await whatsappRetryPolicyError({
+      dealerId,
+      recipient,
+      customerId: order.customerId,
+      kind: "service.appointment.confirmed",
+    });
+    if (policyError) {
+      res.status(422).json({ error: policyError });
+      return;
+    }
+    const dedupeKey = `svc:${order.id}:appointment-confirmed:${card.scheduledAt.getTime()}`;
+    const [existing] = await db
+      .select({
+        id: emailLogsTable.id,
+        recipient: emailLogsTable.recipient,
+        payload: emailLogsTable.payload,
+      })
+      .from(emailLogsTable)
+      .where(
+        and(
+          eq(emailLogsTable.dealerId, dealerId),
+          eq(emailLogsTable.dedupeKey, dedupeKey),
+          eq(emailLogsTable.channel, "whatsapp"),
+          eq(emailLogsTable.template, "service.appointment.confirmed"),
+        ),
+      )
+      .limit(1);
+    if (
+      !existing ||
+      existing.recipient !== recipient ||
+      existing.payload?.serviceOrderId !== String(order.id) ||
+      existing.payload?.appointmentScheduledAt !== card.scheduledAt.toISOString() ||
+      !hasValidServiceAppointmentTemplatePayload(existing.payload)
+    ) {
+      res.status(409).json({
+        error:
+          "The stored confirmation no longer matches this appointment and cannot be retried.",
+      });
+      return;
+    }
+    const retried = await retryRejectedWhatsappOutboxItem({
+      id: existing.id,
+      dealerId,
+    });
+    if (!retried) {
+      res.status(409).json({
+        error:
+          "Only a definitively rejected confirmation without a provider message ID can be retried.",
+      });
+      return;
+    }
+    res.json(
+      GetServiceAppointmentConfirmationDeliveryResponse.parse(
+        serviceAppointmentConfirmationDelivery(retried),
+      ),
+    );
+  },
+);
 
 router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
   const params = ConfirmServiceAppointmentParams.safeParse(req.params);

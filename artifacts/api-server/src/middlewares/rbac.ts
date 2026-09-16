@@ -805,7 +805,11 @@ const PATH_MODULES: Record<string, RouteRule> = {
     category: (req) => {
       // Workflow actions on an existing booking are edits, not creation.
       // The routes still enforce dealership scope and technician ownership.
-      if (/^\/service-orders\/\d+\/(advance|confirm)\/?$/.test(req.path)) {
+      if (
+        /^\/service-orders\/\d+\/(advance|confirm|remind|appointment-confirmation\/retry)\/?$/.test(
+          req.path,
+        )
+      ) {
         return "edit";
       }
       return METHOD_CATEGORY[req.method] ?? "view";
@@ -982,6 +986,9 @@ export function isImpersonationHardBlocked(req: Request): boolean {
   const segment = req.path.replace(/^\/+/, "").split("/")[0] ?? "";
   return (
     IMPERSONATION_HARD_BLOCKED_SEGMENTS.has(segment) ||
+    /^\/service-orders\/\d+\/(remind|appointment-confirmation\/retry)\/?$/.test(
+      req.path,
+    ) ||
     isWhatsappReplyPath(req)
   );
 }

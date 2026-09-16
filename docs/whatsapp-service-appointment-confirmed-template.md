@@ -17,7 +17,20 @@ Account before deploying the feature:
 - **Header:** `Service Appointment Confirmed` (static text; no header variable)
 - **Body (exact copy):**
 
-  `Hi {{1}}, your service appointment at {{2}} is confirmed. Booking reference {{3}}, Service {{4}}, Date {{5}}, Time {{6}}, Vehicle {{7}}, Registration {{8}}. Please arrive 10 minutes before your appointment. Reply to this message if you need assistance or would like to reschedule. Thank you for choosing {{2}}.`
+  ```text
+  Hi {{1}}, your service appointment at {{2}} is confirmed.
+
+  Booking reference: {{3}}
+  Service: {{4}}
+  Date: {{5}}
+  Time: {{6}}
+  Vehicle: {{7}}
+  Registration: {{8}}
+
+  Please arrive 10 minutes before your appointment. Reply to this message if you need assistance or would like to reschedule.
+
+  Thank you. We look forward to welcoming you for your vehicle care.
+  ```
 
 The body must have exactly eight text variables in this order:
 
@@ -31,9 +44,9 @@ The body must have exactly eight text variables in this order:
 8. Persisted registration number (or the truthful `Not recorded` value when
    the booking has no registration)
 
-The dealership name is intentionally used for both `{{2}}` occurrences. Do
-not add punctuation, variables, a footer, buttons, or a dynamic header to the
-approved template. Meta template names and languages are case-sensitive.
+The dealership name is used for `{{2}}`. Do not add punctuation, variables, a
+footer, buttons, or a dynamic header to the approved template. Meta template
+names and languages are case-sensitive.
 
 ## Channel configuration
 

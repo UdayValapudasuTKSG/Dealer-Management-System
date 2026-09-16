@@ -145,6 +145,33 @@ export async function updateWhatsappDeliveryStatus(opts: {
     );
 }
 
+/** Replace the queued transcript copy when an operator re-renders a legacy row. */
+export async function updateWhatsappMessageBody(opts: {
+  dealerId: number;
+  outboxId: number;
+  body: string;
+}): Promise<void> {
+  const body = opts.body.trim();
+  if (!body) return;
+  try {
+    await db
+      .update(whatsappMessagesTable)
+      .set({ body, updatedAt: new Date() })
+      .where(
+        and(
+          eq(whatsappMessagesTable.dealerId, opts.dealerId),
+          eq(whatsappMessagesTable.outboxId, opts.outboxId),
+          eq(whatsappMessagesTable.direction, "out"),
+        ),
+      );
+  } catch (err) {
+    logger.error(
+      { err, dealerId: opts.dealerId, outboxId: opts.outboxId },
+      "Failed to update WhatsApp retry transcript body",
+    );
+  }
+}
+
 /** Attach any not-yet-linked messages for this (dealer, phone) to the lead. */
 export async function linkWhatsappMessagesToLead(
   phone: string,

@@ -3578,6 +3578,66 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /service-orders/{id}/appointment-confirmation:
+    get:
+      operationId: getServiceAppointmentConfirmationDelivery
+      tags: [service]
+      summary: Get the persisted WhatsApp delivery state for the current service appointment confirmation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Current confirmation delivery state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceAppointmentConfirmationDelivery"
+        "404":
+          description: Service order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /service-orders/{id}/appointment-confirmation/retry:
+    post:
+      operationId: retryServiceAppointmentConfirmation
+      tags: [service]
+      summary: Explicitly retry one definitively rejected current appointment confirmation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: The one safe retry was queued for normal outbox processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceAppointmentConfirmationDelivery"
+        "404":
+          description: Service order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The appointment or prior provider outcome is not safe to retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Current customer contact, communication policy, or sender configuration prevents retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /service-orders/{id}/onboarding-media:
     get:
       operationId: listServiceOrderOnboardingMedia
@@ -13165,6 +13225,22 @@ components:
       properties:
         status: { type: string }
         recipient: { type: ["string", "null"] }
+
+    ServiceAppointmentConfirmationDelivery:
+      type: object
+      required: [state, recipient, attempts, lastError, providerMessageId, sentAt, deliveredAt, readAt, canRetry]
+      properties:
+        state:
+          type: string
+          enum: [not_queued, queued, accepted, delivered, read, failed, cancelled]
+        recipient: { type: ["string", "null"] }
+        attempts: { type: integer, minimum: 0 }
+        lastError: { type: ["string", "null"] }
+        providerMessageId: { type: ["string", "null"] }
+        sentAt: { type: ["string", "null"], format: date-time }
+        deliveredAt: { type: ["string", "null"], format: date-time }
+        readAt: { type: ["string", "null"], format: date-time }
+        canRetry: { type: boolean }
 
     ServiceAppointmentConfirmationInput:
       type: object

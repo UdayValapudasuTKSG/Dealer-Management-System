@@ -30,7 +30,11 @@
     "verify:vehicle-onboarding": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-vehicle-onboarding.ts",
     "verify:service-claim-onboarding": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-service-claim-onboarding.ts",
     "test:service-booking-contract": "tsx src/scripts/test-service-booking-contract.ts",
-    "test:service-appointment-whatsapp": "tsx src/scripts/test-service-appointment-whatsapp.ts"
+    "test:service-appointment-whatsapp": "tsx src/scripts/test-service-appointment-whatsapp.ts",
+    "diagnose:whatsapp-template": "NODE_ENV=production tsx src/scripts/diagnose-whatsapp-template.ts",
+    "test:whatsapp-diagnostics": "tsx src/scripts/test-whatsapp-diagnostics.ts",
+    "test:service-appointment-confirmation-worker": "NODE_ENV=development tsx src/scripts/test-service-appointment-confirmation-worker.ts",
+    "test:service-appointment-confirmation-retry": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/test-service-appointment-confirmation-retry.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.95",

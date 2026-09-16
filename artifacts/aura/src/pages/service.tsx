@@ -10,6 +10,9 @@ import {
   getListServiceOrdersQueryKey,
   useSendServiceReminder,
   useConfirmServiceAppointment,
+  useGetServiceAppointmentConfirmationDelivery,
+  useRetryServiceAppointmentConfirmation,
+  getGetServiceAppointmentConfirmationDeliveryQueryKey,
   useListServiceOrderOnboardingMedia,
   useClaimServiceOrder,
   useCreateVehicleOnboardingInvite,
@@ -1702,6 +1705,7 @@ function BookingDetailsDialog({
 }) {
   const money = useMoney();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const remind = useSendServiceReminder();
   const { data: csatReviews } = useListReviews({ source: "service_csat" });
   const review = order
@@ -1919,6 +1923,11 @@ function BookingDetailsDialog({
               if (!reminderRecipient) return;
               try {
                 const result = await remind.mutateAsync({ id: order.id });
+                if (confirmed) {
+                  await queryClient.invalidateQueries({
+                    queryKey: getGetServiceAppointmentConfirmationDeliveryQueryKey(order.id),
+                  });
+                }
                 const wasSent = result.status === "sent";
                 toast({
                   title: wasSent ? "Reminder sent" : "Reminder queued",
@@ -1948,6 +1957,7 @@ function BookingDetailsDialog({
             )}{" "}
             Remind
           </Button>
+          {confirmed && <AppointmentConfirmationDelivery orderId={order.id} />}
           <SelfOnboardButton order={order} />
           <AdvanceAndFeedback order={order} review={review} />
           <OpenCaseButton
@@ -2359,6 +2369,92 @@ function ConfirmAppointmentButton({ order }: { order: ServiceOrder }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const APPOINTMENT_DELIVERY_LABEL: Record<string, string> = {
+  not_queued: "Not queued",
+  queued: "Queued — waiting for provider",
+  accepted: "Provider accepted",
+  delivered: "Delivered",
+  read: "Read",
+  failed: "Failed",
+  cancelled: "Not sent",
+};
+
+function AppointmentConfirmationDelivery({ orderId }: { orderId: number }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const delivery = useGetServiceAppointmentConfirmationDelivery(orderId, {
+    query: {
+      queryKey: getGetServiceAppointmentConfirmationDeliveryQueryKey(orderId),
+      refetchInterval: 10_000,
+    },
+  });
+  const retry = useRetryServiceAppointmentConfirmation();
+  const state = delivery.data;
+
+  if (delivery.isLoading || !state || state.state === "not_queued") return null;
+  const failed = state.state === "failed" || state.state === "cancelled";
+
+  return (
+    <div className="basis-full rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <MessageSquare
+            className={cn(
+              "h-3.5 w-3.5 shrink-0",
+              failed ? "text-destructive" : "text-primary",
+            )}
+          />
+          <div>
+            <div className="text-xs font-medium">
+              WhatsApp confirmation: {APPOINTMENT_DELIVERY_LABEL[state.state] ?? state.state}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {state.state === "accepted"
+                ? "Meta accepted this message; delivery receipt is still pending."
+                : state.recipient
+                  ? `To ${state.recipient}`
+                  : "No customer message has been queued."}
+              {state.attempts > 0 ? ` · ${state.attempts} attempt${state.attempts === 1 ? "" : "s"}` : ""}
+            </div>
+          </div>
+        </div>
+        {state.canRetry && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={retry.isPending}
+            className="h-7 rounded-full px-2.5 text-xs"
+            onClick={async () => {
+              try {
+                await retry.mutateAsync({ id: orderId });
+                await queryClient.invalidateQueries({
+                  queryKey: getGetServiceAppointmentConfirmationDeliveryQueryKey(orderId),
+                });
+                toast({
+                  title: "One retry queued",
+                  description:
+                    "The confirmation will be revalidated before its single provider retry.",
+                });
+              } catch (error: unknown) {
+                const message =
+                  (error as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+                  "This confirmation could not be retried safely.";
+                toast({ title: "Retry blocked", description: message, variant: "destructive" });
+              }
+            }}
+          >
+            {retry.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+            Retry once
+          </Button>
+        )}
+      </div>
+      {failed && state.lastError && (
+        <p className="mt-2 break-words text-xs text-destructive/90">{state.lastError}</p>
+      )}
+    </div>
   );
 }
 
