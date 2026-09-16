@@ -2493,6 +2493,12 @@ try {
   );
   const foreignRead = await api(`/job-cards/${foreignCard.rows[0]!.id}`, managerEmail, dealerId);
   expectStatus(foreignRead, 404, "cross-tenant job card read");
+  const foreignPreview = await api(
+    `/job-cards/${foreignCard.rows[0]!.id}/estimate/preview`,
+    managerEmail,
+    dealerId,
+  );
+  expectStatus(foreignPreview, 404, "cross-tenant estimate preview");
 
   if (assertionFailures.length) {
     throw new Error(

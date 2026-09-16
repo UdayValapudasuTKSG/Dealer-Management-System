@@ -2982,6 +2982,10 @@ router.post("/job-cards/:id/estimate/acknowledge", async (req, res): Promise<voi
 /** Staff-only canonical quote preview. Bearer tokens and customer decision
  * evidence are never returned; delivery data comes only from the email outbox. */
 router.get("/job-cards/:id/estimate/preview", async (req, res): Promise<void> => {
+  // The current estimate and its delivery state are dealer/user-scoped and
+  // can change after a resend or customer decision. Never let a shared proxy
+  // replay one staff member's commercial view to another request.
+  res.set("Cache-Control", "no-store");
   const params = GetJobCardEstimatePreviewParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

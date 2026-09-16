@@ -825,6 +825,15 @@ const PATH_MODULES: Record<string, RouteRule> = {
       if (/^\/job-cards\/\d+\/rollover\/approve\/?$/.test(req.path)) {
         return "edit";
       }
+      // The canonical estimate preview is a read. Keep this explicit rather
+      // than relying on the method default: the preview still enforces
+      // assigned-staff/approver identity and dealer scope in service.ts.
+      if (
+        req.method === "GET" &&
+        /^\/job-cards\/\d+\/estimate\/preview\/?$/.test(req.path)
+      ) {
+        return "view";
+      }
       // Estimate sends and receipt acknowledgement mutate an existing work
       // package. Assigned service staff have service:edit but not
       // service:create; identity/evidence checks remain in the route.
