@@ -25,6 +25,11 @@ export interface JobCardUpdate {
   outtake?: ConditionRecord;
   checklist?: ChecklistItem[];
   laborHours?: number;
+  /**
+     * Customer-facing billable labour hours; editing reprices and versions the estimate without sending it
+     * @minimum 0
+     */
+  quotedLaborHours?: number;
   laborRate?: number;
   notes?: string;
   /** Technician's analysis of the service — mandatory before the card can be marked completed */

@@ -16,6 +16,7 @@ import {
 } from "../lib/timezone";
 import { getServiceSettings } from "../lib/service-settings";
 import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
+import { effectiveQuotedLaborHours } from "../lib/service-labor-hours";
 import {
   clearEstimateStaffAcknowledgement,
   hasCurrentChargeableWorkAuthorization,
@@ -2151,12 +2152,12 @@ async function computeLateSurcharge(order: {
  */
 async function initialJobCardQuoteTotal(input: {
   dealerId: number;
-  laborHours: number;
+  quotedLaborHours: number;
   laborRate: number;
   surchargeStatus?: string;
   surchargeAmount?: number;
 }): Promise<number> {
-  const labour = Math.round(input.laborHours * input.laborRate * 100) / 100;
+  const labour = Math.round(input.quotedLaborHours * input.laborRate * 100) / 100;
   const surcharge = input.surchargeStatus === "applied"
     ? Math.round((input.surchargeAmount ?? 0) * 100) / 100
     : 0;
@@ -2177,10 +2178,11 @@ async function autoCreateJobCard(
 ): Promise<void> {
   const surcharge = await computeLateSurcharge(order);
   const laborHours = order.estimatedHours;
+  const quotedLaborHours = laborHours;
   const laborRate = 120;
   const quoteTotal = await initialJobCardQuoteTotal({
     dealerId: order.dealerId,
-    laborHours,
+    quotedLaborHours,
     laborRate,
     ...surcharge,
   });
@@ -2204,6 +2206,7 @@ async function autoCreateJobCard(
       scheduledAt: new Date(`${order.scheduledDate}T09:00:00`),
       durationMins: Math.round(order.estimatedHours * 60),
       laborHours,
+      quotedLaborHours,
       laborRate,
       quoteTotal,
       ...(customerQuotePending ? {
@@ -2587,11 +2590,12 @@ router.post("/job-cards", async (req, res): Promise<void> => {
   const customerPhoneSnapshot =
     submittedPhone || (order as any).customerPhoneSnapshot || (await resolveCustomerPhoneSnapshot(order.customerId, order.dealerId));
   const payType = parsed.data.payType ?? order.payType;
-  const laborHours = parsed.data.laborHours ?? 0;
+  const laborHours = parsed.data.laborHours ?? order.estimatedHours ?? 0;
+  const quotedLaborHours = parsed.data.quotedLaborHours ?? laborHours;
   const laborRate = parsed.data.laborRate ?? 120;
   const quoteTotal = await initialJobCardQuoteTotal({
     dealerId: order.dealerId,
-    laborHours,
+    quotedLaborHours,
     laborRate,
     ...surcharge,
   });
@@ -2608,6 +2612,7 @@ router.post("/job-cards", async (req, res): Promise<void> => {
         assetId: order.assetId ?? null,
         payType,
         laborHours,
+        quotedLaborHours,
         laborRate,
         quoteTotal,
         status: customerQuotePending ? "on_hold" : "open",
@@ -3129,7 +3134,9 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   }
   const chargesChanging =
     parsed.data.quoteTotal !== undefined ||
-    parsed.data.laborHours !== undefined ||
+    // Planned booking hours remain operational data; only quoted hours are
+    // billable labour and therefore create a new estimate version.
+    parsed.data.quotedLaborHours !== undefined ||
     parsed.data.laborRate !== undefined ||
     parsed.data.payType !== undefined;
   const nextPayType = parsed.data.payType ?? existing.payType;
@@ -3161,13 +3168,6 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     patch.estimateApprovalEvidence = null;
     patch.quoteApprovedAt = null;
     Object.assign(patch, clearEstimateStaffAcknowledgement);
-    if (chargeChangeRequiresCustomerHold) {
-      patch.status = "on_hold";
-      patch.waitingReason = "customer_decision";
-      patch.nextAction = "Send the revised estimate and wait for customer confirmation";
-      patch.timerSeconds = foldedTimerSeconds;
-      patch.timerStartedAt = null;
-    }
   }
   if (
     parsed.data.status === "in_progress" &&
@@ -3261,6 +3261,7 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
         ...lockedCard,
         payType: parsed.data.payType ?? lockedCard.payType,
         laborHours: parsed.data.laborHours ?? lockedCard.laborHours,
+        quotedLaborHours: parsed.data.quotedLaborHours ?? lockedCard.quotedLaborHours,
         laborRate: parsed.data.laborRate ?? lockedCard.laborRate,
       };
       const breakdown = await buildServiceEstimateBreakdown(tx, prospectiveCard);
@@ -3333,6 +3334,12 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
         becameReady = Boolean(resolved);
       }
     }
+    if (updatedCard && chargesChanging) {
+      // Repricing and quote transport share the locked card serialization
+      // point. This cancels queued, retryable, and claimed old deliveries
+      // before the replacement version can be sent explicitly by staff.
+      await invalidateServiceEstimate(tx, lockedCard.dealerId, lockedCard.id);
+    }
     return updatedCard;
   }).catch((error) => {
     const failure = error as Error & { status?: number };
@@ -3350,28 +3357,6 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     if (res.headersSent) return;
     res.status(409).json({ error: "Job card changed — reload and retry" });
     return;
-  }
-
-  // An edited quote invalidates every open public decision before the fresh
-  // secure invitation is queued. Public approval also compares its snapshot
-  // total transactionally, so an edit/approve race fails closed.
-  if (
-    card &&
-    chargesChanging &&
-    (card.quoteTotal !== existing.quoteTotal ||
-      card.laborHours !== existing.laborHours ||
-      card.laborRate !== existing.laborRate)
-  ) {
-    await db
-      .update(serviceEstimateDecisionsTable)
-      .set({ invalidatedAt: new Date() })
-      .where(
-        and(
-          eq(serviceEstimateDecisionsTable.dealerId, card.dealerId),
-          eq(serviceEstimateDecisionsTable.jobCardId, card.id),
-          isNull(serviceEstimateDecisionsTable.invalidatedAt),
-        ),
-      );
   }
 
   if (card) {
@@ -4785,7 +4770,9 @@ async function issueServiceInvoice(
     0,
   );
   const partsTotal = internalPartsTotal + externalPartsTotal;
-  const laborTotal = card.laborHours * card.laborRate;
+  const laborTotal =
+    effectiveQuotedLaborHours(card.quotedLaborHours, card.laborHours) *
+    card.laborRate;
   // A suggested-but-undecided surcharge blocks invoicing: staff must apply
   // or waive it so the decision is on record before totals lock.
   if (card.surchargeStatus === "suggested") {

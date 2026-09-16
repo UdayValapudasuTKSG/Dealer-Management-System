@@ -13414,7 +13414,7 @@ components:
 
     JobCard:
       type: object
-      required: [id, serviceOrderId, title, status, payType, quoteTotal, checklist, laborHours, laborRate, createdAt]
+      required: [id, serviceOrderId, title, status, payType, quoteTotal, checklist, laborHours, quotedLaborHours, laborRate, createdAt]
       properties:
         id: { type: integer }
         serviceOrderId: { type: integer }
@@ -13446,6 +13446,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
         laborHours: { type: number }
+        quotedLaborHours: { type: ["number", "null"], description: "Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable" }
         laborRate: { type: number }
         notes: { type: ["string", "null"] }
         serviceAnalysis: { type: ["string", "null"] }
@@ -13630,6 +13631,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
         laborHours: { type: number }
+        quotedLaborHours: { type: number, minimum: 0, description: "Current customer-facing billable labour hours; defaults to planned booking hours when a card is created" }
         laborRate: { type: number }
         notes: { type: string }
     JobCardUpdate:
@@ -13651,6 +13653,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
         laborHours: { type: number }
+        quotedLaborHours: { type: number, minimum: 0, description: "Customer-facing billable labour hours; editing reprices and versions the estimate without sending it" }
         laborRate: { type: number }
         notes: { type: string }
         serviceAnalysis: { type: string, description: "Technician's analysis of the service — mandatory before the card can be marked completed" }

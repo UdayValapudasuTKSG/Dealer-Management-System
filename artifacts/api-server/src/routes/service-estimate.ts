@@ -42,6 +42,7 @@ async function estimateStillMatches(
     quoteTotal: number;
     estimateVersion: number;
     laborHours: number;
+    quotedLaborHours: number | null;
     laborRate: number;
     surchargeStatus: string;
     surchargeAmount: number;

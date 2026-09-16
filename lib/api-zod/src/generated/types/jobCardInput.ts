@@ -25,6 +25,11 @@ export interface JobCardInput {
   payType?: JobCardInputPayType;
   checklist?: ChecklistItem[];
   laborHours?: number;
+  /**
+     * Current customer-facing billable labour hours; defaults to planned booking hours when a card is created
+     * @minimum 0
+     */
+  quotedLaborHours?: number;
   laborRate?: number;
   notes?: string;
 }

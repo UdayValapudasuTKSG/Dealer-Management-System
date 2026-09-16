@@ -5797,6 +5797,7 @@ export const ClaimServiceOrderResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -5963,6 +5964,7 @@ export const UpdateJobCardWaitingResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -6067,6 +6069,7 @@ export const ResendJobCardEstimateResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -6177,6 +6180,7 @@ export const AcknowledgeJobCardEstimateResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -6318,6 +6322,7 @@ export const ListJobCardsResponseItem = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -6371,6 +6376,8 @@ export const ListJobCardsResponse = zod.array(ListJobCardsResponseItem)
 export const createJobCardBodyCustomerPhoneSnapshotMin = 3;
 export const createJobCardBodyCustomerPhoneSnapshotMax = 50;
 
+export const createJobCardBodyQuotedLaborHoursMin = 0;
+
 
 
 export const CreateJobCardBody = zod.object({
@@ -6388,6 +6395,7 @@ export const CreateJobCardBody = zod.object({
   "done": zod.boolean()
 })).optional(),
   "laborHours": zod.number().optional(),
+  "quotedLaborHours": zod.number().min(createJobCardBodyQuotedLaborHoursMin).optional().describe('Current customer-facing billable labour hours; defaults to planned booking hours when a card is created'),
   "laborRate": zod.number().optional(),
   "notes": zod.string().optional()
 })
@@ -6440,6 +6448,7 @@ export const CreateJobCardResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -6541,6 +6550,7 @@ export const GetJobCardResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -6629,6 +6639,10 @@ export const UpdateJobCardParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateJobCardBodyQuotedLaborHoursMin = 0;
+
+
+
 export const UpdateJobCardBody = zod.object({
   "title": zod.string().optional(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']).optional(),
@@ -6661,6 +6675,7 @@ export const UpdateJobCardBody = zod.object({
   "done": zod.boolean()
 })).optional(),
   "laborHours": zod.number().optional(),
+  "quotedLaborHours": zod.number().min(updateJobCardBodyQuotedLaborHoursMin).optional().describe('Customer-facing billable labour hours; editing reprices and versions the estimate without sending it'),
   "laborRate": zod.number().optional(),
   "notes": zod.string().optional(),
   "serviceAnalysis": zod.string().optional().describe('Technician\'s analysis of the service — mandatory before the card can be marked completed'),
@@ -6715,6 +6730,7 @@ export const UpdateJobCardResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -6891,6 +6907,7 @@ export const ToggleJobCardTimerResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -6998,6 +7015,7 @@ export const ReopenJobCardResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -7106,6 +7124,7 @@ export const RolloverJobCardResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -7213,6 +7232,7 @@ export const ApproveJobCardRolloverResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
@@ -7325,6 +7345,7 @@ export const DecideJobCardSurchargeResponse = zod.object({
   "done": zod.boolean()
 })),
   "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),

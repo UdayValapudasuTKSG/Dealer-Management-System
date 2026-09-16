@@ -54,6 +54,11 @@ export interface JobCard {
   outtake?: ConditionRecord | null;
   checklist: ChecklistItem[];
   laborHours: number;
+  /**
+     * Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable
+     * @nullable
+     */
+  quotedLaborHours: number | null;
   laborRate: number;
   /** @nullable */
   notes?: string | null;

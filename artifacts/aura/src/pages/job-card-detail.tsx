@@ -270,6 +270,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   const { data: creditNotes } = useListJobCardCreditNotes(card.id);
   const { data: serviceInvoices } = useListServiceInvoices();
   const [noteDraft, setNoteDraft] = useState("");
+  const [quotedLaborHoursDraft, setQuotedLaborHoursDraft] = useState(() =>
+    String(card.quotedLaborHours ?? card.laborHours ?? 0),
+  );
   const [estimateActionError, setEstimateActionError] = useState<{
     action: "send" | "acknowledge";
     message: string;
@@ -295,6 +298,10 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   const canAddTechnicianNote =
     card.status === "in_progress" &&
     canActOnCurrentEstimate;
+
+  useEffect(() => {
+    setQuotedLaborHoursDraft(String(card.quotedLaborHours ?? card.laborHours ?? 0));
+  }, [card.id, card.quotedLaborHours, card.laborHours]);
 
   useEffect(() => {
     if (estimatePreview.data?.decision.state !== "approved") return;
@@ -422,8 +429,10 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   const externalPartsTotal =
     externalLines?.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0) ?? 0;
   const partsTotal = internalPartsTotal + externalPartsTotal;
-  const laborTotal = card.laborHours * card.laborRate;
+  const effectiveQuotedLaborHours = card.quotedLaborHours ?? card.laborHours;
+  const laborTotal = effectiveQuotedLaborHours * card.laborRate;
   const linkedInvoice = serviceInvoices?.find((item) => item.jobCardId === card.id);
+  const canEditQuoteHours = canActOnCurrentEstimate && !linkedInvoice;
   const preview = estimatePreview.data;
   const previewPartsTotal =
     preview?.lines
@@ -448,6 +457,36 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
     customerApprovedCurrent &&
     card.estimateStaffAcknowledgedVersion === preview?.estimateVersion &&
     card.estimateStaffAcknowledgedDecisionId === preview?.decision.id;
+
+  const saveQuotedLaborHours = async () => {
+    const quotedLaborHours = Number(quotedLaborHoursDraft);
+    if (!Number.isFinite(quotedLaborHours) || quotedLaborHours < 0) {
+      toast({
+        title: "Invalid quoted hours",
+        description: "Enter a non-negative number of billable hours.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (quotedLaborHours === effectiveQuotedLaborHours) return;
+    try {
+      await update.mutateAsync({
+        id: card.id,
+        data: { quotedLaborHours },
+      });
+      await invalidate();
+      toast({
+        title: "Quoted hours updated",
+        description: "The estimate was repriced. Send the revised quote when ready.",
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Could not update quoted hours",
+        description: apiErrorMessage(error, "Try again."),
+        variant: "destructive",
+      });
+    }
+  };
 
   const sendQuote = async () => {
     setEstimateActionError(null);
@@ -514,9 +553,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
               <span>·</span>
               <PenTool className="w-3 h-3" />
               {card.technicianName ?? "Unassigned"}
-              <span>
-                · Booked {bookedHoursForCard(card)}h @ {money.gyd(card.laborRate)}/hr
-              </span>
+               <span>
+                 · Booked {bookedHoursForCard(card)}h · Quoted {card.quotedLaborHours ?? card.laborHours}h @ {money.gyd(card.laborRate)}/hr
+               </span>
             </div>
             {customerPhoneSnapshot && (
               <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
@@ -894,6 +933,53 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                 {estimateDeliveryLabel(preview.delivery.state)}
               </Badge>
             </div>
+
+             <section className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3">
+               <div className="flex flex-wrap items-start justify-between gap-3">
+                 <div>
+                   <h4 className="text-sm font-medium">Billable labour hours</h4>
+                   <p className="mt-1 text-xs text-muted-foreground">
+                     Planned booking: {bookedHoursForCard(card)}h · Actual timer: {formatTimerHours(card)}
+                   </p>
+                   <p className="mt-1 text-[11px] text-muted-foreground">
+                     Only quoted hours affect the customer estimate; changing them creates a new version and does not send it.
+                   </p>
+                 </div>
+                 {canEditQuoteHours ? (
+                   <div className="flex items-end gap-2">
+                     <div>
+                       <Label htmlFor={`quoted-labor-hours-${card.id}`} className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                         Quoted hours
+                       </Label>
+                       <Input
+                         id={`quoted-labor-hours-${card.id}`}
+                         type="number"
+                         min="0"
+                         step="0.25"
+                         value={quotedLaborHoursDraft}
+                         onChange={(event) => setQuotedLaborHoursDraft(event.target.value)}
+                         className="mt-1 h-9 w-28"
+                         disabled={update.isPending}
+                       />
+                     </div>
+                     <Button
+                       size="sm"
+                       className="h-9 rounded-full text-xs"
+                       disabled={update.isPending || Number(quotedLaborHoursDraft) === effectiveQuotedLaborHours}
+                       onClick={saveQuotedLaborHours}
+                     >
+                       {update.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                       Save
+                     </Button>
+                   </div>
+                 ) : (
+                   <div className="text-right">
+                     <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Quoted hours</div>
+                     <div className="mt-1 text-lg font-semibold">{effectiveQuotedLaborHours}h</div>
+                   </div>
+                 )}
+               </div>
+             </section>
 
             <section className="rounded-lg border border-white/10 p-3">
               <div className="flex items-center gap-2">
@@ -1879,6 +1965,10 @@ function formatWorkedSeconds(totalSeconds: number): string {
   const m = Math.floor((totalSeconds % 3600) / 60);
   if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
   return `${m}m`;
+}
+
+function formatTimerHours(card: JobCard): string {
+  return (workedSecondsAt(card, Date.now()) / 3600).toFixed(2);
 }
 
 function workedSecondsAt(card: JobCard, now: number): number {

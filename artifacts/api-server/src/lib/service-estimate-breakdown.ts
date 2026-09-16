@@ -8,13 +8,19 @@ import {
   type ServiceEstimateLine,
 } from "@workspace/db";
 import { computeServiceTax, ensureDealerTaxes } from "./taxes";
+import {
+  calculateQuotedLaborTotal,
+  effectiveQuotedLaborHours,
+} from "./service-labor-hours";
 
 /**
  * The one customer-price calculation for a service job.
  *
  * A service estimate and its eventual invoice must be based on this exact
  * breakdown: net issued internal parts (returns reduce the price), externally
- * sourced parts, labour, a decided surcharge, and the configured service VAT.
+ * sourced parts, quoted billable labour, a decided surcharge, and the
+ * configured service VAT. Planned booking hours and actual timer hours are
+ * intentionally not customer-price inputs.
  * Keeping tax as an itemized line makes `sum(lines) === total` true, rather
  * than asking a customer to infer an extra charge from the headline amount.
  */
@@ -74,6 +80,7 @@ export async function buildServiceEstimateBreakdown(
     | "id"
     | "dealerId"
     | "laborHours"
+    | "quotedLaborHours"
     | "laborRate"
     | "surchargeStatus"
     | "surchargeAmount"
@@ -151,12 +158,22 @@ export async function buildServiceEstimateBreakdown(
     });
   }
 
-  const labourTotal = cents(card.laborHours * card.laborRate);
+  const quotedLaborHours = effectiveQuotedLaborHours(
+    card.quotedLaborHours,
+    card.laborHours,
+  );
+  const labourTotal = cents(
+    calculateQuotedLaborTotal(
+      card.quotedLaborHours,
+      card.laborHours,
+      card.laborRate,
+    ),
+  );
   if (labourTotal) {
     lines.push({
       kind: "labour",
       description: "Labour",
-      quantity: card.laborHours,
+      quantity: quotedLaborHours,
       amount: labourTotal,
     });
   }

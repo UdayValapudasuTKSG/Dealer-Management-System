@@ -202,7 +202,12 @@ export const jobCardsTable = pgTable(
       .$type<ChecklistItem[]>()
       .notNull()
       .default([]),
+    /** Original/planned labour from the booking. Kept separate from the
+     * customer-facing billable quote override and from the work timer. */
     laborHours: doublePrecision("labor_hours").notNull().default(0),
+    /** Nullable customer-facing billable labour override. Null preserves the
+     * planned booking hours for cards created before this field existed. */
+    quotedLaborHours: doublePrecision("quoted_labor_hours"),
     laborRate: doublePrecision("labor_rate").notNull().default(120),
     notes: text("notes"),
     // Immutable contact value captured at job-card creation. This deliberately

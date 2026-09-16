@@ -5771,6 +5771,11 @@ export interface JobCard {
   outtake?: ConditionRecord | null;
   checklist: ChecklistItem[];
   laborHours: number;
+  /**
+     * Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable
+     * @nullable
+     */
+  quotedLaborHours: number | null;
   laborRate: number;
   /** @nullable */
   notes?: string | null;
@@ -6125,6 +6130,11 @@ export interface JobCardInput {
   payType?: JobCardInputPayType;
   checklist?: ChecklistItem[];
   laborHours?: number;
+  /**
+     * Current customer-facing billable labour hours; defaults to planned booking hours when a card is created
+     * @minimum 0
+     */
+  quotedLaborHours?: number;
   laborRate?: number;
   notes?: string;
 }
@@ -6166,6 +6176,11 @@ export interface JobCardUpdate {
   outtake?: ConditionRecord;
   checklist?: ChecklistItem[];
   laborHours?: number;
+  /**
+     * Customer-facing billable labour hours; editing reprices and versions the estimate without sending it
+     * @minimum 0
+     */
+  quotedLaborHours?: number;
   laborRate?: number;
   notes?: string;
   /** Technician's analysis of the service — mandatory before the card can be marked completed */
