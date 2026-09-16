@@ -15,6 +15,10 @@ import {
   zonedTimeToUtc,
 } from "../lib/timezone";
 import { getServiceSettings } from "../lib/service-settings";
+import {
+  calculateLabourRateGyd,
+  resolveNewCardLabourRate,
+} from "../lib/service-labour-pricing";
 import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
 import { effectiveQuotedLaborHours } from "../lib/service-labor-hours";
 import {
@@ -158,6 +162,8 @@ import {
   AcknowledgeJobCardEstimateResponse,
   GetJobCardEstimatePreviewParams,
   GetJobCardEstimatePreviewResponse,
+  ApplyCurrentJobCardLabourRateParams,
+  ApplyCurrentJobCardLabourRateResponse,
 } from "@workspace/api-zod";
 import { checkLowStockCrossing } from "./parts";
 import {
@@ -2179,7 +2185,8 @@ async function autoCreateJobCard(
   const surcharge = await computeLateSurcharge(order);
   const laborHours = order.estimatedHours;
   const quotedLaborHours = laborHours;
-  const laborRate = 120;
+  const settings = await getServiceSettings(order.dealerId);
+  const laborRate = calculateLabourRateGyd(settings.labourUsdToGydRate);
   const quoteTotal = await initialJobCardQuoteTotal({
     dealerId: order.dealerId,
     quotedLaborHours,
@@ -2592,7 +2599,11 @@ router.post("/job-cards", async (req, res): Promise<void> => {
   const payType = parsed.data.payType ?? order.payType;
   const laborHours = parsed.data.laborHours ?? order.estimatedHours ?? 0;
   const quotedLaborHours = parsed.data.quotedLaborHours ?? laborHours;
-  const laborRate = parsed.data.laborRate ?? 120;
+  const settings = await getServiceSettings(order.dealerId);
+  const laborRate = resolveNewCardLabourRate(
+    parsed.data.laborRate,
+    settings.labourUsdToGydRate,
+  );
   const quoteTotal = await initialJobCardQuoteTotal({
     dealerId: order.dealerId,
     quotedLaborHours,
@@ -3440,6 +3451,106 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
 // ---------------------------------------------------------------------------
 // Work timer: technicians pause/resume without changing the card's status
 // ---------------------------------------------------------------------------
+
+router.post("/job-cards/:id/apply-current-labour-rate", async (req, res): Promise<void> => {
+  const params = ApplyCurrentJobCardLabourRateParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [existing] = await db
+    .select()
+    .from(jobCardsTable)
+    .where(and(eq(jobCardsTable.id, params.data.id), eq(jobCardsTable.dealerId, dealerId)));
+  if (!existing) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (!canActOnJobCard(res.locals.user, existing)) {
+    res.status(403).json({ error: "Claim this job card before changing it" });
+    return;
+  }
+  const settings = await getServiceSettings(dealerId);
+  const labourRate = calculateLabourRateGyd(settings.labourUsdToGydRate);
+
+  try {
+    const card = await db.transaction(async (tx) => {
+      const [lockedCard] = await tx
+        .select()
+        .from(jobCardsTable)
+        .where(and(eq(jobCardsTable.id, existing.id), eq(jobCardsTable.dealerId, dealerId)))
+        .for("update");
+      if (!lockedCard || lockedCard.estimateVersion !== existing.estimateVersion ||
+          lockedCard.status !== existing.status) {
+        throw Object.assign(new Error("job_card_changed"), { status: 409 });
+      }
+      if (lockedCard.laborRate === labourRate) return lockedCard;
+      const [issuedInvoice] = await tx
+        .select({ id: serviceInvoicesTable.id })
+        .from(serviceInvoicesTable)
+        .where(and(
+          eq(serviceInvoicesTable.jobCardId, lockedCard.id),
+          eq(serviceInvoicesTable.dealerId, dealerId),
+        ))
+        .for("update");
+      if (issuedInvoice) {
+        throw Object.assign(new Error("issued_invoice_charge_mutation"), { status: 422 });
+      }
+      const prospectiveCard = { ...lockedCard, laborRate: labourRate };
+      const breakdown = await buildServiceEstimateBreakdown(tx, prospectiveCard);
+      const customerQuotePending =
+        lockedCard.payType === "customer" && breakdown.total > 0;
+      const [updatedCard] = await tx
+        .update(jobCardsTable)
+        .set({
+          laborRate: labourRate,
+          quoteTotal: breakdown.total,
+          estimateVersion: sql`${jobCardsTable.estimateVersion} + 1`,
+          estimateApprovedVersion: null,
+          estimateApprovalAt: null,
+          estimateApprovalEvidence: null,
+          quoteApprovedAt: null,
+          ...clearEstimateStaffAcknowledgement,
+          ...(customerQuotePending
+            ? {
+                status: "on_hold",
+                waitingReason: "customer_decision",
+                nextAction: "Send the revised estimate and wait for customer confirmation",
+                timerSeconds: foldedTimerSeconds,
+                timerStartedAt: null,
+              }
+            : {}),
+        })
+        .where(and(
+          eq(jobCardsTable.id, lockedCard.id),
+          eq(jobCardsTable.dealerId, dealerId),
+          eq(jobCardsTable.status, lockedCard.status),
+          eq(jobCardsTable.estimateVersion, lockedCard.estimateVersion),
+        ))
+        .returning();
+      if (!updatedCard) {
+        throw Object.assign(new Error("job_card_changed"), { status: 409 });
+      }
+      await invalidateServiceEstimate(tx, dealerId, lockedCard.id);
+      return updatedCard;
+    });
+    res.json(ApplyCurrentJobCardLabourRateResponse.parse(card));
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    if (failure.status === 409) {
+      res.status(409).json({ error: "Job card changed — reload and retry" });
+      return;
+    }
+    if (failure.status === 422) {
+      res.status(422).json({
+        error: "An issued invoice is immutable; record a linked financial adjustment instead.",
+      });
+      return;
+    }
+    throw error;
+  }
+});
 
 router.post("/job-cards/:id/timer", async (req, res): Promise<void> => {
   const params = ToggleJobCardTimerParams.safeParse(req.params);

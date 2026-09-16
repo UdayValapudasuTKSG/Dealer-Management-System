@@ -11207,6 +11207,78 @@ export const useResendJobCardEstimate = <TError = ErrorType<Error>,
       return useMutation(getResendJobCardEstimateMutationOptions(options));
     }
 
+export const getApplyCurrentJobCardLabourRateUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/apply-current-labour-rate`
+}
+
+/**
+ * Reprices only this card using the fixed USD 120/hour labour base and the server-side dealer labourUsdToGydRate. This is an explicit action; existing custom GYD rates are never replaced automatically. Repricing creates a new estimate version and invalidates prior approvals.
+ * @summary Apply the active dealer labour-only FX rate to this card
+ */
+export const applyCurrentJobCardLabourRate = async (id: number, options?: RequestInit): Promise<JobCard> => {
+
+  return customFetch<JobCard>(getApplyCurrentJobCardLabourRateUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApplyCurrentJobCardLabourRateMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyCurrentJobCardLabourRate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof applyCurrentJobCardLabourRate>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['applyCurrentJobCardLabourRate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyCurrentJobCardLabourRate>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  applyCurrentJobCardLabourRate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyCurrentJobCardLabourRateMutationResult = NonNullable<Awaited<ReturnType<typeof applyCurrentJobCardLabourRate>>>
+
+    export type ApplyCurrentJobCardLabourRateMutationError = ErrorType<Error>
+
+    /**
+ * @summary Apply the active dealer labour-only FX rate to this card
+ */
+export const useApplyCurrentJobCardLabourRate = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyCurrentJobCardLabourRate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof applyCurrentJobCardLabourRate>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getApplyCurrentJobCardLabourRateMutationOptions(options));
+    }
+
 export const getAcknowledgeJobCardEstimateUrl = (id: number,) => {
 
 

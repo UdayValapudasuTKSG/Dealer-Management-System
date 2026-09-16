@@ -24,7 +24,7 @@
 - [Storage ACL fail-closed](storage-acl-fail-closed.md) — never LIKE-match user-supplied storage keys in reference checks; use eq / jsonb `@>` containment or `%`/`_` widens the match.
 - [Deal delivery progression](deal-delivery-progression.md) — deals have NO manual stage control; finance disbursement commits, the 9-step delivery workflow delivers.
 - [Idempotency replay middleware](idempotency-replay-middleware.md) — atomic insert claim; only res.json+2xx marks completed, client aborts must release the claim or retries replay null.
-- [GYD-only currency](gyd-only-currency.md) — system re-denominated Aug 2026: all money stored/displayed in GYD, rates pinned to 1; never reintroduce rate fallbacks or ×rate money paths.
+- [GYD-only currency](gyd-only-currency.md) — GYD storage; labour alone uses an authorized US$120 base converted once via a separate setting, never by reviving document FX.
 - [GRA duty engine conventions](gra-duty-engine.md) — dealer_taxes-driven, server-only duty; gate approve authorises, filing recomputes with LINE-LEVEL drift check; extract is allowlisted, identity fields human-keyed.
 - [Agent-run idempotency ledger](agent-run-idempotency-ledger.md) — dedupe via agent_runs needs a stable refType/refId across ALL outcome paths; downstream entities go in affectedEntities.
 - [Meta leadgen webhook gaps](meta-leadads-webhook-gaps.md) — dev-mode apps silently drop real-customer webhooks; the poll fallback + atomic ledger claim covers it. Never revert to check-then-insert.

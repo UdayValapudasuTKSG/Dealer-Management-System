@@ -825,6 +825,14 @@ const PATH_MODULES: Record<string, RouteRule> = {
       if (/^\/job-cards\/\d+\/rollover\/approve\/?$/.test(req.path)) {
         return "edit";
       }
+      // Explicitly applying the current dealer labour rate reprices an
+      // existing estimate, so it is an edit action rather than create.
+      if (
+        req.method === "POST" &&
+        /^\/job-cards\/\d+\/apply-current-labour-rate\/?$/.test(req.path)
+      ) {
+        return "edit";
+      }
       // The canonical estimate preview is a read. Keep this explicit rather
       // than relying on the method default: the preview still enforces
       // assigned-staff/approver identity and dealer scope in service.ts.

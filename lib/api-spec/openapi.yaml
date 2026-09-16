@@ -3789,6 +3789,39 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /job-cards/{id}/apply-current-labour-rate:
+    post:
+      operationId: applyCurrentJobCardLabourRate
+      tags: [service]
+      summary: Apply the active dealer labour-only FX rate to this card
+      description: >
+        Reprices only this card using the fixed USD 120/hour labour base and
+        the server-side dealer labourUsdToGydRate. This is an explicit action;
+        existing custom GYD rates are never replaced automatically. Repricing
+        creates a new estimate version and invalidates prior approvals.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Updated job card with the current GYD labour rate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobCard" }
+        "404":
+          description: Job card not found in active dealer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Card changed while repricing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: An issued invoice prevents charge mutation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /job-cards/{id}/estimate/acknowledge:
     post:
       operationId: acknowledgeJobCardEstimate
@@ -13447,7 +13480,7 @@ components:
           items: { $ref: "#/components/schemas/ChecklistItem" }
         laborHours: { type: number }
         quotedLaborHours: { type: ["number", "null"], description: "Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable" }
-        laborRate: { type: number }
+        laborRate: { type: number, minimum: 0, description: "Snapshotted customer-facing GYD labour rate; never a USD amount" }
         notes: { type: ["string", "null"] }
         serviceAnalysis: { type: ["string", "null"] }
         workPerformed: { type: ["string", "null"] }
@@ -13632,7 +13665,7 @@ components:
           items: { $ref: "#/components/schemas/ChecklistItem" }
         laborHours: { type: number }
         quotedLaborHours: { type: number, minimum: 0, description: "Current customer-facing billable labour hours; defaults to planned booking hours when a card is created" }
-        laborRate: { type: number }
+        laborRate: { type: number, minimum: 0, description: "Optional customer-facing GYD labour override" }
         notes: { type: string }
     JobCardUpdate:
       type: object
@@ -13654,7 +13687,7 @@ components:
           items: { $ref: "#/components/schemas/ChecklistItem" }
         laborHours: { type: number }
         quotedLaborHours: { type: number, minimum: 0, description: "Customer-facing billable labour hours; editing reprices and versions the estimate without sending it" }
-        laborRate: { type: number }
+        laborRate: { type: number, minimum: 0, description: "Customer-facing GYD labour override; changing it versions the estimate" }
         notes: { type: string }
         serviceAnalysis: { type: string, description: "Technician's analysis of the service — mandatory before the card can be marked completed" }
         workPerformed: { type: string, description: "What work was done — mandatory before the card can be marked completed" }
@@ -14397,7 +14430,7 @@ components:
 
     ServiceSettings:
       type: object
-      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence, defaultJobHours, techWorkHoursPerDay, leadSourceReportEnabled, leadSourceReportSendTime]
+      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence, defaultJobHours, techWorkHoursPerDay, leadSourceReportEnabled, leadSourceReportSendTime, labourUsdToGydRate, labourUsdPerHour, labourGydPerHour]
       properties:
         serviceIntervalKm: { type: integer }
         lateSurchargeFee: { type: number }
@@ -14406,6 +14439,9 @@ components:
         techWorkHoursPerDay: { type: number }
         leadSourceReportEnabled: { type: boolean }
         leadSourceReportSendTime: { type: string, pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$' }
+        labourUsdToGydRate: { type: number, exclusiveMinimum: 0, description: "Labour-only GYD per 1 USD; does not redenominate any other money" }
+        labourUsdPerHour: { type: number, const: 120, description: "Fixed technician labour input in USD/hour (read-only)" }
+        labourGydPerHour: { type: number, description: "Fixed USD 120/hour converted to GYD using labourUsdToGydRate (read-only)" }
     ServiceSettingsUpdate:
       type: object
       properties:
@@ -14416,6 +14452,7 @@ components:
         techWorkHoursPerDay: { type: number, minimum: 1, maximum: 24 }
         leadSourceReportEnabled: { type: boolean }
         leadSourceReportSendTime: { type: string, pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$' }
+        labourUsdToGydRate: { type: number, exclusiveMinimum: 0, description: "Labour-only GYD per 1 USD" }
 
     CoveragePlan:
       type: object

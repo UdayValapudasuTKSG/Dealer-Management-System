@@ -514,6 +514,10 @@ export const DEFAULT_LATE_SURCHARGE_FEE = 10000;
 /** Capacity planning defaults: 2h per vehicle, 8h technician workday. */
 export const DEFAULT_JOB_HOURS = 2;
 export const DEFAULT_TECH_WORK_HOURS_PER_DAY = 8;
+/** Fixed customer-facing technician labour input, in USD per hour. */
+export const FIXED_LABOUR_USD_PER_HOUR = 120;
+/** Default labour-only GYD per USD rate. This does not affect other money. */
+export const DEFAULT_LABOUR_USD_TO_GYD_RATE = 209;
 
 /** FR-COM-03: management scheduled-services summary cadence options. */
 export const SERVICE_SUMMARY_CADENCES = ["daily", "weekly", "off"] as const;
@@ -541,6 +545,10 @@ export const dealerServiceSettingsTable = pgTable(
     techWorkHoursPerDay: doublePrecision("tech_work_hours_per_day")
       .notNull()
       .default(DEFAULT_TECH_WORK_HOURS_PER_DAY),
+    /** Labour-only FX input; all stored/displayed labour amounts remain GYD. */
+    labourUsdToGydRate: doublePrecision("labour_usd_to_gyd_rate")
+      .notNull()
+      .default(DEFAULT_LABOUR_USD_TO_GYD_RATE),
     /** Task 269: daily lead-source report emailed to GMs. Default off. */
     leadSourceReportEnabled: boolean("lead_source_report_enabled")
       .notNull()

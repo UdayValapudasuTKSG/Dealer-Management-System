@@ -2643,7 +2643,7 @@ function CreateJobCardDialog() {
             technicians?.map((t) => ({ value: String(t.id), label: t.name })) ?? [],
         },
         { name: "laborHours", label: "Labour hours", type: "number", span: "half", placeholder: "2.5" },
-        { name: "laborRate", label: "Labour rate (GYD/hr)", type: "number", span: "half", placeholder: "120" },
+        { name: "laborRate", label: "Custom labour rate (GYD/hr, optional)", type: "number", span: "half", placeholder: "Uses current dealer rate" },
         { name: "checklistText", label: "Checklist (one item per line)", type: "textarea", span: "full", placeholder: "Inspect pads\nReplace rotors\nRoad test" },
         { name: "notes", label: "Notes", type: "textarea", span: "full" },
         {

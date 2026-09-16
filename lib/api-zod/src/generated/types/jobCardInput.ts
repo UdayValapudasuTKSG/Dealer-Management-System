@@ -30,6 +30,10 @@ export interface JobCardInput {
      * @minimum 0
      */
   quotedLaborHours?: number;
+  /**
+     * Optional customer-facing GYD labour override
+     * @minimum 0
+     */
   laborRate?: number;
   notes?: string;
 }

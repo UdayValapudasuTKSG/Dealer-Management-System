@@ -5712,6 +5712,8 @@ export const ClaimServiceOrderBody = zod.object({
   "technicianUserId": zod.number().optional()
 })
 
+export const claimServiceOrderResponseJobCardLaborRateMin = 0;
+
 export const claimServiceOrderResponseJobCardEstimateVersionMin = 0;
 
 export const claimServiceOrderResponseJobCardEstimateApprovedVersionMin = 0;
@@ -5798,7 +5800,7 @@ export const ClaimServiceOrderResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(claimServiceOrderResponseJobCardLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -5916,6 +5918,8 @@ export const UpdateJobCardWaitingBody = zod.object({
   "followUpDate": zod.coerce.date().optional()
 })
 
+export const updateJobCardWaitingResponseLaborRateMin = 0;
+
 export const updateJobCardWaitingResponseEstimateVersionMin = 0;
 
 export const updateJobCardWaitingResponseEstimateApprovedVersionMin = 0;
@@ -5965,7 +5969,7 @@ export const UpdateJobCardWaitingResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(updateJobCardWaitingResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -6020,6 +6024,8 @@ export const ResendJobCardEstimateParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const resendJobCardEstimateResponseJobCardLaborRateMin = 0;
+
 export const resendJobCardEstimateResponseJobCardEstimateVersionMin = 0;
 
 export const resendJobCardEstimateResponseJobCardEstimateApprovedVersionMin = 0;
@@ -6070,7 +6076,7 @@ export const ResendJobCardEstimateResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(resendJobCardEstimateResponseJobCardLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -6126,11 +6132,120 @@ export const ResendJobCardEstimateResponse = zod.object({
 
 
 /**
+ * Reprices only this card using the fixed USD 120/hour labour base and the server-side dealer labourUsdToGydRate. This is an explicit action; existing custom GYD rates are never replaced automatically. Repricing creates a new estimate version and invalidates prior approvals.
+ * @summary Apply the active dealer labour-only FX rate to this card
+ */
+export const ApplyCurrentJobCardLabourRateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const applyCurrentJobCardLabourRateResponseLaborRateMin = 0;
+
+export const applyCurrentJobCardLabourRateResponseEstimateVersionMin = 0;
+
+export const applyCurrentJobCardLabourRateResponseEstimateApprovedVersionMin = 0;
+
+export const applyCurrentJobCardLabourRateResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
+export const ApplyCurrentJobCardLabourRateResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "customerPhoneSnapshot": zod.string().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
+  "laborRate": zod.number().min(applyCurrentJobCardLabourRateResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
+  "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(applyCurrentJobCardLabourRateResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(applyCurrentJobCardLabourRateResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(applyCurrentJobCardLabourRateResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Record assigned service staff receipt of the exact current customer-approved estimate
  */
 export const AcknowledgeJobCardEstimateParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const acknowledgeJobCardEstimateResponseLaborRateMin = 0;
 
 export const acknowledgeJobCardEstimateResponseEstimateVersionMin = 0;
 
@@ -6181,7 +6296,7 @@ export const AcknowledgeJobCardEstimateResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(acknowledgeJobCardEstimateResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -6274,6 +6389,8 @@ export const ListJobCardsQueryParams = zod.object({
   "mine": zod.coerce.string().optional()
 })
 
+export const listJobCardsResponseLaborRateMin = 0;
+
 export const listJobCardsResponseEstimateVersionMin = 0;
 
 export const listJobCardsResponseEstimateApprovedVersionMin = 0;
@@ -6323,7 +6440,7 @@ export const ListJobCardsResponseItem = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(listJobCardsResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -6378,6 +6495,8 @@ export const createJobCardBodyCustomerPhoneSnapshotMax = 50;
 
 export const createJobCardBodyQuotedLaborHoursMin = 0;
 
+export const createJobCardBodyLaborRateMin = 0;
+
 
 
 export const CreateJobCardBody = zod.object({
@@ -6396,9 +6515,11 @@ export const CreateJobCardBody = zod.object({
 })).optional(),
   "laborHours": zod.number().optional(),
   "quotedLaborHours": zod.number().min(createJobCardBodyQuotedLaborHoursMin).optional().describe('Current customer-facing billable labour hours; defaults to planned booking hours when a card is created'),
-  "laborRate": zod.number().optional(),
+  "laborRate": zod.number().min(createJobCardBodyLaborRateMin).optional().describe('Optional customer-facing GYD labour override'),
   "notes": zod.string().optional()
 })
+
+export const createJobCardResponseLaborRateMin = 0;
 
 export const createJobCardResponseEstimateVersionMin = 0;
 
@@ -6449,7 +6570,7 @@ export const CreateJobCardResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(createJobCardResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -6501,6 +6622,8 @@ export const GetJobCardParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getJobCardResponseJobCardLaborRateMin = 0;
+
 export const getJobCardResponseJobCardEstimateVersionMin = 0;
 
 export const getJobCardResponseJobCardEstimateApprovedVersionMin = 0;
@@ -6551,7 +6674,7 @@ export const GetJobCardResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(getJobCardResponseJobCardLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -6641,6 +6764,8 @@ export const UpdateJobCardParams = zod.object({
 
 export const updateJobCardBodyQuotedLaborHoursMin = 0;
 
+export const updateJobCardBodyLaborRateMin = 0;
+
 
 
 export const UpdateJobCardBody = zod.object({
@@ -6676,11 +6801,13 @@ export const UpdateJobCardBody = zod.object({
 })).optional(),
   "laborHours": zod.number().optional(),
   "quotedLaborHours": zod.number().min(updateJobCardBodyQuotedLaborHoursMin).optional().describe('Customer-facing billable labour hours; editing reprices and versions the estimate without sending it'),
-  "laborRate": zod.number().optional(),
+  "laborRate": zod.number().min(updateJobCardBodyLaborRateMin).optional().describe('Customer-facing GYD labour override; changing it versions the estimate'),
   "notes": zod.string().optional(),
   "serviceAnalysis": zod.string().optional().describe('Technician\'s analysis of the service — mandatory before the card can be marked completed'),
   "workPerformed": zod.string().optional().describe('What work was done — mandatory before the card can be marked completed')
 })
+
+export const updateJobCardResponseLaborRateMin = 0;
 
 export const updateJobCardResponseEstimateVersionMin = 0;
 
@@ -6731,7 +6858,7 @@ export const UpdateJobCardResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(updateJobCardResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -6859,6 +6986,8 @@ export const ToggleJobCardTimerBody = zod.object({
   "action": zod.enum(['pause', 'resume'])
 })
 
+export const toggleJobCardTimerResponseLaborRateMin = 0;
+
 export const toggleJobCardTimerResponseEstimateVersionMin = 0;
 
 export const toggleJobCardTimerResponseEstimateApprovedVersionMin = 0;
@@ -6908,7 +7037,7 @@ export const ToggleJobCardTimerResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(toggleJobCardTimerResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -6967,6 +7096,8 @@ export const ReopenJobCardBody = zod.object({
   "reason": zod.string().optional()
 })
 
+export const reopenJobCardResponseLaborRateMin = 0;
+
 export const reopenJobCardResponseEstimateVersionMin = 0;
 
 export const reopenJobCardResponseEstimateApprovedVersionMin = 0;
@@ -7016,7 +7147,7 @@ export const ReopenJobCardResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(reopenJobCardResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -7076,6 +7207,8 @@ export const RolloverJobCardBody = zod.object({
   "reason": zod.string().optional()
 })
 
+export const rolloverJobCardResponseLaborRateMin = 0;
+
 export const rolloverJobCardResponseEstimateVersionMin = 0;
 
 export const rolloverJobCardResponseEstimateApprovedVersionMin = 0;
@@ -7125,7 +7258,7 @@ export const RolloverJobCardResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(rolloverJobCardResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -7184,6 +7317,8 @@ export const ApproveJobCardRolloverBody = zod.object({
   "as": zod.enum(['manager', 'technician'])
 })
 
+export const approveJobCardRolloverResponseLaborRateMin = 0;
+
 export const approveJobCardRolloverResponseEstimateVersionMin = 0;
 
 export const approveJobCardRolloverResponseEstimateApprovedVersionMin = 0;
@@ -7233,7 +7368,7 @@ export const ApproveJobCardRolloverResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(approveJobCardRolloverResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -7297,6 +7432,8 @@ export const DecideJobCardSurchargeBody = zod.object({
   "amount": zod.number().min(decideJobCardSurchargeBodyAmountMin).optional()
 })
 
+export const decideJobCardSurchargeResponseLaborRateMin = 0;
+
 export const decideJobCardSurchargeResponseEstimateVersionMin = 0;
 
 export const decideJobCardSurchargeResponseEstimateApprovedVersionMin = 0;
@@ -7346,7 +7483,7 @@ export const DecideJobCardSurchargeResponse = zod.object({
 })),
   "laborHours": zod.number(),
   "quotedLaborHours": zod.number().nullable().describe('Customer-facing billable labour override; null falls back to planned booking hours and explicit zero remains billable'),
-  "laborRate": zod.number(),
+  "laborRate": zod.number().min(decideJobCardSurchargeResponseLaborRateMin).describe('Snapshotted customer-facing GYD labour rate; never a USD amount'),
   "notes": zod.string().nullish(),
   "serviceAnalysis": zod.string().nullish(),
   "workPerformed": zod.string().nullish(),
@@ -14044,6 +14181,8 @@ export const UpdateDealerLocalizationResponse = zod.object({
  * @summary Dealer service settings (interval km + late surcharge fee)
  */
 export const getServiceSettingsResponseLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const getServiceSettingsResponseLabourUsdToGydRateExclusiveMin = 0;
+
 
 
 export const GetServiceSettingsResponse = zod.object({
@@ -14053,7 +14192,10 @@ export const GetServiceSettingsResponse = zod.object({
   "defaultJobHours": zod.number(),
   "techWorkHoursPerDay": zod.number(),
   "leadSourceReportEnabled": zod.boolean(),
-  "leadSourceReportSendTime": zod.string().regex(getServiceSettingsResponseLeadSourceReportSendTimeRegExp)
+  "leadSourceReportSendTime": zod.string().regex(getServiceSettingsResponseLeadSourceReportSendTimeRegExp),
+  "labourUsdToGydRate": zod.number().gt(getServiceSettingsResponseLabourUsdToGydRateExclusiveMin).describe('Labour-only GYD per 1 USD; does not redenominate any other money'),
+  "labourUsdPerHour": zod.number().describe('Fixed technician labour input in USD\/hour (read-only)'),
+  "labourGydPerHour": zod.number().describe('Fixed USD 120\/hour converted to GYD using labourUsdToGydRate (read-only)')
 })
 
 
@@ -14067,6 +14209,8 @@ export const updateServiceSettingsBodyDefaultJobHoursMax = 24;
 export const updateServiceSettingsBodyTechWorkHoursPerDayMax = 24;
 
 export const updateServiceSettingsBodyLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const updateServiceSettingsBodyLabourUsdToGydRateExclusiveMin = 0;
+
 
 
 export const UpdateServiceSettingsBody = zod.object({
@@ -14076,10 +14220,13 @@ export const UpdateServiceSettingsBody = zod.object({
   "defaultJobHours": zod.number().min(updateServiceSettingsBodyDefaultJobHoursMin).max(updateServiceSettingsBodyDefaultJobHoursMax).optional(),
   "techWorkHoursPerDay": zod.number().min(1).max(updateServiceSettingsBodyTechWorkHoursPerDayMax).optional(),
   "leadSourceReportEnabled": zod.boolean().optional(),
-  "leadSourceReportSendTime": zod.string().regex(updateServiceSettingsBodyLeadSourceReportSendTimeRegExp).optional()
+  "leadSourceReportSendTime": zod.string().regex(updateServiceSettingsBodyLeadSourceReportSendTimeRegExp).optional(),
+  "labourUsdToGydRate": zod.number().gt(updateServiceSettingsBodyLabourUsdToGydRateExclusiveMin).optional().describe('Labour-only GYD per 1 USD')
 })
 
 export const updateServiceSettingsResponseLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const updateServiceSettingsResponseLabourUsdToGydRateExclusiveMin = 0;
+
 
 
 export const UpdateServiceSettingsResponse = zod.object({
@@ -14089,7 +14236,10 @@ export const UpdateServiceSettingsResponse = zod.object({
   "defaultJobHours": zod.number(),
   "techWorkHoursPerDay": zod.number(),
   "leadSourceReportEnabled": zod.boolean(),
-  "leadSourceReportSendTime": zod.string().regex(updateServiceSettingsResponseLeadSourceReportSendTimeRegExp)
+  "leadSourceReportSendTime": zod.string().regex(updateServiceSettingsResponseLeadSourceReportSendTimeRegExp),
+  "labourUsdToGydRate": zod.number().gt(updateServiceSettingsResponseLabourUsdToGydRateExclusiveMin).describe('Labour-only GYD per 1 USD; does not redenominate any other money'),
+  "labourUsdPerHour": zod.number().describe('Fixed technician labour input in USD\/hour (read-only)'),
+  "labourGydPerHour": zod.number().describe('Fixed USD 120\/hour converted to GYD using labourUsdToGydRate (read-only)')
 })
 
 

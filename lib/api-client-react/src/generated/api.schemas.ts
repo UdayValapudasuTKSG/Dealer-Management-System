@@ -5776,6 +5776,10 @@ export interface JobCard {
      * @nullable
      */
   quotedLaborHours: number | null;
+  /**
+     * Snapshotted customer-facing GYD labour rate; never a USD amount
+     * @minimum 0
+     */
   laborRate: number;
   /** @nullable */
   notes?: string | null;
@@ -6135,6 +6139,10 @@ export interface JobCardInput {
      * @minimum 0
      */
   quotedLaborHours?: number;
+  /**
+     * Optional customer-facing GYD labour override
+     * @minimum 0
+     */
   laborRate?: number;
   notes?: string;
 }
@@ -6181,6 +6189,10 @@ export interface JobCardUpdate {
      * @minimum 0
      */
   quotedLaborHours?: number;
+  /**
+     * Customer-facing GYD labour override; changing it versions the estimate
+     * @minimum 0
+     */
   laborRate?: number;
   notes?: string;
   /** Technician's analysis of the service — mandatory before the card can be marked completed */
@@ -7543,6 +7555,15 @@ export interface ServiceSettings {
   leadSourceReportEnabled: boolean;
   /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
   leadSourceReportSendTime: string;
+  /**
+     * Labour-only GYD per 1 USD; does not redenominate any other money
+     * @exclusiveMinimum 0
+     */
+  labourUsdToGydRate: number;
+  /** Fixed technician labour input in USD/hour (read-only) */
+  labourUsdPerHour: 120;
+  /** Fixed USD 120/hour converted to GYD using labourUsdToGydRate (read-only) */
+  labourGydPerHour: number;
 }
 
 export type ServiceSettingsUpdateSummaryCadence = typeof ServiceSettingsUpdateSummaryCadence[keyof typeof ServiceSettingsUpdateSummaryCadence];
@@ -7573,6 +7594,11 @@ export interface ServiceSettingsUpdate {
   leadSourceReportEnabled?: boolean;
   /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
   leadSourceReportSendTime?: string;
+  /**
+     * Labour-only GYD per 1 USD
+     * @exclusiveMinimum 0
+     */
+  labourUsdToGydRate?: number;
 }
 
 export type CoveragePlanType = typeof CoveragePlanType[keyof typeof CoveragePlanType];

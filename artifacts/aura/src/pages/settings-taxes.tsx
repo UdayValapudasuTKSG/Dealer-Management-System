@@ -14,6 +14,7 @@ import {
   type DealerTaxRule,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthz } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -341,10 +342,14 @@ function ServiceSettingsCard() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: settings, isLoading } = useGetServiceSettings();
+  const { can, me } = useAuthz();
+  const canManageLabourRate =
+    can("settings", "admin") || !!me?.isSuperAdmin;
   const [intervalKm, setIntervalKm] = useState<string | null>(null);
   const [fee, setFee] = useState<string | null>(null);
   const [jobHours, setJobHours] = useState<string | null>(null);
   const [dayHours, setDayHours] = useState<string | null>(null);
+  const [labourRate, setLabourRate] = useState<string | null>(null);
 
   const update = useUpdateServiceSettings({
     mutation: {
@@ -354,6 +359,7 @@ function ServiceSettingsCard() {
         setFee(null);
         setJobHours(null);
         setDayHours(null);
+        setLabourRate(null);
         toast({ title: "Service settings saved" });
       },
       onError: (err: unknown) =>
@@ -369,7 +375,14 @@ function ServiceSettingsCard() {
   const shownFee = fee ?? (settings ? String(settings.lateSurchargeFee) : "");
   const shownJobHours = jobHours ?? (settings ? String(settings.defaultJobHours) : "");
   const shownDayHours = dayHours ?? (settings ? String(settings.techWorkHoursPerDay) : "");
-  const dirty = intervalKm != null || fee != null || jobHours != null || dayHours != null;
+  const shownLabourRate =
+    labourRate ?? (settings ? String(settings.labourUsdToGydRate) : "");
+  const dirty =
+    intervalKm != null ||
+    fee != null ||
+    jobHours != null ||
+    dayHours != null ||
+    labourRate != null;
   const valid =
     shownInterval.trim() !== "" &&
     Number(shownInterval) > 0 &&
@@ -380,7 +393,9 @@ function ServiceSettingsCard() {
     Number(shownJobHours) <= 24 &&
     shownDayHours.trim() !== "" &&
     Number(shownDayHours) >= 1 &&
-    Number(shownDayHours) <= 24;
+    Number(shownDayHours) <= 24 &&
+    Number.isFinite(Number(shownLabourRate)) &&
+    Number(shownLabourRate) > 0;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
@@ -392,6 +407,53 @@ function ServiceSettingsCard() {
         Vehicles arriving more than the interval past their last recorded service get flagged
         with a late-service surcharge suggestion on the job card. Staff can apply or waive it.
       </p>
+      <div className="rounded-xl border border-primary/20 bg-primary/[0.05] p-4 space-y-3">
+        <div>
+          <h3 className="font-medium">Customer labour pricing</h3>
+          <p className="text-xs text-muted-foreground">
+            This is a labour-only input conversion. All quotes and invoices remain GYD;
+            changing this setting never reprices an existing job card.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <div className="space-y-2">
+            <Label>Labour FX (GYD per USD)</Label>
+            <Input
+              type="number"
+              min="0.000001"
+              step="any"
+              value={shownLabourRate}
+              disabled={!canManageLabourRate}
+              onChange={(e) => setLabourRate(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Current: GYD {settings?.labourUsdToGydRate?.toLocaleString("en-GY") ?? "—"} per USD.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Fixed labour base</Label>
+            <Input value={`USD ${settings?.labourUsdPerHour ?? 120}/hour`} readOnly />
+            <p className="text-xs text-muted-foreground">Read-only customer labour input.</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Converted customer rate</Label>
+            <Input
+              value={
+                settings
+                  ? `GYD ${Math.round(120 * Number(shownLabourRate || settings.labourUsdToGydRate)).toLocaleString("en-GY")}/hour`
+                  : ""
+              }
+              readOnly
+            />
+            <p className="text-xs text-muted-foreground">USD 120 × labour FX.</p>
+          </div>
+        </div>
+        {!canManageLabourRate && (
+          <p className="text-xs text-muted-foreground">
+            Only permitted dealership managers can edit the labour FX rate.
+          </p>
+        )}
+      </div>
       {isLoading ? (
         <div className="flex items-center gap-2 text-muted-foreground text-sm">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
@@ -454,6 +516,9 @@ function ServiceSettingsCard() {
                     lateSurchargeFee: Number(shownFee),
                     defaultJobHours: Number(shownJobHours),
                     techWorkHoursPerDay: Number(shownDayHours),
+                    ...(canManageLabourRate
+                      ? { labourUsdToGydRate: Number(shownLabourRate) }
+                      : {}),
                   },
                 })
               }

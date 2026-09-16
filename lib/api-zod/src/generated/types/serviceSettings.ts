@@ -16,4 +16,13 @@ export interface ServiceSettings {
   leadSourceReportEnabled: boolean;
   /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
   leadSourceReportSendTime: string;
+  /**
+     * Labour-only GYD per 1 USD; does not redenominate any other money
+     * @exclusiveMinimum 0
+     */
+  labourUsdToGydRate: number;
+  /** Fixed technician labour input in USD/hour (read-only) */
+  labourUsdPerHour: 120;
+  /** Fixed USD 120/hour converted to GYD using labourUsdToGydRate (read-only) */
+  labourGydPerHour: number;
 }

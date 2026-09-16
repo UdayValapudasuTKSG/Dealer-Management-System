@@ -26,4 +26,9 @@ export interface ServiceSettingsUpdate {
   leadSourceReportEnabled?: boolean;
   /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
   leadSourceReportSendTime?: string;
+  /**
+     * Labour-only GYD per 1 USD
+     * @exclusiveMinimum 0
+     */
+  labourUsdToGydRate?: number;
 }

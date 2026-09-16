@@ -7,10 +7,16 @@ import {
   DEFAULT_SERVICE_SUMMARY_CADENCE,
   DEFAULT_JOB_HOURS,
   DEFAULT_TECH_WORK_HOURS_PER_DAY,
+  DEFAULT_LABOUR_USD_TO_GYD_RATE,
+  FIXED_LABOUR_USD_PER_HOUR,
   SERVICE_SUMMARY_CADENCES,
   type DealerServiceSettings,
   type ServiceSummaryCadence,
 } from "@workspace/db";
+import {
+  calculateLabourRateGyd,
+  isValidLabourUsdToGydRate,
+} from "./service-labour-pricing";
 
 /**
  * Per-dealer service settings (FR-SR-07 + FR-COM-03): service interval (km),
@@ -28,7 +34,12 @@ type ServiceSettings = Pick<
   | "techWorkHoursPerDay"
   | "leadSourceReportEnabled"
   | "leadSourceReportSendTime"
-> & { summaryCadence: ServiceSummaryCadence };
+   | "labourUsdToGydRate"
+> & {
+  summaryCadence: ServiceSummaryCadence;
+  labourUsdPerHour: typeof FIXED_LABOUR_USD_PER_HOUR;
+  labourGydPerHour: number;
+};
 
 const DEFAULT_LEAD_SOURCE_REPORT_SEND_TIME = "06:00";
 const SEND_TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
@@ -62,6 +73,12 @@ export async function getServiceSettings(
       row?.techWorkHoursPerDay ?? DEFAULT_TECH_WORK_HOURS_PER_DAY,
     leadSourceReportEnabled: row?.leadSourceReportEnabled ?? false,
     leadSourceReportSendTime: asSendTime(row?.leadSourceReportSendTime),
+    labourUsdToGydRate:
+      row?.labourUsdToGydRate ?? DEFAULT_LABOUR_USD_TO_GYD_RATE,
+    labourUsdPerHour: FIXED_LABOUR_USD_PER_HOUR,
+    labourGydPerHour: calculateLabourRateGyd(
+      row?.labourUsdToGydRate ?? DEFAULT_LABOUR_USD_TO_GYD_RATE,
+    ),
   };
 }
 
@@ -75,6 +92,7 @@ export async function updateServiceSettings(
     techWorkHoursPerDay?: number;
     leadSourceReportEnabled?: boolean;
     leadSourceReportSendTime?: string;
+    labourUsdToGydRate?: number;
   },
 ): Promise<ServiceSettings> {
   // Normalize only the fields actually supplied so concurrent partial
@@ -97,12 +115,25 @@ export async function updateServiceSettings(
     supplied.leadSourceReportSendTime = asSendTime(
       patch.leadSourceReportSendTime,
     );
+  if (patch.labourUsdToGydRate !== undefined) {
+    if (!isValidLabourUsdToGydRate(patch.labourUsdToGydRate)) {
+      throw new Error(
+        "Labour USD to GYD rate must be a positive finite number",
+      );
+    }
+    supplied.labourUsdToGydRate = patch.labourUsdToGydRate;
+  }
 
   if (Object.keys(supplied).length > 0) {
     const current = await getServiceSettings(dealerId);
+    const {
+      labourUsdPerHour: _labourUsdPerHour,
+      labourGydPerHour: _labourGydPerHour,
+      ...persistedCurrent
+    } = current;
     await db
       .insert(dealerServiceSettingsTable)
-      .values({ dealerId, ...current, ...supplied })
+      .values({ dealerId, ...persistedCurrent, ...supplied })
       .onConflictDoUpdate({
         target: dealerServiceSettingsTable.dealerId,
         set: supplied,

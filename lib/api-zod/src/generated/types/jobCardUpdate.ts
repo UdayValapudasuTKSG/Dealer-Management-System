@@ -30,6 +30,10 @@ export interface JobCardUpdate {
      * @minimum 0
      */
   quotedLaborHours?: number;
+  /**
+     * Customer-facing GYD labour override; changing it versions the estimate
+     * @minimum 0
+     */
   laborRate?: number;
   notes?: string;
   /** Technician's analysis of the service — mandatory before the card can be marked completed */

@@ -751,7 +751,19 @@ router.patch("/admin/service-settings", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
-  const settings = await updateServiceSettings(activeDealerId(res), body.data);
+  let settings;
+  try {
+    settings = await updateServiceSettings(activeDealerId(res), body.data);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "Labour USD to GYD rate must be a positive finite number"
+    ) {
+      res.status(422).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
   res.json(UpdateServiceSettingsResponse.parse(settings));
 });
 

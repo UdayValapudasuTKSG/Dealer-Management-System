@@ -34,6 +34,7 @@ import {
   useResendJobCardEstimate,
   useAcknowledgeJobCardEstimate,
   useGetJobCardEstimatePreview,
+  useApplyCurrentJobCardLabourRate,
   type JobCard,
   type ServiceOrder,
   type ServiceInvoice,
@@ -244,6 +245,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const update = useUpdateJobCard();
+  const applyCurrentLabourRateMutation = useApplyCurrentJobCardLabourRate();
   const timer = useToggleJobCardTimer();
   const reopen = useReopenJobCard();
   const { can, me } = useAuthz();
@@ -482,6 +484,24 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
     } catch (error: unknown) {
       toast({
         title: "Could not update quoted hours",
+        description: apiErrorMessage(error, "Try again."),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const applyCurrentLabourRate = async () => {
+    try {
+      await applyCurrentLabourRateMutation.mutateAsync({ id: card.id });
+      await invalidate();
+      toast({
+        title: "Current labour rate applied",
+        description:
+          "The card was repriced in GYD and its estimate authorization was reset. Send the revised quote when ready.",
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Could not apply current labour rate",
         description: apiErrorMessage(error, "Try again."),
         variant: "destructive",
       });
@@ -944,6 +964,21 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                    <p className="mt-1 text-[11px] text-muted-foreground">
                      Only quoted hours affect the customer estimate; changing them creates a new version and does not send it.
                    </p>
+                    {canEditQuoteHours && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 rounded-full text-xs"
+                        disabled={applyCurrentLabourRateMutation.isPending}
+                        onClick={applyCurrentLabourRate}
+                      >
+                        {applyCurrentLabourRateMutation.isPending && (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        )}
+                        Apply current labour rate
+                      </Button>
+                    )}
                  </div>
                  {canEditQuoteHours ? (
                    <div className="flex items-end gap-2">

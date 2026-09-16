@@ -59,6 +59,10 @@ export interface JobCard {
      * @nullable
      */
   quotedLaborHours: number | null;
+  /**
+     * Snapshotted customer-facing GYD labour rate; never a USD amount
+     * @minimum 0
+     */
   laborRate: number;
   /** @nullable */
   notes?: string | null;
