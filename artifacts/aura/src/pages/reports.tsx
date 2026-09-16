@@ -1,7 +1,22 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { useGetReport, GetReportType } from "@workspace/api-client-react";
-import type { Report, GetReportFormat } from "@workspace/api-client-react";
+import {
+  useGetReport,
+  GetReportType,
+  GetReportWorkshopMode,
+  GetReportWaitingReason,
+  GetReportFollowUp,
+  useListServiceTechnicians,
+  type TechnicianRef,
+} from "@workspace/api-client-react";
+import type {
+  Report,
+  GetReportFormat,
+  GetReportParams,
+  GetReportWorkshopMode as WorkshopMode,
+  GetReportWaitingReason as WorkshopWaitingReason,
+  GetReportFollowUp as WorkshopFollowUp,
+} from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
 import { dealerDayKey, dealerDayKeyPlus } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,9 +111,7 @@ function isoDaysAgo(days: number) {
    audit + activity trail). Raw fetch — file downloads have no generated
    hooks. Headers mirror the shared custom-fetch (dealer + dev persona). */
 async function downloadExport(
-  type: ReportType,
-  from: string,
-  to: string,
+  params: GetReportParams,
   format: GetReportFormat,
 ): Promise<void> {
   const headers: Record<string, string> = {};
@@ -110,7 +123,10 @@ async function downloadExport(
   } catch {
     /* localStorage unavailable — skip */
   }
-  const qs = new URLSearchParams({ type, from, to, format });
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries({ ...params, format })) {
+    if (value !== undefined) qs.set(key, String(value));
+  }
   const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
   const res = await fetch(`${apiBase}/reports?${qs.toString()}`, {
     credentials: "include",
@@ -122,7 +138,9 @@ async function downloadExport(
   const blob = await res.blob();
   const disposition = res.headers.get("content-disposition") ?? "";
   const match = /filename="?([^";]+)"?/.exec(disposition);
-  const filename = match?.[1] ?? `${type}-report-${from}-to-${to}.${format}`;
+  const filename =
+    match?.[1] ??
+    `${params.type}-report-${params.from ?? "all"}-to-${params.to ?? "all"}.${format}`;
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -158,6 +176,18 @@ export default function Reports() {
   });
   const [from, setFrom] = useState(initialRange.from);
   const [to, setTo] = useState(initialRange.to);
+  const [workshopMode, setWorkshopMode] = useState<WorkshopMode>(
+    GetReportWorkshopMode.summary,
+  );
+  const [workshopTechnician, setWorkshopTechnician] = useState("");
+  const [workshopAge, setWorkshopAge] = useState("");
+  const [workshopWaitingReason, setWorkshopWaitingReason] = useState<
+    WorkshopWaitingReason | ""
+  >("");
+  const [workshopFollowUp, setWorkshopFollowUp] = useState<
+    WorkshopFollowUp | ""
+  >("");
+  const { data: workshopTechnicians } = useListServiceTechnicians();
 
   const active =
     selected && visible.some((r) => r.type === selected)
@@ -167,9 +197,31 @@ export default function Reports() {
         : visible[0]?.type ?? null;
   const activeDef = REPORT_TYPES.find((r) => r.type === active);
 
-  const { data: report, isLoading, isError } = useGetReport(
-    { type: active ?? "sales_pipeline", from, to },
-  );
+  const reportParams: GetReportParams = {
+    type: active ?? "sales_pipeline",
+    from,
+    to,
+    ...(active === "service_workshop"
+      ? {
+          workshopMode,
+          ...(workshopMode === GetReportWorkshopMode.wip &&
+          workshopTechnician
+            ? { technicianUserId: Number(workshopTechnician) }
+            : {}),
+          ...(workshopMode === GetReportWorkshopMode.wip && workshopAge
+            ? { minAgeDays: Number(workshopAge) }
+            : {}),
+          ...(workshopMode === GetReportWorkshopMode.wip &&
+          workshopWaitingReason
+            ? { waitingReason: workshopWaitingReason }
+            : {}),
+          ...(workshopMode === GetReportWorkshopMode.wip && workshopFollowUp
+            ? { followUp: workshopFollowUp }
+            : {}),
+        }
+      : {}),
+  };
+  const { data: report, isLoading, isError } = useGetReport(reportParams);
 
   if (visible.length === 0) {
     return (
@@ -254,6 +306,22 @@ export default function Reports() {
           })}
         </div>
 
+        {active === "service_workshop" && (
+          <WorkshopReportControls
+            mode={workshopMode}
+            technician={workshopTechnician}
+            age={workshopAge}
+            waitingReason={workshopWaitingReason}
+            followUp={workshopFollowUp}
+            technicians={workshopTechnicians ?? []}
+            onMode={setWorkshopMode}
+            onTechnician={setWorkshopTechnician}
+            onAge={setWorkshopAge}
+            onWaitingReason={setWorkshopWaitingReason}
+            onFollowUp={setWorkshopFollowUp}
+          />
+        )}
+
         {isLoading ? (
           <div className="flex items-center justify-center py-24">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -264,7 +332,7 @@ export default function Reports() {
             different date range.
           </div>
         ) : (
-          <ReportBody report={report} from={from} to={to} />
+          <ReportBody report={report} from={from} to={to} params={reportParams} />
         )}
         </div>
       </div>
@@ -272,29 +340,158 @@ export default function Reports() {
   );
 }
 
+function WorkshopReportControls({
+  mode,
+  technician,
+  age,
+  waitingReason,
+  followUp,
+  technicians,
+  onMode,
+  onTechnician,
+  onAge,
+  onWaitingReason,
+  onFollowUp,
+}: {
+  mode: WorkshopMode;
+  technician: string;
+  age: string;
+  waitingReason: WorkshopWaitingReason | "";
+  followUp: WorkshopFollowUp | "";
+  technicians: TechnicianRef[];
+  onMode: (mode: WorkshopMode) => void;
+  onTechnician: (value: string) => void;
+  onAge: (value: string) => void;
+  onWaitingReason: (value: WorkshopWaitingReason | "") => void;
+  onFollowUp: (value: WorkshopFollowUp | "") => void;
+}) {
+  return (
+    <Card className="glass-panel border-white/10">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Service & Workshop</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Switch to live WIP for dealer-day carry-over and follow-up reporting.
+            </p>
+          </div>
+          <div className="flex rounded-lg bg-foreground/[0.05] p-1 text-xs">
+            {[
+              { value: GetReportWorkshopMode.summary, label: "Historical summary" },
+              { value: GetReportWorkshopMode.wip, label: "Live WIP" },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onMode(option.value)}
+                className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+                  mode === option.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {mode === GetReportWorkshopMode.wip && (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <select
+              aria-label="Filter WIP report by technician"
+              value={technician}
+              onChange={(event) => onTechnician(event.currentTarget.value)}
+              className="h-9 rounded-lg border border-white/10 bg-foreground/[0.04] px-3 text-sm text-foreground outline-none focus:border-primary/50"
+            >
+              <option value="">All technicians</option>
+              {technicians.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+            <select
+              aria-label="Filter WIP report by age"
+              value={age}
+              onChange={(event) => onAge(event.currentTarget.value)}
+              className="h-9 rounded-lg border border-white/10 bg-foreground/[0.04] px-3 text-sm text-foreground outline-none focus:border-primary/50"
+            >
+              <option value="">Any age</option>
+              <option value="1">1+ days</option>
+              <option value="3">3+ days</option>
+              <option value="7">7+ days</option>
+            </select>
+            <select
+              aria-label="Filter WIP report by waiting reason"
+              value={waitingReason}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                const selected = Object.values(GetReportWaitingReason).find(
+                  (item) => item === value,
+                );
+                onWaitingReason(selected ?? "");
+              }}
+              className="h-9 rounded-lg border border-white/10 bg-foreground/[0.04] px-3 text-sm text-foreground outline-none focus:border-primary/50"
+            >
+              <option value="">All waiting reasons</option>
+              <option value={GetReportWaitingReason.ordered_parts}>Ordered parts</option>
+              <option value={GetReportWaitingReason.technician_availability}>Technician availability</option>
+              <option value={GetReportWaitingReason.diagnostics}>Diagnostics</option>
+              <option value={GetReportWaitingReason.escalation_verdict}>Escalation verdict</option>
+              <option value={GetReportWaitingReason.warranty_decision}>Warranty decision</option>
+              <option value={GetReportWaitingReason.customer_decision}>Customer decision</option>
+              <option value={GetReportWaitingReason.other}>Other</option>
+            </select>
+            <select
+              aria-label="Filter WIP report by follow-up"
+              value={followUp}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                const selected = Object.values(GetReportFollowUp).find(
+                  (item) => item === value,
+                );
+                onFollowUp(selected ?? "");
+              }}
+              className="h-9 rounded-lg border border-white/10 bg-foreground/[0.04] px-3 text-sm text-foreground outline-none focus:border-primary/50"
+            >
+              <option value="">All follow-ups</option>
+              <option value={GetReportFollowUp.overdue}>Overdue</option>
+              <option value={GetReportFollowUp.today}>Due today</option>
+              <option value={GetReportFollowUp.upcoming}>Upcoming</option>
+              <option value={GetReportFollowUp.none}>Unknown / not recorded</option>
+            </select>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ReportBody({
   report,
   from,
   to,
+  params,
 }: {
   report: Report;
   from: string;
   to: string;
+  params: GetReportParams;
 }) {
   if (report.type === "sales_advisor_activity") {
     return <SalesAdvisorActivityReport report={report} from={from} to={to} />;
   }
-  return <StandardReport report={report} from={from} to={to} />;
+  return <StandardReport report={report} from={from} to={to} params={params} />;
 }
 
 function StandardReport({
   report,
   from,
   to,
+  params,
 }: {
   report: Report;
   from: string;
   to: string;
+  params: GetReportParams;
 }) {
   const { toast } = useToast();
   const [exporting, setExporting] = useState<GetReportFormat | null>(null);
@@ -302,7 +499,7 @@ function StandardReport({
   const doExport = async (format: GetReportFormat) => {
     setExporting(format);
     try {
-      await downloadExport(report.type as ReportType, from, to, format);
+      await downloadExport(params, format);
     } catch {
       toast({
         title: "Export failed",
@@ -531,7 +728,10 @@ function SalesAdvisorActivityReport({
   const doExport = async (format: GetReportFormat) => {
     setExporting(format);
     try {
-      await downloadExport(report.type as ReportType, from, to, format);
+      await downloadExport(
+        { type: GetReportType.sales_advisor_activity, from, to },
+        format,
+      );
     } catch {
       toast({
         title: "Export failed",

@@ -51,6 +51,9 @@ import {
   enqueueStockEntrySync,
 } from "../lib/erpnext/parts-sync";
 import { notifyPartsRequisitionSubmitted } from "../lib/notify-triggers";
+import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
+import { clearEstimateStaffAcknowledgement } from "../lib/service-estimate-gate";
+import { invalidateServiceEstimate } from "../lib/service-estimate-invalidation";
 import { checkLowStockCrossing } from "./parts";
 
 const router: IRouter = Router();
@@ -886,6 +889,11 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
         );
       }
       const jobCardId = header.jobCardId;
+      const [jobCard] = await tx.select().from(jobCardsTable).where(and(
+        eq(jobCardsTable.id, jobCardId),
+        eq(jobCardsTable.dealerId, dealerId),
+      )).for("update");
+      if (!jobCard) throw Object.assign(new Error("Linked job card was not found"), { status: 409 });
       if (header.status === "fulfilled") {
         const prior = await tx
           .select({ lineId: partRequisitionFulfillmentsTable.lineId })
@@ -909,6 +917,10 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
         .where(and(eq(serviceInvoicesTable.dealerId, dealerId), eq(serviceInvoicesTable.jobCardId, jobCardId)));
       if (invoice) throw Object.assign(new Error(`Invoice #${invoice.id} is already issued`), { status: 422 });
 
+      // A version captures the immutable itemized quote, not just its total.
+      // Even a zero-price fulfillment changes the customer-visible lines and
+      // must therefore revoke any prior decision/acknowledgement.
+      let quoteChanged = false;
       for (const requestLine of parsed.data.lines) {
         const [prior] = await tx
           .select({ id: partRequisitionFulfillmentsTable.id })
@@ -1023,10 +1035,39 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
             .set({ externalJobCardPartId: externalLine.id })
             .where(eq(partRequisitionFulfillmentsTable.id, fulfillment.id));
         }
+        // Both internal and external fulfillments materialize a billable
+        // customer quote line. Do not key the reprice on numeric delta: an
+        // external-only fulfillment (and a zero-price line) still changes the
+        // canonical immutable snapshot.
+        quoteChanged = true;
         await tx
           .update(partRequisitionLinesTable)
           .set({ fulfilledQuantity: line.fulfilledQuantity + requestLine.quantity })
           .where(eq(partRequisitionLinesTable.id, line.id));
+      }
+      if (quoteChanged) {
+        const breakdown = await buildServiceEstimateBreakdown(tx, jobCard);
+        await tx.update(jobCardsTable).set({
+          quoteTotal: breakdown.total,
+          estimateVersion: sql`${jobCardsTable.estimateVersion} + 1`,
+          estimateApprovedVersion: null,
+          estimateApprovalAt: null,
+          estimateApprovalEvidence: null,
+          quoteApprovedAt: null,
+          ...clearEstimateStaffAcknowledgement,
+          ...(jobCard.payType === "customer" ? {
+            status: "on_hold",
+            waitingReason: "customer_decision",
+            nextAction: "Send the revised estimate and wait for customer confirmation",
+            timerSeconds: sql`${jobCardsTable.timerSeconds} + coalesce(greatest(0, extract(epoch from (now() - ${jobCardsTable.timerStartedAt})))::int, 0)`,
+            timerStartedAt: null,
+          } : {}),
+        }).where(and(
+          eq(jobCardsTable.id, jobCard.id),
+          eq(jobCardsTable.dealerId, dealerId),
+          eq(jobCardsTable.estimateVersion, jobCard.estimateVersion),
+        ));
+        await invalidateServiceEstimate(tx, dealerId, jobCard.id);
       }
       const freshLines = await tx
         .select({ quantity: partRequisitionLinesTable.quantity, fulfilledQuantity: partRequisitionLinesTable.fulfilledQuantity })

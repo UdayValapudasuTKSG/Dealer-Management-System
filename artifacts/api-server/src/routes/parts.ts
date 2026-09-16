@@ -17,6 +17,8 @@ import {
   partRequisitionFulfillmentsTable,
   partRequisitionsTable,
   externalJobCardPartsTable,
+  serviceInvoicesTable,
+  serviceOrdersTable,
   dealersTable,
   type Part,
 } from "@workspace/db";
@@ -61,6 +63,12 @@ import {
 import { inArray } from "drizzle-orm";
 import { notifyPartLowStock } from "../lib/notify-triggers";
 import { coordinateCollisionClaim } from "../lib/collision-coordinator";
+import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
+import {
+  clearEstimateStaffAcknowledgement,
+  hasCurrentChargeableWorkAuthorization,
+} from "../lib/service-estimate-gate";
+import { invalidateServiceEstimate } from "../lib/service-estimate-invalidation";
 import {
   enqueuePartItemSync,
   enqueueSupplierSync,
@@ -70,7 +78,6 @@ import {
 } from "../lib/erpnext/parts-sync";
 
 const router: IRouter = Router();
-
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type BackorderRelease = {
@@ -147,16 +154,28 @@ export async function releaseBackorders(
     const blocked = new Set(stillWaiting.map((r) => r.jobCardId));
     const releasable = [...touchedCards].filter((id) => !blocked.has(id));
     if (releasable.length > 0) {
-      await tx
-        .update(jobCardsTable)
-        .set({ status: "in_progress" })
-        .where(
-          and(
-            eq(jobCardsTable.dealerId, dealerId),
-            inArray(jobCardsTable.id, releasable),
-            eq(jobCardsTable.status, "on_hold"),
-          ),
-        );
+      const cardsToConsider = await tx.select().from(jobCardsTable).where(and(
+        eq(jobCardsTable.dealerId, dealerId),
+        inArray(jobCardsTable.id, releasable),
+        eq(jobCardsTable.status, "on_hold"),
+      )).for("update");
+      for (const card of cardsToConsider) {
+        // A stock receipt may only lift the hold it caused. Customer-decision,
+        // diagnostics and rollover holds must retain their own gates.
+        if (card.waitingReason !== "ordered_parts") continue;
+        if (card.rolloverStatus === "pending" || !hasCurrentChargeableWorkAuthorization(card)) continue;
+        await tx.update(jobCardsTable).set({
+          status: "in_progress",
+          waitingReason: null,
+          timerStartedAt: new Date(),
+        }).where(and(
+          eq(jobCardsTable.id, card.id),
+          eq(jobCardsTable.dealerId, dealerId),
+          eq(jobCardsTable.status, "on_hold"),
+          eq(jobCardsTable.waitingReason, "ordered_parts"),
+          eq(jobCardsTable.estimateVersion, card.estimateVersion),
+        ));
+      }
     }
     // Collision cycle-time auto-resume (Task 279): when a paused claim's
     // repair order no longer has ANY backordered line waiting, fold the open
@@ -1587,13 +1606,35 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Purchase order not found" });
     return;
   }
-  if (order.status !== "ordered" && order.status !== "partially_received") {
-    res.status(422).json({
-      error: `PO is ${order.status} — ${order.status === "draft" ? "place the order first" : "nothing left to receive"}`,
+  // Explicit-line retries can be recognized before outstanding-quantity
+  // validation (which would otherwise reject a completed PO as over-received).
+  if (parsed.data.lines && parsed.data.lines.length > 0) {
+    const replayFingerprint = JSON.stringify({
+      lines: parsed.data.lines.map((line) => [line.lineId, line.qty]).sort(([a], [b]) => a - b),
+      receivedAt: parsed.data.receivedAt,
+      deliveryNoteNumber: parsed.data.deliveryNoteNumber.trim(),
+      supplierInvoiceNumber: parsed.data.supplierInvoiceNumber?.trim() || null,
+      warehouseLocation: parsed.data.warehouseLocation.trim(),
+      condition: parsed.data.condition,
+      notes: parsed.data.notes?.trim() || null,
+      documents: parsed.data.documents,
     });
-    return;
+    const [prior] = await db.select({ fingerprint: purchaseOrderReceiptsTable.requestFingerprint })
+      .from(purchaseOrderReceiptsTable)
+      .where(and(
+        eq(purchaseOrderReceiptsTable.dealerId, dealerId),
+        eq(purchaseOrderReceiptsTable.purchaseOrderId, order.id),
+        eq(purchaseOrderReceiptsTable.idempotencyKey, parsed.data.idempotencyKey),
+      ));
+    if (prior) {
+      if (prior.fingerprint !== replayFingerprint) {
+        res.status(409).json({ error: "Idempotency key was already used with different receipt quantities" });
+        return;
+      }
+      res.json(ReceivePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, params.data.id)));
+      return;
+    }
   }
-
   // Requested receipt per line — default: everything outstanding.
   const requested = new Map<number, number>();
   if (parsed.data.lines && parsed.data.lines.length > 0) {
@@ -1643,6 +1684,30 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
     notes: parsed.data.notes?.trim() || null,
     documents: parsed.data.documents,
   });
+  // Idempotent replay is accepted even after the receipt changed the PO to
+  // received. Check it before lifecycle/outstanding validation so retries do
+  // not look like attempted duplicate stock movement.
+  const [priorReceipt] = await db.select({
+    fingerprint: purchaseOrderReceiptsTable.requestFingerprint,
+  }).from(purchaseOrderReceiptsTable).where(and(
+    eq(purchaseOrderReceiptsTable.dealerId, dealerId),
+    eq(purchaseOrderReceiptsTable.purchaseOrderId, order.id),
+    eq(purchaseOrderReceiptsTable.idempotencyKey, parsed.data.idempotencyKey),
+  ));
+  if (priorReceipt) {
+    if (priorReceipt.fingerprint !== receiptFingerprint) {
+      res.status(409).json({ error: "Idempotency key was already used with different receipt quantities" });
+      return;
+    }
+    res.json(ReceivePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, params.data.id)));
+    return;
+  }
+  if (order.status !== "ordered" && order.status !== "partially_received") {
+    res.status(422).json({
+      error: `PO is ${order.status} — ${order.status === "draft" ? "place the order first" : "nothing left to receive"}`,
+    });
+    return;
+  }
   let receiptReplay = false;
   try {
     await db.transaction(async (tx) => {
@@ -1765,6 +1830,26 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
             { status: 409 },
           );
         }
+        const [jobCard] = await tx.select().from(jobCardsTable).where(and(
+          eq(jobCardsTable.id, requisition.jobCardId),
+          eq(jobCardsTable.dealerId, dealerId),
+        )).for("update");
+        if (!jobCard) {
+          throw Object.assign(new Error("Linked job card was not found"), { status: 409 });
+        }
+        const [issuedInvoice] = await tx.select({ id: serviceInvoicesTable.id })
+          .from(serviceInvoicesTable)
+          .where(and(
+            eq(serviceInvoicesTable.jobCardId, jobCard.id),
+            eq(serviceInvoicesTable.dealerId, dealerId),
+          ))
+          .for("update");
+        if (issuedInvoice) {
+          throw Object.assign(
+            new Error(`Job card #${jobCard.id} is already invoiced; receive this external part through a linked financial adjustment instead`),
+            { status: 422 },
+          );
+        }
         const [fulfillment] = await tx
           .insert(partRequisitionFulfillmentsTable)
           .values({
@@ -1797,16 +1882,44 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
             .returning({ id: externalJobCardPartsTable.id });
           externalId = external.id;
         } else {
-          await tx
+          const [updatedExternal] = await tx
             .update(externalJobCardPartsTable)
             .set({ quantity: sql`${externalJobCardPartsTable.quantity} + ${qty}` })
             .where(
               and(
                 eq(externalJobCardPartsTable.id, externalId),
                 eq(externalJobCardPartsTable.dealerId, dealerId),
+                eq(externalJobCardPartsTable.jobCardId, jobCard.id),
+                eq(externalJobCardPartsTable.requisitionLineId, reqLine.id),
               ),
-            );
+            )
+            .returning({ id: externalJobCardPartsTable.id });
+          if (!updatedExternal) {
+            throw Object.assign(new Error("External-part allocation does not match its job card or requisition line"), { status: 409 });
+          }
         }
+        // Receipt materializes a customer-billable external line. It therefore
+        // always creates a new estimate version and invalidates any approval
+        // atomically with fulfillment — an old customer link can never approve
+        // an amount that did not include this received quantity.
+        const breakdown = await buildServiceEstimateBreakdown(tx, jobCard);
+        await tx.update(jobCardsTable).set({
+          quoteTotal: breakdown.total,
+          estimateVersion: sql`${jobCardsTable.estimateVersion} + 1`,
+          estimateApprovedVersion: null,
+          estimateApprovalAt: null,
+          estimateApprovalEvidence: null,
+          quoteApprovedAt: null,
+          ...clearEstimateStaffAcknowledgement,
+          ...(jobCard.payType === "customer" ? {
+            status: "on_hold",
+            waitingReason: "customer_decision",
+            nextAction: "Send the revised estimate and wait for customer confirmation",
+            timerSeconds: sql`${jobCardsTable.timerSeconds} + coalesce(greatest(0, extract(epoch from (now() - ${jobCardsTable.timerStartedAt})))::int, 0)`,
+            timerStartedAt: null,
+          } : {}),
+        }).where(and(eq(jobCardsTable.id, jobCard.id), eq(jobCardsTable.dealerId, dealerId)));
+        await invalidateServiceEstimate(tx, dealerId, jobCard.id);
         await tx
           .update(partRequisitionFulfillmentsTable)
           .set({ externalJobCardPartId: externalId })

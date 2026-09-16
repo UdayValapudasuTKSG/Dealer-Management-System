@@ -3728,6 +3728,103 @@ paths:
                 items:
                   $ref: "#/components/schemas/TechnicianRef"
 
+  /job-cards/wip:
+    get:
+      operationId: listWorkshopWip
+      tags: [service]
+      summary: Open workshop jobs, including dealer-day carry-over ageing
+      parameters:
+        - { name: technicianUserId, in: query, required: false, schema: { type: integer } }
+        - { name: minAgeDays, in: query, required: false, schema: { type: integer, minimum: 0 } }
+        - { name: waitingReason, in: query, required: false, schema: { type: string, enum: [ordered_parts, technician_availability, diagnostics, escalation_verdict, warranty_decision, customer_decision, other] } }
+        - { name: followUp, in: query, required: false, schema: { type: string, enum: [overdue, today, upcoming, none] } }
+        - { name: carryOver, in: query, required: false, schema: { type: string, enum: ["0", "1"] } }
+        - { name: format, in: query, required: false, schema: { type: string, enum: [csv, xlsx, pdf] } }
+      responses:
+        "200":
+          description: Dealership-day scoped WIP rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkshopWipItem" }
+  /job-cards/{id}/waiting:
+    patch:
+      operationId: updateJobCardWaiting
+      tags: [service]
+      summary: Put an active job on a named wait or resume it without bypassing rollover approvals
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobCardWaitingUpdate" }
+      responses:
+        "200":
+          description: Updated job card
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobCard" }
+        "409":
+          description: Card state changed or a pending rollover blocks resume
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /job-cards/{id}/estimate/resend:
+    post:
+      operationId: resendJobCardEstimate
+      tags: [service]
+      summary: Invalidate previous estimate links and send the exact current customer-cost version again
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "202":
+          description: Quote was queued for durable delivery
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobCardEstimateSendResult" }
+        "422":
+          description: No customer-pay estimate is available to send
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /job-cards/{id}/estimate/acknowledge:
+    post:
+      operationId: acknowledgeJobCardEstimate
+      tags: [service]
+      summary: Record assigned service staff receipt of the exact current customer-approved estimate
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Current estimate receipt acknowledgement (idempotent for the same decision)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobCard" }
+        "422":
+          description: The current version does not have a non-stale customer approval
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnmetError" }
+  /job-cards/{id}/estimate/preview:
+    get:
+      operationId: getJobCardEstimatePreview
+      tags: [service]
+      summary: Staff-safe canonical estimate, customer recipient, and email outbox delivery state
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Canonical current estimate and its linked customer-delivery state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobCardEstimatePreview" }
+        "404":
+          description: Job card not found in active dealer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /job-cards:
     get:
       operationId: listJobCards
@@ -6303,6 +6400,31 @@ paths:
           schema:
             type: string
             enum: [csv, xlsx, pdf]
+        - name: workshopMode
+          in: query
+          required: false
+          description: service_workshop only; `wip` produces the live dealer-day WIP export without replacing the historical report.
+          schema: { type: string, enum: [summary, wip] }
+        - name: technicianUserId
+          in: query
+          required: false
+          description: service_workshop WIP only
+          schema: { type: integer }
+        - name: minAgeDays
+          in: query
+          required: false
+          description: service_workshop WIP only
+          schema: { type: integer, minimum: 0 }
+        - name: waitingReason
+          in: query
+          required: false
+          description: service_workshop WIP only
+          schema: { type: string, enum: [ordered_parts, technician_availability, diagnostics, escalation_verdict, warranty_decision, customer_decision, other] }
+        - name: followUp
+          in: query
+          required: false
+          description: service_workshop WIP only
+          schema: { type: string, enum: [overdue, today, upcoming, none] }
       responses:
         "200":
           description: Report payload
@@ -13080,19 +13202,20 @@ components:
       type: object
       required: [kind, description, amount]
       properties:
-        kind: { type: string, enum: [part, labour] }
+        kind: { type: string, enum: [part, labour, surcharge, tax] }
         description: { type: string }
         quantity: { type: number }
         amount: { type: number }
     PublicServiceEstimate:
       type: object
-      required: [state, brandName, vehicle, service, total, lines, expiresAt]
+      required: [state, brandName, vehicle, service, total, lines, estimateVersion, expiresAt]
       properties:
-        state: { type: string, enum: [open, approved, declined] }
+        state: { type: string, enum: [open, approved, declined, expired, stale] }
         brandName: { type: string }
         vehicle: { type: string }
         service: { type: string }
         total: { type: number }
+        estimateVersion: { type: integer, minimum: 0 }
         lines:
           type: array
           items: { $ref: "#/components/schemas/ServiceEstimateLine" }
@@ -13147,6 +13270,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ServiceStageEvent"
+        createdByUserId: { type: ["integer", "null"] }
+        createdByName: { type: ["string", "null"] }
+        createdOrigin: { type: string, enum: [staff, system, import, legacy_unknown] }
         jobs:
           type: array
           items: { type: string }
@@ -13292,6 +13418,10 @@ components:
       properties:
         id: { type: integer }
         serviceOrderId: { type: integer }
+        customerName: { type: ["string", "null"] }
+        vehicleInfo: { type: ["string", "null"] }
+        netPartsTotal: { type: number, description: "Authoritative issued-minus-returned internal parts total; credit returns are included" }
+        latestEstimateState: { type: ["string", "null"], enum: [not_sent, open, approved, declined, expired, stale, null], description: "Staff-safe state of the current estimate version; never exposes bearer tokens" }
         assetId: { type: ["integer", "null"] }
         title: { type: string }
         status: { type: string, enum: [open, in_progress, on_hold, completed, closed, cancelled] }
@@ -13338,7 +13468,99 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         timerSeconds: { type: integer, description: "Accumulated worked seconds (excludes the running segment)" }
         timerStartedAt: { type: ["string", "null"], format: date-time, description: "Start of the running timer segment; null when paused" }
+        receivedAt: { type: ["string", "null"], format: date-time, description: "Physical workshop intake time; not booking/card creation time" }
+        waitingReason: { type: ["string", "null"], enum: [ordered_parts, technician_availability, diagnostics, escalation_verdict, warranty_decision, customer_decision, other, null] }
+        waitingHistory:
+          type: array
+          items: { $ref: "#/components/schemas/JobWaitingEvent" }
+        nextAction: { type: ["string", "null"] }
+        followUpDate: { type: ["string", "null"], format: date }
+        estimateVersion: { type: integer, minimum: 0 }
+        estimateApprovedVersion: { type: ["integer", "null"], minimum: 0 }
+        estimateApprovalAt: { type: ["string", "null"], format: date-time }
+        estimateApprovalEvidence: { type: ["object", "null"], additionalProperties: true }
+        estimateStaffAcknowledgedVersion: { type: ["integer", "null"], minimum: 0, description: "Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work" }
+        estimateStaffAcknowledgedDecisionId: { type: ["integer", "null"], description: "Exact approved service_estimate_decisions record acknowledged by staff" }
+        estimateStaffAcknowledgedByUserId: { type: ["integer", "null"] }
+        estimateStaffAcknowledgedByName: { type: ["string", "null"] }
+        estimateStaffAcknowledgedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+    JobCardEstimatePreview:
+      type: object
+      required: [estimateVersion, total, lines, customerRecipient, decision, delivery]
+      properties:
+        estimateVersion: { type: integer, minimum: 0 }
+        total: { type: number, description: "Canonical total recalculated from the current card lines" }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceEstimateLine" }
+        customerRecipient: { type: ["string", "null"], description: "Current deliverable customer email; no bearer token is exposed" }
+        decision:
+          type: object
+          required: [id, state, decidedAt]
+          properties:
+            id: { type: ["integer", "null"] }
+            state: { type: string, enum: [draft, open, approved, declined, expired, stale] }
+            decidedAt: { type: ["string", "null"], format: date-time }
+        delivery:
+          type: object
+          required: [state, recipient, attempts, lastError, sentAt, deliveredAt]
+          properties:
+            state: { type: string, description: "Actual email outbox state; queued is not a claim that email was sent" }
+            recipient: { type: ["string", "null"] }
+            attempts: { type: integer, minimum: 0 }
+            lastError: { type: ["string", "null"] }
+            sentAt: { type: ["string", "null"], format: date-time }
+            deliveredAt: { type: ["string", "null"], format: date-time }
+    JobCardEstimateSendResult:
+      type: object
+      required: [jobCard, outcome, code, message, decisionId, emailLogId, deliveryStatus]
+      properties:
+        jobCard: { $ref: "#/components/schemas/JobCard" }
+        outcome: { type: string, enum: [queued] }
+        code: { type: string, enum: [queued] }
+        message: { type: string }
+        decisionId: { type: integer }
+        emailLogId: { type: integer }
+        deliveryStatus: { type: string, enum: [queued, dispatched, sent, delivered, read] }
+    JobWaitingEvent:
+      type: object
+      required: [action, byName, at]
+      properties:
+        action: { type: string, enum: [hold, resume] }
+        reason: { type: ["string", "null"], enum: [ordered_parts, technician_availability, diagnostics, escalation_verdict, warranty_decision, customer_decision, other, null] }
+        nextAction: { type: ["string", "null"] }
+        followUpDate: { type: ["string", "null"], format: date }
+        byUserId: { type: ["integer", "null"] }
+        byName: { type: string }
+        at: { type: string, format: date-time }
+    JobCardWaitingUpdate:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [hold, resume] }
+        reason: { type: string, enum: [ordered_parts, technician_availability, diagnostics, escalation_verdict, warranty_decision, customer_decision, other] }
+        nextAction: { type: string, minLength: 1, maxLength: 2000 }
+        followUpDate: { type: string, format: date }
+    WorkshopWipItem:
+      type: object
+      required: [id, serviceOrderId, title, customerName, vehicleInfo, receivedAt, receivedSource, elapsedDays, carryOver, status, technicianUserId, technicianName, waitingReason, nextAction, followUpDate]
+      properties:
+        id: { type: integer }
+        serviceOrderId: { type: integer }
+        title: { type: string }
+        customerName: { type: ["string", "null"] }
+        vehicleInfo: { type: string }
+        receivedAt: { type: string, format: date-time }
+        receivedSource: { type: string, enum: [intake, legacy_started], description: "Legacy rows use startedAt rather than fabricating an intake time" }
+        elapsedDays: { type: integer, minimum: 0 }
+        carryOver: { type: boolean }
+        status: { type: string }
+        technicianUserId: { type: ["integer", "null"] }
+        technicianName: { type: ["string", "null"] }
+        waitingReason: { type: ["string", "null"] }
+        nextAction: { type: ["string", "null"] }
+        followUpDate: { type: ["string", "null"], format: date }
     JobCardDetail:
       type: object
       required: [jobCard, serviceOrder]
@@ -13665,7 +13887,7 @@ components:
 
     ServiceInvoice:
       type: object
-      required: [id, serviceOrderId, jobCardId, vehicleInfo, partsTotal, laborTotal, surchargeTotal, discountTotal, discountStatus, tax, total, status, adjustments, createdAt]
+      required: [id, serviceOrderId, jobCardId, vehicleInfo, partsTotal, laborTotal, surchargeTotal, discountTotal, discountStatus, tax, total, originalTotal, balance, customerCreditBalance, status, adjustments, createdAt]
       properties:
         id: { type: integer }
         serviceOrderId: { type: integer }
@@ -13687,6 +13909,10 @@ components:
         discountDecidedAt: { type: ["string", "null"], format: date-time }
         tax: { type: number }
         total: { type: number }
+        originalTotal: { type: number, description: "Immutable issued document total before credits/adjustments" }
+        balance: { type: number, description: "Current outstanding balance after auditable financial entries" }
+        customerCreditBalance: { type: number, description: "Non-cash customer account credit awaiting controlled refund or future application" }
+        creditReconciliationStatus: { type: ["string", "null"], enum: [pending_collision_settlement, null] }
         status: { type: string, enum: [issued, paid, void] }
         paymentMethod: { type: ["string", "null"], enum: [cash, card, bank_transfer, cheque, mobile_money, other, null] }
         paymentReference: { type: ["string", "null"] }

@@ -20,6 +20,7 @@ import {
   useCreateJobCard,
   useUpdateJobCard,
   getListJobCardsQueryKey,
+  getListWorkshopWipQueryKey,
   useListJobCardParts,
   useListJobCardExternalParts,
   useAddJobCardPart,
@@ -36,6 +37,7 @@ import {
   getListCoveragePlansQueryKey,
   useSendCoverageReminder,
   useListServiceTechnicians,
+  useListWorkshopWip,
   useListParts,
   getListPartsQueryKey,
   useListJobCardCreditNotes,
@@ -64,6 +66,10 @@ import {
   type ServiceOrderUpdateType,
   type ServiceInvoice,
   type ServiceOrderAdvanceBodyTargetStatus,
+  type JobCardWaitingReason,
+  type ListWorkshopWipFollowUp,
+  type WorkshopWipItem,
+  type TechnicianRef,
   useListCustomers,
   useListServiceCustomerVehicles,
   getListServiceCustomerVehiclesQueryKey,
@@ -163,8 +169,10 @@ import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { useAuthz } from "@/lib/auth";
 import { ViewControls } from "@/components/view-controls";
+import { ListPagination } from "@/components/list-pagination";
 import { PartRequisitionForm } from "@/components/service/part-requisition-form";
 import { cn } from "@/lib/utils";
 import {
@@ -391,6 +399,7 @@ function HistoryTab() {
   const { data: rows, isLoading } = useListJobCardHistory(
     applied ? { q: applied } : {},
   );
+  const historyPager = useListPagination(rows ?? [], applied);
 
   return (
     <div className="space-y-4">
@@ -425,6 +434,7 @@ function HistoryTab() {
           </p>
         </div>
       ) : (
+        <>
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
           <table className="w-full text-sm">
             <thead>
@@ -439,7 +449,7 @@ function HistoryTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {historyPager.items.map((r) => (
                 <tr key={r.id} className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors align-top">
                   <td className="px-4 py-3">
                     <div className="font-medium">{r.title}</div>
@@ -478,6 +488,8 @@ function HistoryTab() {
             </tbody>
           </table>
         </div>
+        <ListPagination {...historyPager} label="history jobs" />
+        </>
       )}
     </div>
   );
@@ -521,6 +533,8 @@ function MyJobsTab() {
     visibleCards.filter(
       (card) => !active.includes(card) && !completed.includes(card),
     );
+  const orderedCards = [...active, ...completed, ...other];
+  const myJobsPager = useListPagination(orderedCards, scope);
   const bookedHours =
     visibleCards.reduce((sum, card) => sum + bookedHoursForCard(card), 0);
   const now = Date.now();
@@ -589,10 +603,13 @@ function MyJobsTab() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {[...active, ...completed, ...other].map((card) => (
-            <Link key={card.id} href={`/service/job-cards/${card.id}`}><JobCardSummary card={card} /></Link>
-          ))}
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {myJobsPager.items.map((card) => (
+              <Link key={card.id} href={`/service/job-cards/${card.id}`}><JobCardSummary card={card} /></Link>
+            ))}
+          </div>
+          <ListPagination {...myJobsPager} label="my jobs" />
         </div>
       )}
     </div>
@@ -1083,6 +1100,7 @@ function EditBookingDialog({
       const updatedOrder = await update.mutateAsync({ id: order.id, data: payload });
       queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
       queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListWorkshopWipQueryKey() });
       onUpdated?.(updatedOrder);
       toast({ title: "Booking updated", description: `RO #${order.id} updated successfully.` });
       setOpen(false);
@@ -1448,6 +1466,7 @@ function DeleteOrderButton({ order }: { order: ServiceOrder }) {
                 await del.mutateAsync({ id: order.id });
                 queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
                 queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+                queryClient.invalidateQueries({ queryKey: getListWorkshopWipQueryKey() });
                 toast({ title: "Booking deleted", description: `RO #${order.id} removed.` });
               } catch (e: unknown) {
                 const msg =
@@ -1788,10 +1807,21 @@ function BookingDetailsDialog({
                 {formatCalendarDateShort(order.scheduledDate)}
               </div>
               <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mt-3 mb-1">
-                Created
+                Booking created
               </div>
               <div className="font-medium text-xs text-muted-foreground">
-                {formatDealerDateShort(order.createdAt)}
+                {formatDealerDayTime(order.createdAt)}
+                {" · "}
+                {order.createdByName?.trim() ||
+                  (order.createdOrigin === "import"
+                    ? "Imported record"
+                    : order.createdOrigin === "system"
+                      ? "System"
+                      : order.createdOrigin === "staff"
+                        ? "Staff member not recorded"
+                        : "Legacy creator unknown")}
+                {" · "}
+                {(order.createdOrigin ?? "legacy_unknown").replace(/_/g, " ")}
               </div>
             </div>
           </div>
@@ -1985,7 +2015,39 @@ function BookingsTab() {
   });
   const { density, setDensity, layout, setLayout } = useViewMode("service");
   const focusOrderId = useFocusParam("order");
-  const isFocused = useFocusHighlight(focusOrderId, "service-order", !!orders?.length);
+  const bookingsPager = useListPagination(
+    orders ?? [],
+    `${fromStr}|${toStr}|${layout}`,
+  );
+  const focusedOrderIndex =
+    focusOrderId == null ? -1 : (orders ?? []).findIndex((order) => order.id === focusOrderId);
+  const focusedOrderPage =
+    focusedOrderIndex < 0 ? null : Math.floor(focusedOrderIndex / bookingsPager.pageSize) + 1;
+  const focusHandledRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (focusOrderId == null) {
+      focusHandledRef.current = null;
+      return;
+    }
+    if (focusedOrderPage == null) return;
+
+    // Do not depend on the pager callback (it is intentionally recreated by
+    // the hook). Remembering this focus/page-size pair also leaves subsequent
+    // Next/Previous navigation under the user's control.
+    const focusKey = `${focusOrderId}:${bookingsPager.pageSize}`;
+    if (focusHandledRef.current === focusKey) return;
+    focusHandledRef.current = focusKey;
+    if (bookingsPager.page !== focusedOrderPage) {
+      bookingsPager.onPageChange(focusedOrderPage);
+    }
+  }, [focusOrderId, focusedOrderPage, bookingsPager.pageSize]);
+
+  const isFocused = useFocusHighlight(
+    focusOrderId,
+    "service-order",
+    focusedOrderIndex >= 0 && bookingsPager.items.some((order) => order.id === focusOrderId),
+  );
 
   return (
     <>
@@ -2039,7 +2101,7 @@ function BookingsTab() {
               </tr>
             </thead>
             <tbody>
-              {(orders ?? []).map((order) => (
+              {bookingsPager.items.map((order) => (
                 <tr
                   key={order.id}
                   id={`service-order-${order.id}`}
@@ -2102,7 +2164,7 @@ function BookingsTab() {
           ) : !orders?.length ? (
             <EmptyState icon={Calendar} text="No bookings yet. Book the first service." />
           ) : (
-            orders.map((order) => (
+            bookingsPager.items.map((order) => (
               <div
                 key={order.id}
                 id={`service-order-${order.id}`}
@@ -2222,6 +2284,24 @@ function BookingsTab() {
                         {order.vin?.trim() || "Not recorded"}
                       </div>
                     </div>
+                    <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Booking provenance
+                      </div>
+                      <div className="mt-1 truncate text-sm font-medium">
+                        {order.createdByName?.trim() ??
+                          (order.createdOrigin === "import"
+                            ? "Imported record"
+                            : order.createdOrigin === "system"
+                              ? "System"
+                              : order.createdOrigin === "staff"
+                                ? "Staff member not recorded"
+                                : "Legacy creator unknown")}
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {formatDealerDayTime(order.createdAt)} · {(order.createdOrigin ?? "legacy_unknown").replace(/_/g, " ")}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="mt-3 flex flex-col gap-2.5 border-t border-white/10 pt-3 xl:flex-row xl:items-end xl:justify-between">
@@ -2265,6 +2345,9 @@ function BookingsTab() {
             ))
           )}
         </div>
+      )}
+      {!isLoading && !!orders?.length && (
+        <ListPagination {...bookingsPager} label="bookings" />
       )}
     </div>
 
@@ -2594,6 +2677,7 @@ function CreateJobCardDialog() {
           } as never,
         });
         queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListWorkshopWipQueryKey() });
         toast({ title: "Job card opened", description: "Technician has been notified." });
       }}
     />
@@ -2607,6 +2691,19 @@ function JobCardsTab() {
   const [toDate, setToDate] = useState("");
   const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
+  const [wipTech, setWipTech] = useState("all");
+  const [wipAge, setWipAge] = useState("all");
+  const [wipReason, setWipReason] = useState("all");
+  const [wipFollowUp, setWipFollowUp] = useState("all");
+  const [wipCarryOver, setWipCarryOver] = useState("all");
+  const { data: technicians } = useListServiceTechnicians();
+  const { data: wip, isLoading: wipLoading } = useListWorkshopWip({
+    ...(wipTech !== "all" ? { technicianUserId: Number(wipTech) } : {}),
+    ...(wipAge !== "all" ? { minAgeDays: Number(wipAge) } : {}),
+    ...(isWaitingReason(wipReason) ? { waitingReason: wipReason } : {}),
+    ...(isWipFollowUpFilter(wipFollowUp) ? { followUp: wipFollowUp } : {}),
+    ...(isCarryOverFilter(wipCarryOver) ? { carryOver: wipCarryOver } : {}),
+  });
 
   const ordersById = new Map((orders ?? []).map((order) => [order.id, order]));
   const normalizedSearch = search.trim().toLowerCase();
@@ -2630,6 +2727,10 @@ function JobCardsTab() {
       order?.registrationNumber,
     ].some((value) => value?.toLowerCase().includes(normalizedSearch));
   });
+  const jobCardsPager = useListPagination(
+    filteredCards,
+    `${search}|${fromDate}|${toDate}|${status}`,
+  );
 
   if (isLoading || ordersLoading)
     return (
@@ -2647,6 +2748,21 @@ function JobCardsTab() {
 
   return (
     <div className="space-y-4">
+      <WorkshopWipPanel
+        rows={wip ?? []}
+        loading={wipLoading}
+        technicians={technicians ?? []}
+        technician={wipTech}
+        age={wipAge}
+        reason={wipReason}
+        followUp={wipFollowUp}
+        carryOver={wipCarryOver}
+        onTechnician={setWipTech}
+        onAge={setWipAge}
+        onReason={setWipReason}
+        onFollowUp={setWipFollowUp}
+        onCarryOver={setWipCarryOver}
+      />
       <Card className="glass-panel border-white/10 rounded-2xl">
         <CardContent className="p-4">
           <div className="grid items-end gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_170px_170px_180px_auto]">
@@ -2740,14 +2856,217 @@ function JobCardsTab() {
         />
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {filteredCards.map((card) => (
+          {jobCardsPager.items.map((card) => (
             <Link key={card.id} href={`/service/job-cards/${card.id}`}>
               <JobCardSummary card={card} order={ordersById.get(card.serviceOrderId)} />
             </Link>
           ))}
         </div>
       )}
+      {filteredCards.length > 0 && (
+        <ListPagination {...jobCardsPager} label="job cards" />
+      )}
     </div>
+  );
+}
+
+const WAITING_REASON_LABEL: Record<string, string> = {
+  ordered_parts: "Ordered parts",
+  technician_availability: "Technician availability",
+  diagnostics: "Diagnostics",
+  escalation_verdict: "Escalation verdict",
+  warranty_decision: "Warranty decision",
+  customer_decision: "Customer decision",
+  other: "Other",
+};
+
+function isWaitingReason(value: string): value is Exclude<JobCardWaitingReason, null> {
+  return value in WAITING_REASON_LABEL;
+}
+
+function isCarryOverFilter(value: string): value is "0" | "1" {
+  return value === "0" || value === "1";
+}
+
+function isWipFollowUpFilter(value: string): value is ListWorkshopWipFollowUp {
+  return value === "overdue" || value === "today" || value === "upcoming" || value === "none";
+}
+
+function WorkshopWipPanel({
+  rows,
+  loading,
+  technicians,
+  technician,
+  age,
+  reason,
+  followUp,
+  carryOver,
+  onTechnician,
+  onAge,
+  onReason,
+  onFollowUp,
+  onCarryOver,
+}: {
+  rows: WorkshopWipItem[];
+  loading: boolean;
+  technicians: TechnicianRef[];
+  technician: string;
+  age: string;
+  reason: string;
+  followUp: string;
+  carryOver: string;
+  onTechnician: (value: string) => void;
+  onAge: (value: string) => void;
+  onReason: (value: string) => void;
+  onFollowUp: (value: string) => void;
+  onCarryOver: (value: string) => void;
+}) {
+  const wipPager = useListPagination(
+    rows,
+    `${technician}|${age}|${reason}|${followUp}|${carryOver}`,
+  );
+  const waitingLabel = (value: string | null) =>
+    value ? (WAITING_REASON_LABEL[value] ?? value.replace(/_/g, " ")) : "Working";
+  const download = () => {
+    const escape = (value: string | number | null) =>
+      `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rowsForCsv = rows.map((row) =>
+      [
+        `JC #${row.id}`,
+        `RO #${row.serviceOrderId}`,
+        row.customerName,
+        row.vehicleInfo,
+        `${formatDealerDayTime(row.receivedAt)}${row.receivedSource === "legacy_started" ? " (legacy work-start record)" : ""}`,
+        row.elapsedDays,
+        row.carryOver ? "Yes" : "No",
+        row.status.replace(/_/g, " "),
+        row.technicianName ?? "Unassigned",
+        waitingLabel(row.waitingReason),
+        row.nextAction,
+        row.followUpDate,
+      ]
+        .map(escape)
+        .join(","),
+    );
+    const content = [
+      "Job card,Repair order,Customer,Vehicle,Received,Elapsed days,Carry-over,Status,Responsible person,Waiting reason,Next action,Expected follow-up",
+      ...rowsForCsv,
+    ].join("\r\n");
+    const blob = new Blob([`\ufeff${content}`], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "workshop-wip.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Card className="glass-panel border-white/10 rounded-2xl overflow-hidden">
+      <CardContent className="p-4 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-bold uppercase tracking-widest">Workshop WIP</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Open vehicles received into the workshop. Carry-over means received before today in dealership time.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-full"
+            disabled={loading || rows.length === 0}
+            onClick={download}
+          >
+            <FileText className="mr-1.5 h-3.5 w-3.5" /> Download report
+          </Button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <Select value={technician} onValueChange={onTechnician}>
+            <SelectTrigger aria-label="Filter WIP by technician"><SelectValue placeholder="All technicians" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All technicians</SelectItem>
+              {technicians.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={age} onValueChange={onAge}>
+            <SelectTrigger aria-label="Filter WIP by age"><SelectValue placeholder="Any age" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any age</SelectItem>
+              <SelectItem value="1">1+ days</SelectItem>
+              <SelectItem value="3">3+ days</SelectItem>
+              <SelectItem value="7">7+ days</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={reason} onValueChange={onReason}>
+            <SelectTrigger aria-label="Filter WIP by waiting reason"><SelectValue placeholder="Any waiting reason" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any waiting reason</SelectItem>
+              {Object.entries(WAITING_REASON_LABEL).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={carryOver} onValueChange={onCarryOver}>
+            <SelectTrigger aria-label="Filter WIP carry-over"><SelectValue placeholder="All open work" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All open work</SelectItem>
+              <SelectItem value="1">Carry-over only</SelectItem>
+              <SelectItem value="0">Received today</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={followUp} onValueChange={onFollowUp}>
+            <SelectTrigger aria-label="Filter WIP by follow-up"><SelectValue placeholder="All follow-ups" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All follow-ups</SelectItem>
+              <SelectItem value="overdue">Overdue</SelectItem>
+              <SelectItem value="today">Due today</SelectItem>
+              <SelectItem value="upcoming">Upcoming</SelectItem>
+              <SelectItem value="none">Unknown / not recorded</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {loading ? (
+          <div className="h-28 animate-pulse rounded-xl bg-white/[0.04]" />
+        ) : rows.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
+            No open jobs match these WIP filters.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[940px] text-xs">
+              <thead>
+                <tr className="border-b border-white/10 text-left uppercase tracking-wider text-muted-foreground">
+                  {["Job / Customer", "Vehicle / received", "Age", "Status", "Responsible", "Waiting reason", "Next action"].map((heading) => <th key={heading} className="px-3 py-2.5 font-semibold">{heading}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {wipPager.items.map((row) => (
+                  <tr key={row.id} className="border-b border-white/[0.05] last:border-0">
+                    <td className="px-3 py-3">
+                      <Link href={`/service/job-cards/${row.id}`} className="font-medium hover:text-primary">JC #{row.id} · {row.customerName ?? "Customer not recorded"}</Link>
+                      <div className="mt-0.5 text-muted-foreground">RO #{row.serviceOrderId} · {row.title}</div>
+                    </td>
+                    <td className="px-3 py-3"><div className="font-medium">{row.vehicleInfo}</div><div className="mt-0.5 text-muted-foreground">{formatDealerDayTime(row.receivedAt)}{row.receivedSource === "legacy_started" && <span className="block text-xs">Legacy work-start record; intake time unknown</span>}</div></td>
+                    <td className="px-3 py-3 whitespace-nowrap">{row.elapsedDays}d {row.carryOver && <Badge className="ml-1 border-none bg-primary/15 text-primary text-[9px]">Carry-over</Badge>}</td>
+                    <td className="px-3 py-3 capitalize">{row.status.replace(/_/g, " ")}</td>
+                    <td className="px-3 py-3">{row.technicianName ?? "Unassigned"}</td>
+                    <td className="px-3 py-3">{waitingLabel(row.waitingReason)}</td>
+                    <td className="px-3 py-3">{row.nextAction ?? "—"}{row.followUpDate && <div className="mt-0.5 text-muted-foreground">Follow up {formatGuyanaDate(row.followUpDate)}</div>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!loading && rows.length > 0 && (
+          <ListPagination {...wipPager} label="workshop WIP jobs" />
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -3060,6 +3379,7 @@ function RolloverSection({
 
 function InvoicesTab() {
   const { data: invoices, isLoading } = useListServiceInvoices();
+  const invoicesPager = useListPagination(invoices ?? []);
 
   if (isLoading)
     return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
@@ -3067,10 +3387,13 @@ function InvoicesTab() {
     return <EmptyState icon={Receipt} text="No invoices yet. Complete a job card and generate one." />;
 
   return (
-    <div className="grid grid-cols-1 gap-4">
-      {invoices.map((inv) => (
-        <InvoiceCard key={inv.id} inv={inv} />
-      ))}
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-4">
+        {invoicesPager.items.map((inv) => (
+          <InvoiceCard key={inv.id} inv={inv} />
+        ))}
+      </div>
+      <ListPagination {...invoicesPager} label="invoices" />
     </div>
   );
 }
@@ -3589,6 +3912,7 @@ function CoverageTab() {
   const { data: plans, isLoading } = useListCoveragePlans();
   const remind = useSendCoverageReminder();
   const { toast } = useToast();
+  const coveragePager = useListPagination(plans ?? []);
 
   if (isLoading)
     return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
@@ -3597,74 +3921,77 @@ function CoverageTab() {
 
   const now = new Date();
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {plans.map((plan) => {
-        const end = new Date(plan.endDate);
-        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86400000);
-        const expiring = daysLeft <= 60;
-        return (
-          <Card key={plan.id} className="glass-panel border-none rounded-3xl relative overflow-hidden">
-            <div
-              className={cn(
-                "absolute top-0 bottom-0 left-0 w-1.5",
-                daysLeft < 0 ? "bg-white/10" : expiring ? "bg-primary" : "bg-white/20",
-              )}
-            />
-            <CardContent className="p-6 pl-8 flex items-center justify-between gap-4">
-              <div>
-                <div className="text-xs font-semibold tracking-widest text-primary uppercase mb-1">
-                  {plan.type === "amc" ? "AMC" : "Warranty"}
-                  {plan.provider && <span className="text-muted-foreground"> · {plan.provider}</span>}
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {coveragePager.items.map((plan) => {
+          const end = new Date(plan.endDate);
+          const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86400000);
+          const expiring = daysLeft <= 60;
+          return (
+            <Card key={plan.id} className="glass-panel border-none rounded-3xl relative overflow-hidden">
+              <div
+                className={cn(
+                  "absolute top-0 bottom-0 left-0 w-1.5",
+                  daysLeft < 0 ? "bg-white/10" : expiring ? "bg-primary" : "bg-white/20",
+                )}
+              />
+              <CardContent className="p-6 pl-8 flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs font-semibold tracking-widest text-primary uppercase mb-1">
+                    {plan.type === "amc" ? "AMC" : "Warranty"}
+                    {plan.provider && <span className="text-muted-foreground"> · {plan.provider}</span>}
+                  </div>
+                  <h3 className="font-bold text-lg">{plan.vehicleInfo}</h3>
+                  <div className="text-sm text-muted-foreground">
+                    {plan.customerName ?? "—"} · {formatDealerMonthYear(plan.startDate)} →{" "}
+                    {formatGuyanaDate(end)}
+                  </div>
+                  <div
+                    className={cn(
+                      "text-sm mt-1 font-medium",
+                      daysLeft < 0
+                        ? "text-muted-foreground"
+                        : expiring
+                          ? "text-primary"
+                          : "text-foreground",
+                    )}
+                  >
+                    {daysLeft < 0 ? "Expired" : `${daysLeft} days remaining`}
+                  </div>
                 </div>
-                <h3 className="font-bold text-lg">{plan.vehicleInfo}</h3>
-                <div className="text-sm text-muted-foreground">
-                  {plan.customerName ?? "—"} · {formatDealerMonthYear(plan.startDate)} →{" "}
-                  {formatGuyanaDate(end)}
-                </div>
-                <div
-                  className={cn(
-                    "text-sm mt-1 font-medium",
-                    daysLeft < 0
-                      ? "text-muted-foreground"
-                      : expiring
-                        ? "text-primary"
-                        : "text-foreground",
-                  )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={remind.isPending}
+                  className="rounded-full border-white/15 gap-1.5 text-xs shrink-0"
+                  onClick={async () => {
+                    try {
+                      const r = await remind.mutateAsync({ id: plan.id });
+                      toast({ title: "Reminder sent", description: `Email queued to ${r.recipient}.` });
+                    } catch (e: unknown) {
+                      const msg =
+                        (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+                        "Could not send reminder.";
+                      toast({ title: "Reminder failed", description: msg, variant: "destructive" });
+                    }
+                  }}
                 >
-                  {daysLeft < 0 ? "Expired" : `${daysLeft} days remaining`}
-                </div>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={remind.isPending}
-                className="rounded-full border-white/15 gap-1.5 text-xs shrink-0"
-                onClick={async () => {
-                  try {
-                    const r = await remind.mutateAsync({ id: plan.id });
-                    toast({ title: "Reminder sent", description: `Email queued to ${r.recipient}.` });
-                  } catch (e: unknown) {
-                    const msg =
-                      (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-                      "Could not send reminder.";
-                    toast({ title: "Reminder failed", description: msg, variant: "destructive" });
-                  }
-                }}
-              >
-                <Mail className="w-3.5 h-3.5" /> Remind
-              </Button>
-              <a
-                href={`${import.meta.env.BASE_URL}api/coverage/${plan.id}/pdf`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-white/15 text-xs font-medium hover:bg-white/[0.05] transition-colors shrink-0"
-              >
-                <FileText className="w-3.5 h-3.5" /> Certificate
-              </a>
-            </CardContent>
-          </Card>
-        );
-      })}
+                  <Mail className="w-3.5 h-3.5" /> Remind
+                </Button>
+                <a
+                  href={`${import.meta.env.BASE_URL}api/coverage/${plan.id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-white/15 text-xs font-medium hover:bg-white/[0.05] transition-colors shrink-0"
+                >
+                  <FileText className="w-3.5 h-3.5" /> Certificate
+                </a>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+      <ListPagination {...coveragePager} label="coverage plans" />
     </div>
   );
 }
@@ -3847,6 +4174,7 @@ function ClaimJobCardAction({ card }: { card: JobCard }) {
           await claim.mutateAsync({ id: card.serviceOrderId, data: {} });
           queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
           queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListWorkshopWipQueryKey() });
           toast({
             title: "Claimed",
             description: "You have claimed this job.",
@@ -3912,6 +4240,7 @@ function AssignJobCardDialog({ card, technicians, claim }: { card: JobCard, tech
                 await claim.mutateAsync({ id: card.serviceOrderId, data });
                 queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
                 queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+                queryClient.invalidateQueries({ queryKey: getListWorkshopWipQueryKey() });
                 toast({ title: "Assigned", description: `Job assigned successfully.` });
                 setOpen(false);
               } catch (e: unknown) {
@@ -3941,6 +4270,8 @@ function JobCardSummary({
   const worked = workedSeconds > 0
     ? formatWorkedSeconds(workedSeconds)
     : "—";
+  const customerName = order?.customerName ?? card.customerName ?? "Unassigned customer";
+  const vehicleInfo = order?.vehicleInfo ?? card.vehicleInfo ?? "Not recorded";
 
   return (
     <Card className="glass-panel border-white/10 hover:bg-white/[0.04] transition-colors cursor-pointer group rounded-2xl" onClick={onClick}>
@@ -3960,23 +4291,23 @@ function JobCardSummary({
           </Badge>
         </div>
 
-        {order && (
+        {(order || card.customerName || card.vehicleInfo) && (
           <div className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs sm:grid-cols-2">
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Customer</div>
-              <div className="font-medium truncate">{order.customerName ?? "Unassigned customer"}</div>
+              <div className="font-medium truncate">{customerName}</div>
             </div>
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Model</div>
-              <div className="font-medium truncate">{order.vehicleInfo || "Not recorded"}</div>
+              <div className="font-medium truncate">{vehicleInfo}</div>
             </div>
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Registration</div>
-              <div className="font-medium truncate">{order.registrationNumber || "Not recorded"}</div>
+              <div className="font-medium truncate">{order?.registrationNumber || "Not recorded"}</div>
             </div>
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">VIN</div>
-              <div className="font-medium truncate" title={order.vin ?? undefined}>{order.vin || "Not recorded"}</div>
+              <div className="font-medium truncate" title={order?.vin ?? undefined}>{order?.vin || "Not recorded"}</div>
             </div>
           </div>
         )}

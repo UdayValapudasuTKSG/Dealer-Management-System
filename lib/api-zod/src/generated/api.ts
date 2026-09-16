@@ -5236,14 +5236,19 @@ export const GetPublicServiceEstimateParams = zod.object({
   "token": zod.coerce.string().min(getPublicServiceEstimatePathTokenMin).max(getPublicServiceEstimatePathTokenMax)
 })
 
+export const getPublicServiceEstimateResponseEstimateVersionMin = 0;
+
+
+
 export const GetPublicServiceEstimateResponse = zod.object({
-  "state": zod.enum(['open', 'approved', 'declined']),
+  "state": zod.enum(['open', 'approved', 'declined', 'expired', 'stale']),
   "brandName": zod.string(),
   "vehicle": zod.string(),
   "service": zod.string(),
   "total": zod.number(),
+  "estimateVersion": zod.number().min(getPublicServiceEstimateResponseEstimateVersionMin),
   "lines": zod.array(zod.object({
-  "kind": zod.enum(['part', 'labour']),
+  "kind": zod.enum(['part', 'labour', 'surcharge', 'tax']),
   "description": zod.string(),
   "quantity": zod.number().optional(),
   "amount": zod.number()
@@ -5269,14 +5274,19 @@ export const DecidePublicServiceEstimateBody = zod.object({
   "decision": zod.enum(['approved', 'declined'])
 })
 
+export const decidePublicServiceEstimateResponseEstimateVersionMin = 0;
+
+
+
 export const DecidePublicServiceEstimateResponse = zod.object({
-  "state": zod.enum(['open', 'approved', 'declined']),
+  "state": zod.enum(['open', 'approved', 'declined', 'expired', 'stale']),
   "brandName": zod.string(),
   "vehicle": zod.string(),
   "service": zod.string(),
   "total": zod.number(),
+  "estimateVersion": zod.number().min(decidePublicServiceEstimateResponseEstimateVersionMin),
   "lines": zod.array(zod.object({
-  "kind": zod.enum(['part', 'labour']),
+  "kind": zod.enum(['part', 'labour', 'surcharge', 'tax']),
   "description": zod.string(),
   "quantity": zod.number().optional(),
   "amount": zod.number()
@@ -5325,6 +5335,9 @@ export const ListServiceOrdersResponseItem = zod.object({
   "byName": zod.string(),
   "at": zod.string()
 })).optional(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "createdOrigin": zod.enum(['staff', 'system', 'import', 'legacy_unknown']).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -5401,6 +5414,9 @@ export const CreateServiceOrderResponse = zod.object({
   "byName": zod.string(),
   "at": zod.string()
 })).optional(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "createdOrigin": zod.enum(['staff', 'system', 'import', 'legacy_unknown']).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -5512,6 +5528,9 @@ export const UpdateServiceOrderResponse = zod.object({
   "byName": zod.string(),
   "at": zod.string()
 })).optional(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "createdOrigin": zod.enum(['staff', 'system', 'import', 'legacy_unknown']).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -5563,6 +5582,9 @@ export const AdvanceServiceOrderResponse = zod.object({
   "byName": zod.string(),
   "at": zod.string()
 })).optional(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "createdOrigin": zod.enum(['staff', 'system', 'import', 'legacy_unknown']).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -5690,6 +5712,12 @@ export const ClaimServiceOrderBody = zod.object({
   "technicianUserId": zod.number().optional()
 })
 
+export const claimServiceOrderResponseJobCardEstimateVersionMin = 0;
+
+export const claimServiceOrderResponseJobCardEstimateApprovedVersionMin = 0;
+
+export const claimServiceOrderResponseJobCardEstimateStaffAcknowledgedVersionMin = 0;
+
 
 
 
@@ -5723,12 +5751,19 @@ export const ClaimServiceOrderResponse = zod.object({
   "byName": zod.string(),
   "at": zod.string()
 })).optional(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "createdOrigin": zod.enum(['staff', 'system', 'import', 'legacy_unknown']).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 }),
   "jobCard": zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -5784,6 +5819,28 @@ export const ClaimServiceOrderResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(claimServiceOrderResponseJobCardEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(claimServiceOrderResponseJobCardEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(claimServiceOrderResponseJobCardEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }),
   "assignedJobCardCount": zod.number().min(1)
@@ -5800,15 +5857,79 @@ export const ListServiceTechniciansResponseItem = zod.object({
 export const ListServiceTechniciansResponse = zod.array(ListServiceTechniciansResponseItem)
 
 
-export const ListJobCardsQueryParams = zod.object({
-  "serviceOrderId": zod.coerce.number().optional(),
-  "status": zod.coerce.string().optional(),
-  "mine": zod.coerce.string().optional()
+/**
+ * @summary Open workshop jobs, including dealer-day carry-over ageing
+ */
+export const listWorkshopWipQueryMinAgeDaysMin = 0;
+
+
+
+export const ListWorkshopWipQueryParams = zod.object({
+  "technicianUserId": zod.coerce.number().optional(),
+  "minAgeDays": zod.coerce.number().min(listWorkshopWipQueryMinAgeDaysMin).optional(),
+  "waitingReason": zod.enum(['ordered_parts', 'technician_availability', 'diagnostics', 'escalation_verdict', 'warranty_decision', 'customer_decision', 'other']).optional(),
+  "followUp": zod.enum(['overdue', 'today', 'upcoming', 'none']).optional(),
+  "carryOver": zod.enum(['0', '1']).optional(),
+  "format": zod.enum(['csv', 'xlsx', 'pdf']).optional()
 })
 
-export const ListJobCardsResponseItem = zod.object({
+export const listWorkshopWipResponseElapsedDaysMin = 0;
+
+
+
+export const ListWorkshopWipResponseItem = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "title": zod.string(),
+  "customerName": zod.string().nullable(),
+  "vehicleInfo": zod.string(),
+  "receivedAt": zod.coerce.date(),
+  "receivedSource": zod.enum(['intake', 'legacy_started']).describe('Legacy rows use startedAt rather than fabricating an intake time'),
+  "elapsedDays": zod.number().min(listWorkshopWipResponseElapsedDaysMin),
+  "carryOver": zod.boolean(),
+  "status": zod.string(),
+  "technicianUserId": zod.number().nullable(),
+  "technicianName": zod.string().nullable(),
+  "waitingReason": zod.string().nullable(),
+  "nextAction": zod.string().nullable(),
+  "followUpDate": zod.coerce.date().nullable()
+})
+export const ListWorkshopWipResponse = zod.array(ListWorkshopWipResponseItem)
+
+
+/**
+ * @summary Put an active job on a named wait or resume it without bypassing rollover approvals
+ */
+export const UpdateJobCardWaitingParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateJobCardWaitingBodyNextActionMax = 2000;
+
+
+
+export const UpdateJobCardWaitingBody = zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.enum(['ordered_parts', 'technician_availability', 'diagnostics', 'escalation_verdict', 'warranty_decision', 'customer_decision', 'other']).optional(),
+  "nextAction": zod.string().min(1).max(updateJobCardWaitingBodyNextActionMax).optional(),
+  "followUpDate": zod.coerce.date().optional()
+})
+
+export const updateJobCardWaitingResponseEstimateVersionMin = 0;
+
+export const updateJobCardWaitingResponseEstimateApprovedVersionMin = 0;
+
+export const updateJobCardWaitingResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
+export const UpdateJobCardWaitingResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -5864,6 +5985,383 @@ export const ListJobCardsResponseItem = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(updateJobCardWaitingResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(updateJobCardWaitingResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(updateJobCardWaitingResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Invalidate previous estimate links and send the exact current customer-cost version again
+ */
+export const ResendJobCardEstimateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const resendJobCardEstimateResponseJobCardEstimateVersionMin = 0;
+
+export const resendJobCardEstimateResponseJobCardEstimateApprovedVersionMin = 0;
+
+export const resendJobCardEstimateResponseJobCardEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
+export const ResendJobCardEstimateResponse = zod.object({
+  "jobCard": zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "customerPhoneSnapshot": zod.string().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(resendJobCardEstimateResponseJobCardEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(resendJobCardEstimateResponseJobCardEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(resendJobCardEstimateResponseJobCardEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+}),
+  "outcome": zod.enum(['queued']),
+  "code": zod.enum(['queued']),
+  "message": zod.string(),
+  "decisionId": zod.number(),
+  "emailLogId": zod.number(),
+  "deliveryStatus": zod.enum(['queued', 'dispatched', 'sent', 'delivered', 'read'])
+})
+
+
+/**
+ * @summary Record assigned service staff receipt of the exact current customer-approved estimate
+ */
+export const AcknowledgeJobCardEstimateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const acknowledgeJobCardEstimateResponseEstimateVersionMin = 0;
+
+export const acknowledgeJobCardEstimateResponseEstimateApprovedVersionMin = 0;
+
+export const acknowledgeJobCardEstimateResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
+export const AcknowledgeJobCardEstimateResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "customerPhoneSnapshot": zod.string().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(acknowledgeJobCardEstimateResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(acknowledgeJobCardEstimateResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(acknowledgeJobCardEstimateResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Staff-safe canonical estimate, customer recipient, and email outbox delivery state
+ */
+export const GetJobCardEstimatePreviewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const getJobCardEstimatePreviewResponseEstimateVersionMin = 0;
+
+export const getJobCardEstimatePreviewResponseDeliveryAttemptsMin = 0;
+
+
+
+export const GetJobCardEstimatePreviewResponse = zod.object({
+  "estimateVersion": zod.number().min(getJobCardEstimatePreviewResponseEstimateVersionMin),
+  "total": zod.number().describe('Canonical total recalculated from the current card lines'),
+  "lines": zod.array(zod.object({
+  "kind": zod.enum(['part', 'labour', 'surcharge', 'tax']),
+  "description": zod.string(),
+  "quantity": zod.number().optional(),
+  "amount": zod.number()
+})),
+  "customerRecipient": zod.string().nullable().describe('Current deliverable customer email; no bearer token is exposed'),
+  "decision": zod.object({
+  "id": zod.number().nullable(),
+  "state": zod.enum(['draft', 'open', 'approved', 'declined', 'expired', 'stale']),
+  "decidedAt": zod.coerce.date().nullable()
+}),
+  "delivery": zod.object({
+  "state": zod.string().describe('Actual email outbox state; queued is not a claim that email was sent'),
+  "recipient": zod.string().nullable(),
+  "attempts": zod.number().min(getJobCardEstimatePreviewResponseDeliveryAttemptsMin),
+  "lastError": zod.string().nullable(),
+  "sentAt": zod.coerce.date().nullable(),
+  "deliveredAt": zod.coerce.date().nullable()
+})
+})
+
+
+export const ListJobCardsQueryParams = zod.object({
+  "serviceOrderId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional(),
+  "mine": zod.coerce.string().optional()
+})
+
+export const listJobCardsResponseEstimateVersionMin = 0;
+
+export const listJobCardsResponseEstimateApprovedVersionMin = 0;
+
+export const listJobCardsResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
+export const ListJobCardsResponseItem = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "customerPhoneSnapshot": zod.string().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(listJobCardsResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(listJobCardsResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(listJobCardsResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListJobCardsResponse = zod.array(ListJobCardsResponseItem)
@@ -5894,9 +6392,21 @@ export const CreateJobCardBody = zod.object({
   "notes": zod.string().optional()
 })
 
+export const createJobCardResponseEstimateVersionMin = 0;
+
+export const createJobCardResponseEstimateApprovedVersionMin = 0;
+
+export const createJobCardResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
 export const CreateJobCardResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -5952,6 +6462,28 @@ export const CreateJobCardResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(createJobCardResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(createJobCardResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(createJobCardResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -5960,10 +6492,22 @@ export const GetJobCardParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getJobCardResponseJobCardEstimateVersionMin = 0;
+
+export const getJobCardResponseJobCardEstimateApprovedVersionMin = 0;
+
+export const getJobCardResponseJobCardEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
 export const GetJobCardResponse = zod.object({
   "jobCard": zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -6019,6 +6563,28 @@ export const GetJobCardResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(getJobCardResponseJobCardEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(getJobCardResponseJobCardEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(getJobCardResponseJobCardEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }),
   "serviceOrder": zod.object({
@@ -6050,6 +6616,9 @@ export const GetJobCardResponse = zod.object({
   "byName": zod.string(),
   "at": zod.string()
 })).optional(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "createdOrigin": zod.enum(['staff', 'system', 'import', 'legacy_unknown']).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -6098,9 +6667,21 @@ export const UpdateJobCardBody = zod.object({
   "workPerformed": zod.string().optional().describe('What work was done — mandatory before the card can be marked completed')
 })
 
+export const updateJobCardResponseEstimateVersionMin = 0;
+
+export const updateJobCardResponseEstimateApprovedVersionMin = 0;
+
+export const updateJobCardResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
 export const UpdateJobCardResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -6156,6 +6737,28 @@ export const UpdateJobCardResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(updateJobCardResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(updateJobCardResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(updateJobCardResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -6240,9 +6843,21 @@ export const ToggleJobCardTimerBody = zod.object({
   "action": zod.enum(['pause', 'resume'])
 })
 
+export const toggleJobCardTimerResponseEstimateVersionMin = 0;
+
+export const toggleJobCardTimerResponseEstimateApprovedVersionMin = 0;
+
+export const toggleJobCardTimerResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
 export const ToggleJobCardTimerResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -6298,6 +6913,28 @@ export const ToggleJobCardTimerResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(toggleJobCardTimerResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(toggleJobCardTimerResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(toggleJobCardTimerResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -6313,9 +6950,21 @@ export const ReopenJobCardBody = zod.object({
   "reason": zod.string().optional()
 })
 
+export const reopenJobCardResponseEstimateVersionMin = 0;
+
+export const reopenJobCardResponseEstimateApprovedVersionMin = 0;
+
+export const reopenJobCardResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
 export const ReopenJobCardResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -6371,6 +7020,28 @@ export const ReopenJobCardResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(reopenJobCardResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(reopenJobCardResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(reopenJobCardResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -6387,9 +7058,21 @@ export const RolloverJobCardBody = zod.object({
   "reason": zod.string().optional()
 })
 
+export const rolloverJobCardResponseEstimateVersionMin = 0;
+
+export const rolloverJobCardResponseEstimateApprovedVersionMin = 0;
+
+export const rolloverJobCardResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
 export const RolloverJobCardResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -6445,6 +7128,28 @@ export const RolloverJobCardResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(rolloverJobCardResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(rolloverJobCardResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(rolloverJobCardResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -6460,9 +7165,21 @@ export const ApproveJobCardRolloverBody = zod.object({
   "as": zod.enum(['manager', 'technician'])
 })
 
+export const approveJobCardRolloverResponseEstimateVersionMin = 0;
+
+export const approveJobCardRolloverResponseEstimateApprovedVersionMin = 0;
+
+export const approveJobCardRolloverResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
 export const ApproveJobCardRolloverResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -6518,6 +7235,28 @@ export const ApproveJobCardRolloverResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(approveJobCardRolloverResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(approveJobCardRolloverResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(approveJobCardRolloverResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -6538,9 +7277,21 @@ export const DecideJobCardSurchargeBody = zod.object({
   "amount": zod.number().min(decideJobCardSurchargeBodyAmountMin).optional()
 })
 
+export const decideJobCardSurchargeResponseEstimateVersionMin = 0;
+
+export const decideJobCardSurchargeResponseEstimateApprovedVersionMin = 0;
+
+export const decideJobCardSurchargeResponseEstimateStaffAcknowledgedVersionMin = 0;
+
+
+
 export const DecideJobCardSurchargeResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string().nullish(),
+  "netPartsTotal": zod.number().optional().describe('Authoritative issued-minus-returned internal parts total; credit returns are included'),
+  "latestEstimateState": zod.union([zod.literal('not_sent'),zod.literal('open'),zod.literal('approved'),zod.literal('declined'),zod.literal('expired'),zod.literal('stale'),zod.literal(null)]).nullish().describe('Staff-safe state of the current estimate version; never exposes bearer tokens'),
   "assetId": zod.number().nullish(),
   "title": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
@@ -6596,6 +7347,28 @@ export const DecideJobCardSurchargeResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
   "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "receivedAt": zod.coerce.date().nullish().describe('Physical workshop intake time; not booking\/card creation time'),
+  "waitingReason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "waitingHistory": zod.array(zod.object({
+  "action": zod.enum(['hold', 'resume']),
+  "reason": zod.union([zod.literal('ordered_parts'),zod.literal('technician_availability'),zod.literal('diagnostics'),zod.literal('escalation_verdict'),zod.literal('warranty_decision'),zod.literal('customer_decision'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.coerce.date()
+})).optional(),
+  "nextAction": zod.string().nullish(),
+  "followUpDate": zod.coerce.date().nullish(),
+  "estimateVersion": zod.number().min(decideJobCardSurchargeResponseEstimateVersionMin).optional(),
+  "estimateApprovedVersion": zod.number().min(decideJobCardSurchargeResponseEstimateApprovedVersionMin).nullish(),
+  "estimateApprovalAt": zod.coerce.date().nullish(),
+  "estimateApprovalEvidence": zod.record(zod.string(), zod.unknown()).nullish(),
+  "estimateStaffAcknowledgedVersion": zod.number().min(decideJobCardSurchargeResponseEstimateStaffAcknowledgedVersionMin).nullish().describe('Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work'),
+  "estimateStaffAcknowledgedDecisionId": zod.number().nullish().describe('Exact approved service_estimate_decisions record acknowledged by staff'),
+  "estimateStaffAcknowledgedByUserId": zod.number().nullish(),
+  "estimateStaffAcknowledgedByName": zod.string().nullish(),
+  "estimateStaffAcknowledgedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -6700,6 +7473,10 @@ export const CreateJobCardInvoiceResponse = zod.object({
   "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
+  "originalTotal": zod.number().describe('Immutable issued document total before credits\/adjustments'),
+  "balance": zod.number().describe('Current outstanding balance after auditable financial entries'),
+  "customerCreditBalance": zod.number().describe('Non-cash customer account credit awaiting controlled refund or future application'),
+  "creditReconciliationStatus": zod.union([zod.literal('pending_collision_settlement'),zod.literal(null)]).nullish(),
   "status": zod.enum(['issued', 'paid', 'void']),
   "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
   "paymentReference": zod.string().nullish(),
@@ -7478,6 +8255,10 @@ export const ListServiceInvoicesResponseItem = zod.object({
   "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
+  "originalTotal": zod.number().describe('Immutable issued document total before credits\/adjustments'),
+  "balance": zod.number().describe('Current outstanding balance after auditable financial entries'),
+  "customerCreditBalance": zod.number().describe('Non-cash customer account credit awaiting controlled refund or future application'),
+  "creditReconciliationStatus": zod.union([zod.literal('pending_collision_settlement'),zod.literal(null)]).nullish(),
   "status": zod.enum(['issued', 'paid', 'void']),
   "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
   "paymentReference": zod.string().nullish(),
@@ -7533,6 +8314,10 @@ export const UpdateServiceInvoiceResponse = zod.object({
   "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
+  "originalTotal": zod.number().describe('Immutable issued document total before credits\/adjustments'),
+  "balance": zod.number().describe('Current outstanding balance after auditable financial entries'),
+  "customerCreditBalance": zod.number().describe('Non-cash customer account credit awaiting controlled refund or future application'),
+  "creditReconciliationStatus": zod.union([zod.literal('pending_collision_settlement'),zod.literal(null)]).nullish(),
   "status": zod.enum(['issued', 'paid', 'void']),
   "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
   "paymentReference": zod.string().nullish(),
@@ -7588,6 +8373,10 @@ export const RequestServiceInvoiceDiscountResponse = zod.object({
   "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
+  "originalTotal": zod.number().describe('Immutable issued document total before credits\/adjustments'),
+  "balance": zod.number().describe('Current outstanding balance after auditable financial entries'),
+  "customerCreditBalance": zod.number().describe('Non-cash customer account credit awaiting controlled refund or future application'),
+  "creditReconciliationStatus": zod.union([zod.literal('pending_collision_settlement'),zod.literal(null)]).nullish(),
   "status": zod.enum(['issued', 'paid', 'void']),
   "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
   "paymentReference": zod.string().nullish(),
@@ -7638,6 +8427,10 @@ export const DecideServiceInvoiceDiscountResponse = zod.object({
   "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
+  "originalTotal": zod.number().describe('Immutable issued document total before credits\/adjustments'),
+  "balance": zod.number().describe('Current outstanding balance after auditable financial entries'),
+  "customerCreditBalance": zod.number().describe('Non-cash customer account credit awaiting controlled refund or future application'),
+  "creditReconciliationStatus": zod.union([zod.literal('pending_collision_settlement'),zod.literal(null)]).nullish(),
   "status": zod.enum(['issued', 'paid', 'void']),
   "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
   "paymentReference": zod.string().nullish(),
@@ -7693,6 +8486,10 @@ export const AdjustServiceInvoiceResponse = zod.object({
   "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
+  "originalTotal": zod.number().describe('Immutable issued document total before credits\/adjustments'),
+  "balance": zod.number().describe('Current outstanding balance after auditable financial entries'),
+  "customerCreditBalance": zod.number().describe('Non-cash customer account credit awaiting controlled refund or future application'),
+  "creditReconciliationStatus": zod.union([zod.literal('pending_collision_settlement'),zod.literal(null)]).nullish(),
   "status": zod.enum(['issued', 'paid', 'void']),
   "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
   "paymentReference": zod.string().nullish(),
@@ -10331,12 +11128,21 @@ export const GetSentimentAnalysisResponse = zod.object({
 /**
  * @summary Aggregated report over live data for a date range
  */
+export const getReportQueryMinAgeDaysMin = 0;
+
+
+
 export const GetReportQueryParams = zod.object({
   "type": zod.enum(['sales_pipeline', 'sales_performance', 'sales_advisor_activity', 'inventory_aging', 'finance_applications', 'service_workshop', 'parts_inventory', 'revenue_receivables', 'tax_gra', 'delivery_operations', 'agent_activity', 'collision_claims']),
   "from": zod.coerce.string().optional(),
   "to": zod.coerce.string().optional(),
   "divisionId": zod.coerce.number().optional(),
-  "format": zod.enum(['csv', 'xlsx', 'pdf']).optional().describe('Server-side export; returns a file instead of JSON.')
+  "format": zod.enum(['csv', 'xlsx', 'pdf']).optional().describe('Server-side export; returns a file instead of JSON.'),
+  "workshopMode": zod.enum(['summary', 'wip']).optional().describe('service_workshop only; `wip` produces the live dealer-day WIP export without replacing the historical report.'),
+  "technicianUserId": zod.coerce.number().optional().describe('service_workshop WIP only'),
+  "minAgeDays": zod.coerce.number().min(getReportQueryMinAgeDaysMin).optional().describe('service_workshop WIP only'),
+  "waitingReason": zod.enum(['ordered_parts', 'technician_availability', 'diagnostics', 'escalation_verdict', 'warranty_decision', 'customer_decision', 'other']).optional().describe('service_workshop WIP only'),
+  "followUp": zod.enum(['overdue', 'today', 'upcoming', 'none']).optional().describe('service_workshop WIP only')
 })
 
 export const GetReportResponse = zod.object({
@@ -10859,6 +11665,9 @@ export const GetCustomerOverviewResponse = zod.object({
   "byName": zod.string(),
   "at": zod.string()
 })).optional(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "createdOrigin": zod.enum(['staff', 'system', 'import', 'legacy_unknown']).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })),

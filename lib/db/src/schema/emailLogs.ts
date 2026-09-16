@@ -103,6 +103,9 @@ export const emailLogsTable = pgTable("email_logs", {
   dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id"),
   leadId: integer("lead_id"),
+  /** Durable owner of a service-estimate delivery. Unlike payload metadata,
+   * this survives template/data changes and supports staff-safe delivery audit. */
+  serviceEstimateDecisionId: integer("service_estimate_decision_id"),
   recipient: text("recipient").notNull(),
   subject: text("subject").notNull(),
   template: text("template").notNull(),

@@ -5182,6 +5182,8 @@ export type ServiceEstimateLineKind = typeof ServiceEstimateLineKind[keyof typeo
 export const ServiceEstimateLineKind = {
   part: 'part',
   labour: 'labour',
+  surcharge: 'surcharge',
+  tax: 'tax',
 } as const;
 
 export interface ServiceEstimateLine {
@@ -5198,6 +5200,8 @@ export const PublicServiceEstimateState = {
   open: 'open',
   approved: 'approved',
   declined: 'declined',
+  expired: 'expired',
+  stale: 'stale',
 } as const;
 
 export interface PublicServiceEstimate {
@@ -5206,6 +5210,8 @@ export interface PublicServiceEstimate {
   vehicle: string;
   service: string;
   total: number;
+  /** @minimum 0 */
+  estimateVersion: number;
   lines: ServiceEstimateLine[];
   expiresAt: string;
   /** @nullable */
@@ -5285,6 +5291,16 @@ export const ServiceOrderStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type ServiceOrderCreatedOrigin = typeof ServiceOrderCreatedOrigin[keyof typeof ServiceOrderCreatedOrigin];
+
+
+export const ServiceOrderCreatedOrigin = {
+  staff: 'staff',
+  system: 'system',
+  import: 'import',
+  legacy_unknown: 'legacy_unknown',
+} as const;
+
 export interface ServiceStageEvent {
   from: string;
   to: string;
@@ -5329,6 +5345,11 @@ export interface ServiceOrder {
   estimatedCost: number;
   estimatedHours?: number;
   stageHistory?: ServiceStageEvent[];
+  /** @nullable */
+  createdByUserId?: number | null;
+  /** @nullable */
+  createdByName?: string | null;
+  createdOrigin?: ServiceOrderCreatedOrigin;
   jobs: string[];
   createdAt: string;
 }
@@ -5596,6 +5617,22 @@ export interface ConditionRecord {
   recordedAt?: string;
 }
 
+/**
+ * Staff-safe state of the current estimate version; never exposes bearer tokens
+ * @nullable
+ */
+export type JobCardLatestEstimateState = typeof JobCardLatestEstimateState[keyof typeof JobCardLatestEstimateState] | null;
+
+
+export const JobCardLatestEstimateState = {
+  not_sent: 'not_sent',
+  open: 'open',
+  approved: 'approved',
+  declined: 'declined',
+  expired: 'expired',
+  stale: 'stale',
+} as const;
+
 export type JobCardStatus = typeof JobCardStatus[keyof typeof JobCardStatus];
 
 
@@ -5637,9 +5674,79 @@ export const JobCardSurchargeStatus = {
   waived: 'waived',
 } as const;
 
+/**
+ * @nullable
+ */
+export type JobCardWaitingReason = typeof JobCardWaitingReason[keyof typeof JobCardWaitingReason] | null;
+
+
+export const JobCardWaitingReason = {
+  ordered_parts: 'ordered_parts',
+  technician_availability: 'technician_availability',
+  diagnostics: 'diagnostics',
+  escalation_verdict: 'escalation_verdict',
+  warranty_decision: 'warranty_decision',
+  customer_decision: 'customer_decision',
+  other: 'other',
+} as const;
+
+/**
+ * @nullable
+ */
+export type JobCardEstimateApprovalEvidence = { [key: string]: unknown } | null;
+
+export type JobWaitingEventAction = typeof JobWaitingEventAction[keyof typeof JobWaitingEventAction];
+
+
+export const JobWaitingEventAction = {
+  hold: 'hold',
+  resume: 'resume',
+} as const;
+
+/**
+ * @nullable
+ */
+export type JobWaitingEventReason = typeof JobWaitingEventReason[keyof typeof JobWaitingEventReason] | null;
+
+
+export const JobWaitingEventReason = {
+  ordered_parts: 'ordered_parts',
+  technician_availability: 'technician_availability',
+  diagnostics: 'diagnostics',
+  escalation_verdict: 'escalation_verdict',
+  warranty_decision: 'warranty_decision',
+  customer_decision: 'customer_decision',
+  other: 'other',
+} as const;
+
+export interface JobWaitingEvent {
+  action: JobWaitingEventAction;
+  /** @nullable */
+  reason?: JobWaitingEventReason;
+  /** @nullable */
+  nextAction?: string | null;
+  /** @nullable */
+  followUpDate?: string | null;
+  /** @nullable */
+  byUserId?: number | null;
+  byName: string;
+  at: string;
+}
+
 export interface JobCard {
   id: number;
   serviceOrderId: number;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  vehicleInfo?: string | null;
+  /** Authoritative issued-minus-returned internal parts total; credit returns are included */
+  netPartsTotal?: number;
+  /**
+     * Staff-safe state of the current estimate version; never exposes bearer tokens
+     * @nullable
+     */
+  latestEstimateState?: JobCardLatestEstimateState;
   /** @nullable */
   assetId?: number | null;
   title: string;
@@ -5707,7 +5814,201 @@ export interface JobCard {
      * @nullable
      */
   timerStartedAt?: string | null;
+  /**
+     * Physical workshop intake time; not booking/card creation time
+     * @nullable
+     */
+  receivedAt?: string | null;
+  /** @nullable */
+  waitingReason?: JobCardWaitingReason;
+  waitingHistory?: JobWaitingEvent[];
+  /** @nullable */
+  nextAction?: string | null;
+  /** @nullable */
+  followUpDate?: string | null;
+  /** @minimum 0 */
+  estimateVersion?: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  estimateApprovedVersion?: number | null;
+  /** @nullable */
+  estimateApprovalAt?: string | null;
+  /** @nullable */
+  estimateApprovalEvidence?: JobCardEstimateApprovalEvidence;
+  /**
+     * Version acknowledged as received by service staff; must match estimateVersion to authorize chargeable work
+     * @minimum 0
+     * @nullable
+     */
+  estimateStaffAcknowledgedVersion?: number | null;
+  /**
+     * Exact approved service_estimate_decisions record acknowledged by staff
+     * @nullable
+     */
+  estimateStaffAcknowledgedDecisionId?: number | null;
+  /** @nullable */
+  estimateStaffAcknowledgedByUserId?: number | null;
+  /** @nullable */
+  estimateStaffAcknowledgedByName?: string | null;
+  /** @nullable */
+  estimateStaffAcknowledgedAt?: string | null;
   createdAt: string;
+}
+
+export type JobCardEstimatePreviewDecisionState = typeof JobCardEstimatePreviewDecisionState[keyof typeof JobCardEstimatePreviewDecisionState];
+
+
+export const JobCardEstimatePreviewDecisionState = {
+  draft: 'draft',
+  open: 'open',
+  approved: 'approved',
+  declined: 'declined',
+  expired: 'expired',
+  stale: 'stale',
+} as const;
+
+export type JobCardEstimatePreviewDecision = {
+  /** @nullable */
+  id: number | null;
+  state: JobCardEstimatePreviewDecisionState;
+  /** @nullable */
+  decidedAt: string | null;
+};
+
+export type JobCardEstimatePreviewDelivery = {
+  /** Actual email outbox state; queued is not a claim that email was sent */
+  state: string;
+  /** @nullable */
+  recipient: string | null;
+  /** @minimum 0 */
+  attempts: number;
+  /** @nullable */
+  lastError: string | null;
+  /** @nullable */
+  sentAt: string | null;
+  /** @nullable */
+  deliveredAt: string | null;
+};
+
+export interface JobCardEstimatePreview {
+  /** @minimum 0 */
+  estimateVersion: number;
+  /** Canonical total recalculated from the current card lines */
+  total: number;
+  lines: ServiceEstimateLine[];
+  /**
+     * Current deliverable customer email; no bearer token is exposed
+     * @nullable
+     */
+  customerRecipient: string | null;
+  decision: JobCardEstimatePreviewDecision;
+  delivery: JobCardEstimatePreviewDelivery;
+}
+
+export type JobCardEstimateSendResultOutcome = typeof JobCardEstimateSendResultOutcome[keyof typeof JobCardEstimateSendResultOutcome];
+
+
+export const JobCardEstimateSendResultOutcome = {
+  queued: 'queued',
+} as const;
+
+export type JobCardEstimateSendResultCode = typeof JobCardEstimateSendResultCode[keyof typeof JobCardEstimateSendResultCode];
+
+
+export const JobCardEstimateSendResultCode = {
+  queued: 'queued',
+} as const;
+
+export type JobCardEstimateSendResultDeliveryStatus = typeof JobCardEstimateSendResultDeliveryStatus[keyof typeof JobCardEstimateSendResultDeliveryStatus];
+
+
+export const JobCardEstimateSendResultDeliveryStatus = {
+  queued: 'queued',
+  dispatched: 'dispatched',
+  sent: 'sent',
+  delivered: 'delivered',
+  read: 'read',
+} as const;
+
+export interface JobCardEstimateSendResult {
+  jobCard: JobCard;
+  outcome: JobCardEstimateSendResultOutcome;
+  code: JobCardEstimateSendResultCode;
+  message: string;
+  decisionId: number;
+  emailLogId: number;
+  deliveryStatus: JobCardEstimateSendResultDeliveryStatus;
+}
+
+export type JobCardWaitingUpdateAction = typeof JobCardWaitingUpdateAction[keyof typeof JobCardWaitingUpdateAction];
+
+
+export const JobCardWaitingUpdateAction = {
+  hold: 'hold',
+  resume: 'resume',
+} as const;
+
+export type JobCardWaitingUpdateReason = typeof JobCardWaitingUpdateReason[keyof typeof JobCardWaitingUpdateReason];
+
+
+export const JobCardWaitingUpdateReason = {
+  ordered_parts: 'ordered_parts',
+  technician_availability: 'technician_availability',
+  diagnostics: 'diagnostics',
+  escalation_verdict: 'escalation_verdict',
+  warranty_decision: 'warranty_decision',
+  customer_decision: 'customer_decision',
+  other: 'other',
+} as const;
+
+export interface JobCardWaitingUpdate {
+  action: JobCardWaitingUpdateAction;
+  reason?: JobCardWaitingUpdateReason;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  nextAction?: string;
+  followUpDate?: string;
+}
+
+/**
+ * Legacy rows use startedAt rather than fabricating an intake time
+ */
+export type WorkshopWipItemReceivedSource = typeof WorkshopWipItemReceivedSource[keyof typeof WorkshopWipItemReceivedSource];
+
+
+export const WorkshopWipItemReceivedSource = {
+  intake: 'intake',
+  legacy_started: 'legacy_started',
+} as const;
+
+export interface WorkshopWipItem {
+  id: number;
+  serviceOrderId: number;
+  title: string;
+  /** @nullable */
+  customerName: string | null;
+  vehicleInfo: string;
+  receivedAt: string;
+  /** Legacy rows use startedAt rather than fabricating an intake time */
+  receivedSource: WorkshopWipItemReceivedSource;
+  /** @minimum 0 */
+  elapsedDays: number;
+  carryOver: boolean;
+  status: string;
+  /** @nullable */
+  technicianUserId: number | null;
+  /** @nullable */
+  technicianName: string | null;
+  /** @nullable */
+  waitingReason: string | null;
+  /** @nullable */
+  nextAction: string | null;
+  /** @nullable */
+  followUpDate: string | null;
 }
 
 export interface JobCardDetail {
@@ -6312,6 +6613,16 @@ export const ServiceInvoiceDiscountStatus = {
   rejected: 'rejected',
 } as const;
 
+/**
+ * @nullable
+ */
+export type ServiceInvoiceCreditReconciliationStatus = typeof ServiceInvoiceCreditReconciliationStatus[keyof typeof ServiceInvoiceCreditReconciliationStatus] | null;
+
+
+export const ServiceInvoiceCreditReconciliationStatus = {
+  pending_collision_settlement: 'pending_collision_settlement',
+} as const;
+
 export type ServiceInvoiceStatus = typeof ServiceInvoiceStatus[keyof typeof ServiceInvoiceStatus];
 
 
@@ -6373,6 +6684,14 @@ export interface ServiceInvoice {
   discountDecidedAt?: string | null;
   tax: number;
   total: number;
+  /** Immutable issued document total before credits/adjustments */
+  originalTotal: number;
+  /** Current outstanding balance after auditable financial entries */
+  balance: number;
+  /** Non-cash customer account credit awaiting controlled refund or future application */
+  customerCreditBalance: number;
+  /** @nullable */
+  creditReconciliationStatus?: ServiceInvoiceCreditReconciliationStatus;
   status: ServiceInvoiceStatus;
   /** @nullable */
   paymentMethod?: ServiceInvoicePaymentMethod;
@@ -9971,6 +10290,58 @@ export type ClaimServiceOrder200 = {
   assignedJobCardCount: number;
 };
 
+export type ListWorkshopWipParams = {
+technicianUserId?: number;
+/**
+ * @minimum 0
+ */
+minAgeDays?: number;
+waitingReason?: ListWorkshopWipWaitingReason;
+followUp?: ListWorkshopWipFollowUp;
+carryOver?: ListWorkshopWipCarryOver;
+format?: ListWorkshopWipFormat;
+};
+
+export type ListWorkshopWipWaitingReason = typeof ListWorkshopWipWaitingReason[keyof typeof ListWorkshopWipWaitingReason];
+
+
+export const ListWorkshopWipWaitingReason = {
+  ordered_parts: 'ordered_parts',
+  technician_availability: 'technician_availability',
+  diagnostics: 'diagnostics',
+  escalation_verdict: 'escalation_verdict',
+  warranty_decision: 'warranty_decision',
+  customer_decision: 'customer_decision',
+  other: 'other',
+} as const;
+
+export type ListWorkshopWipFollowUp = typeof ListWorkshopWipFollowUp[keyof typeof ListWorkshopWipFollowUp];
+
+
+export const ListWorkshopWipFollowUp = {
+  overdue: 'overdue',
+  today: 'today',
+  upcoming: 'upcoming',
+  none: 'none',
+} as const;
+
+export type ListWorkshopWipCarryOver = typeof ListWorkshopWipCarryOver[keyof typeof ListWorkshopWipCarryOver];
+
+
+export const ListWorkshopWipCarryOver = {
+  NUMBER_0: '0',
+  NUMBER_1: '1',
+} as const;
+
+export type ListWorkshopWipFormat = typeof ListWorkshopWipFormat[keyof typeof ListWorkshopWipFormat];
+
+
+export const ListWorkshopWipFormat = {
+  csv: 'csv',
+  xlsx: 'xlsx',
+  pdf: 'pdf',
+} as const;
+
 export type ListJobCardsParams = {
 serviceOrderId?: number;
 status?: string;
@@ -10122,6 +10493,27 @@ divisionId?: number;
  * Server-side export; returns a file instead of JSON.
  */
 format?: GetReportFormat;
+/**
+ * service_workshop only; `wip` produces the live dealer-day WIP export without replacing the historical report.
+ */
+workshopMode?: GetReportWorkshopMode;
+/**
+ * service_workshop WIP only
+ */
+technicianUserId?: number;
+/**
+ * service_workshop WIP only
+ * @minimum 0
+ */
+minAgeDays?: number;
+/**
+ * service_workshop WIP only
+ */
+waitingReason?: GetReportWaitingReason;
+/**
+ * service_workshop WIP only
+ */
+followUp?: GetReportFollowUp;
 };
 
 export type GetReportType = typeof GetReportType[keyof typeof GetReportType];
@@ -10149,6 +10541,37 @@ export const GetReportFormat = {
   csv: 'csv',
   xlsx: 'xlsx',
   pdf: 'pdf',
+} as const;
+
+export type GetReportWorkshopMode = typeof GetReportWorkshopMode[keyof typeof GetReportWorkshopMode];
+
+
+export const GetReportWorkshopMode = {
+  summary: 'summary',
+  wip: 'wip',
+} as const;
+
+export type GetReportWaitingReason = typeof GetReportWaitingReason[keyof typeof GetReportWaitingReason];
+
+
+export const GetReportWaitingReason = {
+  ordered_parts: 'ordered_parts',
+  technician_availability: 'technician_availability',
+  diagnostics: 'diagnostics',
+  escalation_verdict: 'escalation_verdict',
+  warranty_decision: 'warranty_decision',
+  customer_decision: 'customer_decision',
+  other: 'other',
+} as const;
+
+export type GetReportFollowUp = typeof GetReportFollowUp[keyof typeof GetReportFollowUp];
+
+
+export const GetReportFollowUp = {
+  overdue: 'overdue',
+  today: 'today',
+  upcoming: 'upcoming',
+  none: 'none',
 } as const;
 
 export type GlobalSearchParams = {

@@ -2011,16 +2011,22 @@ router.post(
           error: "Claim has not been invoiced yet — no receivable to settle",
         };
       }
-      // Never collect against a void invoice — the receivable died with it.
+      // Serialize settlement collection with every other service-invoice
+      // mutation (credits, voids and manual payment). The claim lock protects
+      // the split caps; this invoice lock protects the receivable balance.
       const [linkedInvoice] = await tx
-        .select({ status: serviceInvoicesTable.status })
+        .select({
+          status: serviceInvoicesTable.status,
+          balance: serviceInvoicesTable.balance,
+        })
         .from(serviceInvoicesTable)
         .where(
           and(
             eq(serviceInvoicesTable.id, claim.serviceInvoiceId),
             eq(serviceInvoicesTable.dealerId, claim.dealerId),
           ),
-        );
+        )
+        .for("update");
       if (!linkedInvoice || linkedInvoice.status === "void") {
         return {
           kind: "unprocessable" as const,
@@ -2099,8 +2105,10 @@ router.post(
         })
         .where(eq(collisionClaimsTable.id, claim.id));
 
-      // When BOTH shares are fully collected, flip the service invoice to
-      // paid (issued → paid CAS; a manual flip elsewhere just no-ops here).
+      // Recompute both shares under the claim + invoice locks. The service
+      // invoice balance mirrors the still-uncollected collision receivable on
+      // every partial payment; it must not remain at the original issued
+      // amount until the last settlement.
       const [all] = await tx
         .select({
           insurerPaid: sql<number>`coalesce(sum(case when ${collisionSettlementsTable.payer} = 'insurer' then ${collisionSettlementsTable.amount} else 0 end), 0)`,
@@ -2113,13 +2121,35 @@ router.post(
             eq(collisionSettlementsTable.dealerId, claim.dealerId),
           ),
         );
-      if (
-        (all?.insurerPaid ?? 0) >= claim.insurerDue - 0.005 &&
-        (all?.deductiblePaid ?? 0) >= claim.deductibleDue - 0.005
-      ) {
+      const insurerRemaining = Math.max(
+        0,
+        claim.insurerDue - (all?.insurerPaid ?? 0),
+      );
+      const deductibleRemaining = Math.max(
+        0,
+        claim.deductibleDue - (all?.deductiblePaid ?? 0),
+      );
+      const remainingBalance =
+        Math.round((insurerRemaining + deductibleRemaining) * 100) / 100;
+      const fullySettled = insurerRemaining <= 0.005 && deductibleRemaining <= 0.005;
+      // `originalTotal` and `customerCreditBalance` deliberately remain
+      // untouched. Credits have their own pending-allocation/reconciliation
+      // policy; settlement only records collected collision receivable.
+      if (fullySettled) {
         await tx
           .update(serviceInvoicesTable)
-          .set({ status: "paid" })
+          .set({ status: "paid", balance: 0 })
+          .where(
+            and(
+              eq(serviceInvoicesTable.id, claim.serviceInvoiceId),
+              eq(serviceInvoicesTable.dealerId, claim.dealerId),
+              eq(serviceInvoicesTable.status, "issued"),
+            ),
+          );
+      } else {
+        await tx
+          .update(serviceInvoicesTable)
+          .set({ balance: remainingBalance })
           .where(
             and(
               eq(serviceInvoicesTable.id, claim.serviceInvoiceId),

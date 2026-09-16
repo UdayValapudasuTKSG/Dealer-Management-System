@@ -13,7 +13,7 @@ import { serviceOrdersTable } from "./serviceOrders";
 import { jobCardsTable } from "./workshop";
 
 export type ServiceEstimateLine = {
-  kind: "part" | "labour";
+  kind: "part" | "labour" | "surcharge" | "tax";
   description: string;
   quantity?: number;
   amount: number;
@@ -37,9 +37,15 @@ export const serviceEstimateDecisionsTable = pgTable(
       .$type<ServiceEstimateLine[]>()
       .notNull()
       .default([]),
+    /** Version of the job card's price/line snapshot; a decision cannot be
+     * reused after any charge-changing edit. */
+    estimateVersion: integer("estimate_version").notNull().default(0),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     decision: text("decision"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
+    /** Non-sensitive acknowledgement evidence from the public bearer flow. */
+    decisionEvidence: jsonb("decision_evidence")
+      .$type<Record<string, unknown> | null>(),
     invalidatedAt: timestamp("invalidated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

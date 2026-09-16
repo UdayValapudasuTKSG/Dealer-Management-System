@@ -143,6 +143,26 @@ export type ConditionRecord = {
   recordedAt?: string;
 };
 
+export const JOB_WAITING_REASONS = [
+  "ordered_parts",
+  "technician_availability",
+  "diagnostics",
+  "escalation_verdict",
+  "warranty_decision",
+  "customer_decision",
+  "other",
+] as const;
+export type JobWaitingReason = (typeof JOB_WAITING_REASONS)[number];
+export type JobWaitingEvent = {
+  action: "hold" | "resume";
+  reason: JobWaitingReason | null;
+  nextAction: string | null;
+  followUpDate: string | null;
+  byUserId: number | null;
+  byName: string;
+  at: string;
+};
+
 /** Multi-day rollover approval state (FR-SR-06): dual sign-off required. */
 export const ROLLOVER_STATUSES = ["none", "pending", "approved"] as const;
 export type RolloverStatus = (typeof ROLLOVER_STATUSES)[number];
@@ -173,6 +193,9 @@ export const jobCardsTable = pgTable(
     payType: text("pay_type").notNull().default("customer"),
     quoteTotal: doublePrecision("quote_total").notNull().default(0),
     quoteApprovedAt: timestamp("quote_approved_at", { withTimezone: true }),
+    /** Physical workshop reception, set on the first signed intake rather
+     * than card creation (which may happen at booking time). */
+    receivedAt: timestamp("received_at", { withTimezone: true }),
     intake: jsonb("intake").$type<ConditionRecord | null>(),
     outtake: jsonb("outtake").$type<ConditionRecord | null>(),
     checklist: jsonb("checklist")
@@ -227,6 +250,31 @@ export const jobCardsTable = pgTable(
     // hold, completion and reopen so the stored total is authoritative.
     timerSeconds: integer("timer_seconds").notNull().default(0),
     timerStartedAt: timestamp("timer_started_at", { withTimezone: true }),
+    /** Dealer-facing WIP state. Kept separate from diagnostics/intake so a
+     * hold does not erase evidence gathered before the wait. */
+    waitingReason: text("waiting_reason"),
+    waitingHistory: jsonb("waiting_history")
+      .$type<JobWaitingEvent[]>()
+      .notNull()
+      .default([]),
+    nextAction: text("next_action"),
+    followUpDate: date("follow_up_date", { mode: "string" }),
+    /** The immutable estimate version the customer approved. Legacy
+     * quoteApprovedAt alone intentionally cannot satisfy chargeable-work gates. */
+    estimateVersion: integer("estimate_version").notNull().default(0),
+    estimateApprovedVersion: integer("estimate_approved_version"),
+    estimateApprovalAt: timestamp("estimate_approval_at", { withTimezone: true }),
+    estimateApprovalEvidence: jsonb("estimate_approval_evidence")
+      .$type<Record<string, unknown> | null>(),
+    /** Staff's receipt acknowledgement is deliberately bound to both the
+     * immutable price version and the exact customer-decision record. */
+    estimateStaffAcknowledgedVersion: integer("estimate_staff_acknowledged_version"),
+    estimateStaffAcknowledgedDecisionId: integer("estimate_staff_acknowledged_decision_id"),
+    estimateStaffAcknowledgedByUserId: integer("estimate_staff_acknowledged_by_user_id"),
+    estimateStaffAcknowledgedByName: text("estimate_staff_acknowledged_by_name"),
+    estimateStaffAcknowledgedAt: timestamp("estimate_staff_acknowledged_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -412,6 +460,14 @@ export const serviceInvoicesTable = pgTable(
   discountDecidedBy: text("discount_decided_by"),
   discountDecidedAt: timestamp("discount_decided_at", { withTimezone: true }),
   total: doublePrecision("total").notNull().default(0),
+  /** Issued document total never changes. Balance reflects approved
+   * discount/credit/adjustment ledger entries and is the collectible amount. */
+  originalTotal: doublePrecision("original_total").notNull().default(0),
+  balance: doublePrecision("balance").notNull().default(0),
+  /** Non-cash account credit created when a paid service invoice is partially
+   * credited. Payment/refund settlement is intentionally a separate workflow. */
+  customerCreditBalance: doublePrecision("customer_credit_balance").notNull().default(0),
+  creditReconciliationStatus: text("credit_reconciliation_status"),
   status: text("status").notNull().default("issued"),
   paymentMethod: text("payment_method"),
   paymentReference: text("payment_reference"),

@@ -214,6 +214,8 @@ import type {
   InvoiceUpdate,
   JobCard,
   JobCardDetail,
+  JobCardEstimatePreview,
+  JobCardEstimateSendResult,
   JobCardExternalPart,
   JobCardHistoryItem,
   JobCardInput,
@@ -227,6 +229,7 @@ import type {
   JobCardTechnicianNoteInput,
   JobCardTimerAction,
   JobCardUpdate,
+  JobCardWaitingUpdate,
   Lead,
   LeadAdvanceInput,
   LeadAdvanceUnmet,
@@ -279,6 +282,7 @@ import type {
   ListTestDrivesParams,
   ListTimelineParams,
   ListVehiclesParams,
+  ListWorkshopWipParams,
   MapAmberDeviceRequest,
   MarkNotificationsReadRequest,
   MarkNotificationsReadResult,
@@ -426,7 +430,8 @@ import type {
   WhatsappReplyInput,
   WhatsappSettings,
   WhatsappTestResult,
-  WhatsappThread
+  WhatsappThread,
+  WorkshopWipItem
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -10963,6 +10968,381 @@ export function useListServiceTechnicians<TData = Awaited<ReturnType<typeof list
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListServiceTechniciansQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListWorkshopWipUrl = (params?: ListWorkshopWipParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/job-cards/wip?${stringifiedParams}` : `/api/job-cards/wip`
+}
+
+/**
+ * @summary Open workshop jobs, including dealer-day carry-over ageing
+ */
+export const listWorkshopWip = async (params?: ListWorkshopWipParams, options?: RequestInit): Promise<WorkshopWipItem[]> => {
+
+  return customFetch<WorkshopWipItem[]>(getListWorkshopWipUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkshopWipQueryKey = (params?: ListWorkshopWipParams,) => {
+    return [
+    `/api/job-cards/wip`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListWorkshopWipQueryOptions = <TData = Awaited<ReturnType<typeof listWorkshopWip>>, TError = ErrorType<unknown>>(params?: ListWorkshopWipParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWorkshopWip>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkshopWipQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkshopWip>>> = ({ signal }) => listWorkshopWip(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkshopWip>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListWorkshopWipQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkshopWip>>>
+export type ListWorkshopWipQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Open workshop jobs, including dealer-day carry-over ageing
+ */
+
+export function useListWorkshopWip<TData = Awaited<ReturnType<typeof listWorkshopWip>>, TError = ErrorType<unknown>>(
+ params?: ListWorkshopWipParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWorkshopWip>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListWorkshopWipQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateJobCardWaitingUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/waiting`
+}
+
+/**
+ * @summary Put an active job on a named wait or resume it without bypassing rollover approvals
+ */
+export const updateJobCardWaiting = async (id: number,
+    jobCardWaitingUpdate: JobCardWaitingUpdate, options?: RequestInit): Promise<JobCard> => {
+
+  return customFetch<JobCard>(getUpdateJobCardWaitingUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jobCardWaitingUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateJobCardWaitingMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateJobCardWaiting>>, TError,{id: number;data: BodyType<JobCardWaitingUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateJobCardWaiting>>, TError,{id: number;data: BodyType<JobCardWaitingUpdate>}, TContext> => {
+
+const mutationKey = ['updateJobCardWaiting'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateJobCardWaiting>>, {id: number;data: BodyType<JobCardWaitingUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateJobCardWaiting(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateJobCardWaitingMutationResult = NonNullable<Awaited<ReturnType<typeof updateJobCardWaiting>>>
+    export type UpdateJobCardWaitingMutationBody = BodyType<JobCardWaitingUpdate>
+    export type UpdateJobCardWaitingMutationError = ErrorType<Error>
+
+    /**
+ * @summary Put an active job on a named wait or resume it without bypassing rollover approvals
+ */
+export const useUpdateJobCardWaiting = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateJobCardWaiting>>, TError,{id: number;data: BodyType<JobCardWaitingUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateJobCardWaiting>>,
+        TError,
+        {id: number;data: BodyType<JobCardWaitingUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateJobCardWaitingMutationOptions(options));
+    }
+
+export const getResendJobCardEstimateUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/estimate/resend`
+}
+
+/**
+ * @summary Invalidate previous estimate links and send the exact current customer-cost version again
+ */
+export const resendJobCardEstimate = async (id: number, options?: RequestInit): Promise<JobCardEstimateSendResult> => {
+
+  return customFetch<JobCardEstimateSendResult>(getResendJobCardEstimateUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResendJobCardEstimateMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendJobCardEstimate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resendJobCardEstimate>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['resendJobCardEstimate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resendJobCardEstimate>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resendJobCardEstimate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResendJobCardEstimateMutationResult = NonNullable<Awaited<ReturnType<typeof resendJobCardEstimate>>>
+
+    export type ResendJobCardEstimateMutationError = ErrorType<Error>
+
+    /**
+ * @summary Invalidate previous estimate links and send the exact current customer-cost version again
+ */
+export const useResendJobCardEstimate = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendJobCardEstimate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resendJobCardEstimate>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getResendJobCardEstimateMutationOptions(options));
+    }
+
+export const getAcknowledgeJobCardEstimateUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/estimate/acknowledge`
+}
+
+/**
+ * @summary Record assigned service staff receipt of the exact current customer-approved estimate
+ */
+export const acknowledgeJobCardEstimate = async (id: number, options?: RequestInit): Promise<JobCard> => {
+
+  return customFetch<JobCard>(getAcknowledgeJobCardEstimateUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAcknowledgeJobCardEstimateMutationOptions = <TError = ErrorType<UnmetError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acknowledgeJobCardEstimate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acknowledgeJobCardEstimate>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['acknowledgeJobCardEstimate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acknowledgeJobCardEstimate>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  acknowledgeJobCardEstimate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcknowledgeJobCardEstimateMutationResult = NonNullable<Awaited<ReturnType<typeof acknowledgeJobCardEstimate>>>
+
+    export type AcknowledgeJobCardEstimateMutationError = ErrorType<UnmetError>
+
+    /**
+ * @summary Record assigned service staff receipt of the exact current customer-approved estimate
+ */
+export const useAcknowledgeJobCardEstimate = <TError = ErrorType<UnmetError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acknowledgeJobCardEstimate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acknowledgeJobCardEstimate>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getAcknowledgeJobCardEstimateMutationOptions(options));
+    }
+
+export const getGetJobCardEstimatePreviewUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/estimate/preview`
+}
+
+/**
+ * @summary Staff-safe canonical estimate, customer recipient, and email outbox delivery state
+ */
+export const getJobCardEstimatePreview = async (id: number, options?: RequestInit): Promise<JobCardEstimatePreview> => {
+
+  return customFetch<JobCardEstimatePreview>(getGetJobCardEstimatePreviewUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetJobCardEstimatePreviewQueryKey = (id: number,) => {
+    return [
+    `/api/job-cards/${id}/estimate/preview`
+    ] as const;
+    }
+
+
+export const getGetJobCardEstimatePreviewQueryOptions = <TData = Awaited<ReturnType<typeof getJobCardEstimatePreview>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJobCardEstimatePreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetJobCardEstimatePreviewQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJobCardEstimatePreview>>> = ({ signal }) => getJobCardEstimatePreview(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getJobCardEstimatePreview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetJobCardEstimatePreviewQueryResult = NonNullable<Awaited<ReturnType<typeof getJobCardEstimatePreview>>>
+export type GetJobCardEstimatePreviewQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Staff-safe canonical estimate, customer recipient, and email outbox delivery state
+ */
+
+export function useGetJobCardEstimatePreview<TData = Awaited<ReturnType<typeof getJobCardEstimatePreview>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJobCardEstimatePreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetJobCardEstimatePreviewQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

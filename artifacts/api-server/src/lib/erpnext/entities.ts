@@ -24,6 +24,10 @@ import {
   saveErpnextRef,
 } from "./sync";
 import { registerErpnextInboundHandler } from "../../routes/webhooks";
+import {
+  handleServiceInvoiceCreditJob,
+  handleServiceInvoiceJob,
+} from "./service-invoice-credits";
 
 // ---------------------------------------------------------------------------
 // ERPNext entity sync (Task: customers, invoices & payments).
@@ -805,8 +809,18 @@ export function registerErpnextEntitySync(): void {
   if (registered) return;
   registered = true;
   registerErpnextSyncHandler("Customer", handleCustomerJob);
-  registerErpnextSyncHandler("Sales Invoice", handleSalesInvoiceJob);
+  // Sales Invoice has two distinct AURA sources. Service part-credit returns
+  // need a dedicated handler so they are return invoices linked to their
+  // original service invoice, rather than being interpreted as vehicle-sale
+  // invoices by the legacy one-way handler.
+  registerErpnextSyncHandler("Sales Invoice", (job) =>
+    job.entityType === "service_invoice"
+      ? handleServiceInvoiceJob(job)
+      : job.entityType === "service_invoice_credit"
+        ? handleServiceInvoiceCreditJob(job)
+        : handleSalesInvoiceJob(job),
+  );
   registerErpnextSyncHandler("Payment Entry", handlePaymentEntryJob);
   registerErpnextInboundHandler("Customer", handleInboundCustomer);
-  logger.info("ERPNext entity sync handlers registered (Customer, Sales Invoice, Payment Entry)");
+  logger.info("ERPNext entity sync handlers registered (Customer, Sales Invoice, Payment Entry, service credits)");
 }

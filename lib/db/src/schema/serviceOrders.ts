@@ -84,6 +84,11 @@ export const serviceOrdersTable = pgTable("service_orders", {
     .$type<ServiceStageEvent[]>()
     .notNull()
     .default([]),
+  /** Immutable booking provenance. Null means this pre-dates provenance capture,
+   * not that a current actor was hidden. */
+  createdByUserId: integer("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdOrigin: text("created_origin").notNull().default("system"),
   jobs: text("jobs").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

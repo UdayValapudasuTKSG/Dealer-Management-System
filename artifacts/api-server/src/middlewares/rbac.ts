@@ -825,6 +825,15 @@ const PATH_MODULES: Record<string, RouteRule> = {
       if (/^\/job-cards\/\d+\/rollover\/approve\/?$/.test(req.path)) {
         return "edit";
       }
+      // Estimate sends and receipt acknowledgement mutate an existing work
+      // package. Assigned service staff have service:edit but not
+      // service:create; identity/evidence checks remain in the route.
+      if (
+        req.method === "POST" &&
+        /^\/job-cards\/\d+\/estimate\/(?:resend|acknowledge)\/?$/.test(req.path)
+      ) {
+        return "edit";
+      }
       // Timer pause/resume and reopen are edit-actions on an existing card,
       // reachable by Technicians (service:edit, no create); the routes
       // enforce manager-or-assigned-technician identity themselves.

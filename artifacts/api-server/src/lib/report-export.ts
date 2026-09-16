@@ -17,17 +17,21 @@ const fileBase = (payload: ReportPayload) =>
   `${payload.type}-${payload.from.slice(0, 10)}-${payload.to.slice(0, 10)}`;
 
 function csvEscape(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  // Customer-entered names and notes must remain text in spreadsheet apps.
+  const text = /^[\s]*[=+@\t\r]/.test(value) || /^\s*-(?!\d)/.test(value)
+    ? `'${value}`
+    : value;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function buildCsv(payload: ReportPayload, meta: ExportMeta): string {
   const lines: string[] = [];
-  lines.push(`${payload.label} — ${meta.dealerName}`);
+  lines.push(csvEscape(`${payload.label} — ${meta.dealerName}`));
   lines.push(
-    `Range,${dealerDateLabel(payload.from, meta.timezone)} - ${dealerDateLabel(payload.to, meta.timezone)}`,
+    ["Range", `${dealerDateLabel(payload.from, meta.timezone)} - ${dealerDateLabel(payload.to, meta.timezone)}`].map(csvEscape).join(","),
   );
   lines.push(
-    `Money,GYD,Generated,${generatedAt(meta.timezone)} (${meta.timezone})`,
+    ["Money", "GYD", "Generated", `${generatedAt(meta.timezone)} (${meta.timezone})`].map(csvEscape).join(","),
   );
   lines.push("");
   lines.push("KPI,Value,Note");
@@ -119,13 +123,38 @@ function buildPdf(payload: ReportPayload, meta: ExportMeta): Promise<Buffer> {
     doc.fontSize(13).font("Helvetica-Bold").text("Breakdown");
     doc.moveDown(0.4);
     const cols = payload.table.columns;
+    // Operational WIP includes long next-action notes and many columns.
+    // Stacking labelled fields preserves every value without tiny columns or
+    // text spilling past the page; PDFKit paginates long fields naturally.
+    if (cols.length > 8) {
+      for (const [index, row] of payload.table.rows.entries()) {
+        if (doc.y > doc.page.height - 140) doc.addPage();
+        doc.font("Helvetica-Bold").fontSize(11).fillColor(bronze)
+          .text(`Record ${index + 1}`);
+        for (const [column, label] of cols.entries()) {
+          if (doc.y > doc.page.height - 90) doc.addPage();
+          doc.font("Helvetica").fontSize(9).fillColor("#222222")
+            .text(`${label}: ${row[column] || "—"}`, {
+              width: doc.page.width - 96,
+            });
+        }
+        doc.moveDown(0.8);
+      }
+      doc.end();
+      return;
+    }
     const usable = doc.page.width - 96;
     const colW = usable / Math.max(1, cols.length);
     const startX = doc.page.margins.left;
     let y = doc.y;
 
     const drawRow = (cells: string[], bold: boolean) => {
-      if (y > doc.page.height - 72) {
+      doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8.5);
+      const rowHeight = Math.max(
+        ...cells.map((cell) => doc.heightOfString(cell, { width: colW - 6 })),
+        10,
+      );
+      if (y + rowHeight > doc.page.height - 72) {
         doc.addPage();
         y = doc.page.margins.top;
       }
@@ -154,6 +183,7 @@ export async function renderReportExport(
   meta: ExportMeta,
 ): Promise<void> {
   const base = fileBase(payload);
+  res.setHeader("Cache-Control", "private, no-store");
   if (format === "csv") {
     res
       .type("text/csv")

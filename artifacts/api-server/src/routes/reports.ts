@@ -49,7 +49,7 @@ import {
   makeGyd,
   type PersonaScope,
 } from "../lib/report-scope";
-import { dealerTimezone, zonedParts } from "../lib/timezone";
+import { dealerTimezone, formatDealerDateTime, zonedParts } from "../lib/timezone";
 import { renderReportExport } from "../lib/report-export";
 import { fieldAccessFor } from "../lib/field-permissions";
 
@@ -157,6 +157,13 @@ type Ctx = {
   gydNumber: (usd: number) => number;
   rate: number;
   tz: string;
+  workshopWip?: {
+    mode: "summary" | "wip";
+    technicianUserId: number | null;
+    minAgeDays: number | null;
+    waitingReason: string | null;
+    followUp: "overdue" | "today" | "upcoming" | "none" | null;
+  };
 };
 
 type Builder = (
@@ -731,6 +738,78 @@ const serviceWorkshop: Builder = async (ctx) => {
       .from(serviceInvoicesTable)
       .where(eq(serviceInvoicesTable.dealerId, dealerId)),
   ]);
+  if (ctx.workshopWip?.mode === "wip") {
+    const today = `${zonedParts(new Date(), ctx.tz).year}-${String(zonedParts(new Date(), ctx.tz).month).padStart(2, "0")}-${String(zonedParts(new Date(), ctx.tz).day).padStart(2, "0")}`;
+    const midnightMs = (day: string) => Date.parse(`${day}T00:00:00Z`);
+    const orderById = new Map(orders.map((order) => [order.id, order]));
+    const filters = ctx.workshopWip;
+    const rows = jobCards
+      .map((card) => {
+        const order = orderById.get(card.serviceOrderId);
+        if (!order) return null;
+        // Legacy cards without a captured intake may use their actual work
+        // start, never booking/card creation, as an explicitly conservative
+        // WIP age fallback.
+        const receivedAt = card.receivedAt ?? card.startedAt;
+        if (receivedAt == null) return null;
+        const receivedParts = zonedParts(receivedAt, ctx.tz);
+        const receivedDay = `${receivedParts.year}-${String(receivedParts.month).padStart(2, "0")}-${String(receivedParts.day).padStart(2, "0")}`;
+        const elapsedDays = Math.max(0, Math.floor((midnightMs(today) - midnightMs(receivedDay)) / 86400000));
+        return { card, order, receivedDay, elapsedDays, carryOver: receivedDay < today };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      // Keep this predicate exactly in lockstep with GET /job-cards/wip.
+      .filter(({ card, order, elapsedDays, carryOver }) => {
+        if (!["open", "in_progress", "on_hold"].includes(card.status)) return false;
+        if (order.scheduledDate > today) return false;
+        if (filters.technicianUserId != null && card.technicianUserId !== filters.technicianUserId) return false;
+        if (filters.minAgeDays != null && elapsedDays < filters.minAgeDays) return false;
+        if (filters.waitingReason != null && card.waitingReason !== filters.waitingReason) return false;
+        const due = card.followUpDate;
+        if (filters.followUp === "none" && due != null) return false;
+        if (filters.followUp === "overdue" && !(due != null && due < today)) return false;
+        if (filters.followUp === "today" && due !== today) return false;
+        if (filters.followUp === "upcoming" && !(due != null && due > today)) return false;
+        return true;
+      })
+      .sort((a, b) => b.elapsedDays - a.elapsedDays || a.card.id - b.card.id);
+    const byWait = new Map<string, number>();
+    for (const { card } of rows) {
+      const label = card.waitingReason ? titleCase(card.waitingReason) : "Active";
+      byWait.set(label, (byWait.get(label) ?? 0) + 1);
+    }
+    const followupsDue = rows.filter(({ card }) => card.followUpDate != null && card.followUpDate <= today).length;
+    return {
+      label: "Service & Workshop — Live WIP",
+      kpis: [
+        { label: "Open WIP", value: String(rows.length), sub: "Dealer-day scoped" },
+        { label: "Carry-over", value: String(rows.filter((row) => row.carryOver).length), sub: "Received before today" },
+        { label: "On hold", value: String(rows.filter(({ card }) => card.status === "on_hold").length), sub: "Named waiting reason required" },
+        { label: "Follow-ups due", value: String(followupsDue), sub: `As of ${today}` },
+      ],
+      chart: {
+        kind: "bar",
+        valueLabel: "Open jobs",
+        points: [...byWait.entries()].map(([label, value]) => ({ label, value })),
+      },
+      table: {
+        columns: ["Job card", "Customer", "Vehicle", "Received / first known work", "Technician", "Status", "Waiting reason", "Next action", "Follow-up", "Age", "Carry-over"],
+        rows: rows.map(({ card, order, elapsedDays, carryOver }) => [
+          `JC #${card.id}`,
+          order.customerName ?? "—",
+          order.vehicleInfo,
+          `${formatDealerDateTime((card.receivedAt ?? card.startedAt)!, ctx.tz)}${card.receivedAt == null ? " (legacy work-start; intake unknown)" : ""}`,
+          card.technicianName ?? "Unassigned",
+          titleCase(card.status),
+          card.waitingReason ? titleCase(card.waitingReason) : "—",
+          card.nextAction ?? "—",
+          card.followUpDate ?? "—",
+          `${elapsedDays} d`,
+          carryOver ? "Yes" : "No",
+        ]),
+      },
+    };
+  }
   const inWindow = orders.filter((o) => inRange(o.createdAt, from, to));
   const open = orders.filter(
     (o) => !["resolved", "closed", "cancelled"].includes(o.status),
@@ -1532,6 +1611,39 @@ router.get("/reports", async (req, res): Promise<void> => {
     typeof req.query.divisionId === "string" && req.query.divisionId !== ""
       ? Number(req.query.divisionId)
       : null;
+  const workshopMode = req.query.workshopMode === "wip" ? "wip" : "summary";
+  const technicianUserId =
+    typeof req.query.technicianUserId === "string" && /^\d+$/.test(req.query.technicianUserId)
+      ? Number(req.query.technicianUserId)
+      : null;
+  const minAgeDays =
+    typeof req.query.minAgeDays === "string" && /^\d+$/.test(req.query.minAgeDays)
+      ? Number(req.query.minAgeDays)
+      : null;
+  const waitingReasons = new Set([
+    "ordered_parts", "technician_availability", "diagnostics",
+    "escalation_verdict", "warranty_decision", "customer_decision", "other",
+  ]);
+  const waitingReason =
+    typeof req.query.waitingReason === "string" && waitingReasons.has(req.query.waitingReason)
+      ? req.query.waitingReason
+      : null;
+  const followUp =
+    typeof req.query.followUp === "string" &&
+    ["overdue", "today", "upcoming", "none"].includes(req.query.followUp)
+      ? req.query.followUp as "overdue" | "today" | "upcoming" | "none"
+      : null;
+  if (
+    type === "service_workshop" &&
+    ((req.query.workshopMode != null && workshopMode !== req.query.workshopMode) ||
+      (req.query.technicianUserId != null && technicianUserId == null) ||
+      (req.query.minAgeDays != null && minAgeDays == null) ||
+      (req.query.waitingReason != null && waitingReason == null) ||
+      (req.query.followUp != null && followUp == null))
+  ) {
+    res.status(400).json({ error: "invalid_workshop_wip_filter" });
+    return;
+  }
 
   const [dealer] = await db
     .select()
@@ -1553,6 +1665,13 @@ router.get("/reports", async (req, res): Promise<void> => {
       gydNumber,
       rate,
       tz,
+      workshopWip: {
+        mode: workshopMode,
+        technicianUserId,
+        minAgeDays,
+        waitingReason,
+        followUp,
+      },
     })),
   };
   const payload = await redactReportPayload(user, type, rawPayload);

@@ -1,21 +1,28 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams, useSearch } from "wouter";
 import {
   useDecidePublicServiceEstimate,
   useGetPublicServiceEstimate,
 } from "@workspace/api-client-react";
-import { CheckCircle2, Loader2, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, Loader2, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-GY", {
     style: "currency",
     currency: "GYD",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 
 export default function ServiceEstimate() {
   const { token = "" } = useParams<{ token: string }>();
+  const search = useSearch();
+  const decisionFromEmail = new URLSearchParams(search).get("decision");
+  const preselectedDecision =
+    decisionFromEmail === "approved" || decisionFromEmail === "declined"
+      ? decisionFromEmail
+      : null;
   const estimate = useGetPublicServiceEstimate(token);
   const decide = useDecidePublicServiceEstimate();
   const [result, setResult] = useState<"approved" | "declined" | null>(null);
@@ -37,7 +44,7 @@ export default function ServiceEstimate() {
           ) : estimate.isError || !data ? (
             <div className="py-20 text-center">
               <XCircle className="mx-auto mb-4 h-10 w-10 text-red-600" />
-              <h1 className="text-2xl font-semibold">Estimate unavailable</h1>
+              <h1 className="text-2xl font-semibold">Quote unavailable</h1>
               <p className="mt-2 text-neutral-600">
                 This secure link is invalid or has expired. Please contact your service advisor.
               </p>
@@ -49,10 +56,13 @@ export default function ServiceEstimate() {
                 {data.brandName}
               </div>
               <h1 className="mt-5 text-3xl font-semibold tracking-tight">
-                Service estimate
+                Service quote
               </h1>
               <p className="mt-2 text-neutral-600">
                 {data.vehicle} · {data.service.replace(/_/g, " ")}
+              </p>
+              <p className="mt-1 text-xs font-medium uppercase tracking-wider text-neutral-500">
+                Quote version {data.estimateVersion} · valid until {new Date(data.expiresAt).toLocaleString("en-GY", { dateStyle: "medium", timeStyle: "short" })}
               </p>
               <div className="mt-8 divide-y divide-black/10 rounded-2xl border border-black/10">
                 {data.lines.length ? (
@@ -69,44 +79,64 @@ export default function ServiceEstimate() {
                   ))
                 ) : (
                   <div className="p-4 text-sm text-neutral-600">
-                    Your advisor has provided a whole-estimate total.
+                    Your service advisor has provided the itemized cost in this quote.
                   </div>
                 )}
                 <div className="flex items-center justify-between bg-neutral-50 p-5 text-lg font-semibold">
-                  <span>Total estimate</span>
+                  <span>Total quote</span>
                   <span>{money(data.total)}</span>
                 </div>
               </div>
               {data.state !== "open" || result ? (
-                <div className="mt-8 rounded-2xl bg-emerald-50 p-5 text-emerald-900">
-                  <CheckCircle2 className="mb-2 h-6 w-6" />
-                  Your decision to {data.state === "approved" || result === "approved" ? "approve" : "decline"} the whole estimate has been recorded.
+                <div className={`mt-8 rounded-2xl p-5 ${data.state === "approved" || result === "approved" ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-950"}`}>
+                  {data.state === "approved" || result === "approved" ? <CheckCircle2 className="mb-2 h-6 w-6" /> : <Clock3 className="mb-2 h-6 w-6" />}
+                  <p className="font-medium">
+                    {data.state === "approved" || result === "approved"
+                      ? "Thank you — your authorization of this exact quote version has been recorded."
+                      : data.state === "declined" || result === "declined"
+                        ? "This quote was declined. Chargeable work is blocked until your advisor sends a revised quote."
+                        : data.state === "expired"
+                          ? "This quote has expired. Chargeable work is blocked until your advisor sends the current quote."
+                          : "This quote is stale because a newer version is available. Chargeable work is blocked until the current quote is authorized."}
+                  </p>
+                  {(data.state === "approved" || result === "approved") && (
+                    <p className="mt-2 text-sm opacity-80">
+                      Your dealership will review this authorization before chargeable work begins.
+                    </p>
+                  )}
+                  {data.decidedAt && <p className="mt-1 text-sm opacity-80">Recorded {new Date(data.decidedAt).toLocaleString("en-GY", { dateStyle: "medium", timeStyle: "short" })}.</p>}
                 </div>
               ) : (
                 <div className="mt-8">
                   <p className="mb-4 text-sm text-neutral-600">
-                    Choose once below. Parts and labour are shown read-only; your choice applies to the whole estimate.
+                    Review the itemized cost above. Your choice applies to this complete quote, including any parts, servicing or labour, taxes, and surcharge shown.
                   </p>
+                  {preselectedDecision && (
+                    <p className="mb-4 rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-700">
+                      Your email highlighted {preselectedDecision === "approved" ? "Authorize quote" : "Decline quote"}.
+                      Nothing is recorded until you select it below.
+                    </p>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Button
-                      className="h-12 rounded-full"
+                      className={`h-12 rounded-full ${preselectedDecision === "approved" ? "ring-2 ring-primary ring-offset-2" : ""}`}
                       disabled={decide.isPending}
                       onClick={() => submit("approved")}
                     >
-                      Approve whole estimate
+                      Authorize quote
                     </Button>
                     <Button
                       variant="outline"
-                      className="h-12 rounded-full border-black/20"
+                      className={`h-12 rounded-full border-black/20 ${preselectedDecision === "declined" ? "ring-2 ring-neutral-500 ring-offset-2" : ""}`}
                       disabled={decide.isPending}
                       onClick={() => submit("declined")}
                     >
-                      Decline estimate
+                      Decline quote
                     </Button>
                   </div>
                   {decide.isError && (
                     <p className="mt-3 text-sm text-red-700">
-                      We could not record that decision. The link may have expired or already been used.
+                      We could not record that decision. This quote may have expired, already been used, or been revised. Ask your advisor to send the current quote.
                     </p>
                   )}
                 </div>

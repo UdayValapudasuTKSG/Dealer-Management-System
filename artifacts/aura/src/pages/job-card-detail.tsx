@@ -10,6 +10,7 @@ import {
   useCreateJobCardInvoice,
   useAddJobCardPart,
   useCreateJobCardCreditNote,
+  useListServiceInvoices,
   useListJobCardParts,
   useListJobCardExternalParts,
   useListJobCardPartRequisitions,
@@ -19,6 +20,7 @@ import {
   useCreateJobCardTechnicianNote,
   getListJobCardTechnicianNotesQueryKey,
   getListJobCardsQueryKey,
+  getListWorkshopWipQueryKey,
   getListJobCardPartsQueryKey,
   getListJobCardExternalPartsQueryKey,
   getListJobCardPartRequisitionsQueryKey,
@@ -28,15 +30,20 @@ import {
   useRolloverJobCard,
   useListServiceTechnicians,
   useClaimServiceOrder,
+  useUpdateJobCardWaiting,
+  useResendJobCardEstimate,
+  useAcknowledgeJobCardEstimate,
+  useGetJobCardEstimatePreview,
   type JobCard,
   type ServiceOrder,
   type ServiceInvoice,
-  type JobCardDetail
+  type JobCardDetail,
+  type JobCardWaitingUpdateReason,
 } from "@workspace/api-client-react";
 import { useAuthz, } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useMoney, formatDealerDateShort, formatDealerDayTime, formatGuyanaDate } from "@/lib/format";
-import { getListPartsQueryKey, getListServiceInvoicesQueryKey, getListServiceOrdersQueryKey } from "@workspace/api-client-react";
+import { getGetJobCardEstimatePreviewQueryKey, getListPartsQueryKey, getListServiceInvoicesQueryKey, getListServiceOrdersQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -110,12 +117,69 @@ const JOB_STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+const serviceAmount = new Intl.NumberFormat("en-GY", {
+  style: "currency",
+  currency: "GYD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 function formatWorkDuration(start: Date, end: Date): string {
   const mins = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   if (h === 0) return `${m}m`;
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function estimateDeliveryLabel(state: string): string {
+  switch (state) {
+    case "queued":
+      return "QUEUED";
+    case "sent":
+      return "SENT";
+    case "delivered":
+      return "DELIVERED";
+    case "read":
+      return "READ";
+    case "failed":
+      return "FAILED";
+    case "not_queued":
+      return "NOT QUEUED";
+    default:
+      return state.replace(/_/g, " ").toUpperCase();
+  }
+}
+
+function estimateDeliveryBadgeClass(state: string): string {
+  if (state === "failed") return "bg-rose-500/15 text-rose-300";
+  if (state === "sent" || state === "delivered" || state === "read") {
+    return "bg-primary/15 text-primary";
+  }
+  return "bg-amber-500/15 text-amber-300";
+}
+
+function estimateDecisionLabel(state: string): string {
+  switch (state) {
+    case "draft":
+      return "NOT YET SENT";
+    case "open":
+      return "AWAITING CUSTOMER AUTHORIZATION";
+    case "approved":
+      return "CUSTOMER AUTHORIZED";
+    case "declined":
+      return "CUSTOMER DECLINED";
+    case "expired":
+      return "QUOTE EXPIRED";
+    case "stale":
+      return "QUOTE REVISED";
+    default:
+      return state.replace(/_/g, " ").toUpperCase();
+  }
+}
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export default function JobCardDetailPage() {
@@ -163,6 +227,7 @@ export default function JobCardDetailPage() {
         <p className="text-muted-foreground">
           Service Order #{detail.serviceOrder.id}
           {detail.serviceOrder.vehicleInfo ? ` · ${detail.serviceOrder.vehicleInfo}` : ""}
+          {detail.serviceOrder.customerName ? ` · ${detail.serviceOrder.customerName}` : ""}
           {detail.serviceOrder.vin ? ` · VIN ${detail.serviceOrder.vin}` : ""}
           {detail.serviceOrder.registrationNumber ? ` · Reg ${detail.serviceOrder.registrationNumber}` : ""}
         </p>
@@ -184,24 +249,64 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   const { can, me } = useAuthz();
   const invoice = useCreateJobCardInvoice();
   const addPart = useAddJobCardPart();
-  const createCreditNote = useCreateJobCardCreditNote();
-  const money = useMoney();
+  const [creditNoteDialogOpen, setCreditNoteDialogOpen] = useState(false);
+  const [creditNoteIdempotencyKey, setCreditNoteIdempotencyKey] = useState(() =>
+    crypto.randomUUID(),
+  );
+  const createCreditNote = useCreateJobCardCreditNote({
+    request: {
+      headers: {
+        "x-idempotency-key": creditNoteIdempotencyKey,
+      },
+    },
+  });
+  const renewCreditNoteIdempotencyKey = () =>
+    setCreditNoteIdempotencyKey(crypto.randomUUID());
+  const money = { ...useMoney(), gyd: (value: number) => serviceAmount.format(value) };
   const { data: lines } = useListJobCardParts(card.id);
   const { data: externalLines } = useListJobCardExternalParts(card.id);
   const { data: requisitions } = useListJobCardPartRequisitions(card.id);
   const { data: parts } = useListParts();
   const { data: creditNotes } = useListJobCardCreditNotes(card.id);
+  const { data: serviceInvoices } = useListServiceInvoices();
   const [noteDraft, setNoteDraft] = useState("");
+  const [estimateActionError, setEstimateActionError] = useState<{
+    action: "send" | "acknowledge";
+    message: string;
+  } | null>(null);
   const technicianNotesQuery = useListJobCardTechnicianNotes(card.id);
   const createTechnicianNote = useCreateJobCardTechnicianNote();
+  const resendEstimate = useResendJobCardEstimate();
+  const acknowledgeEstimate = useAcknowledgeJobCardEstimate();
+  const estimatePreview = useGetJobCardEstimatePreview(card.id, {
+    query: {
+      queryKey: getGetJobCardEstimatePreviewQueryKey(card.id),
+      refetchInterval: (query) =>
+        query.state.data?.decision.state === "open" ? 12_000 : false,
+    },
+  });
   const technicianNotes = technicianNotesQuery.data ?? [];
   const notesLoading = technicianNotesQuery.isLoading;
   const noteSaving = createTechnicianNote.isPending;
   const isApprover = useIsServiceApprover();
   const customerPhoneSnapshot = serviceOrder?.customerPhoneSnapshot;
+  const canActOnCurrentEstimate =
+    isApprover || (card.technicianUserId != null && card.technicianUserId === me?.id);
   const canAddTechnicianNote =
     card.status === "in_progress" &&
-    (isApprover || (card.technicianUserId != null && card.technicianUserId === me?.id));
+    canActOnCurrentEstimate;
+
+  useEffect(() => {
+    if (estimatePreview.data?.decision.state !== "approved") return;
+    void queryClient.invalidateQueries({
+      queryKey: getGetJobCardQueryKey(card.id),
+    });
+  }, [
+    card.id,
+    estimatePreview.data?.decision.state,
+    estimatePreview.data?.estimateVersion,
+    queryClient,
+  ]);
 
   const addTechnicianNote = async () => {
     const body = noteDraft.trim();
@@ -221,19 +326,41 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
     }
   };
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: getGetJobCardQueryKey(card.id) });
-    queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getListJobCardPartsQueryKey(card.id) });
-    queryClient.invalidateQueries({ queryKey: getListJobCardExternalPartsQueryKey(card.id) });
-    queryClient.invalidateQueries({ queryKey: getListJobCardPartRequisitionsQueryKey(card.id) });
-    queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getListJobCardCreditNotesQueryKey(card.id) });
+  const invalidate = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetJobCardQueryKey(card.id) }),
+      queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListJobCardPartsQueryKey(card.id) }),
+      queryClient.invalidateQueries({ queryKey: getListJobCardExternalPartsQueryKey(card.id) }),
+      queryClient.invalidateQueries({ queryKey: getListJobCardPartRequisitionsQueryKey(card.id) }),
+      queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListJobCardCreditNotesQueryKey(card.id) }),
+      queryClient.invalidateQueries({ queryKey: getListServiceInvoicesQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListWorkshopWipQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetJobCardEstimatePreviewQueryKey(card.id) }),
+    ]);
   };
 
-  // Issued (non-backordered) lines are what a credit note can be raised against.
+  // Issued (non-backordered) lines are creditable only up to their remaining
+  // quantity. The server repeats this check transactionally for concurrent use.
+  const creditedByLine = new Map<number, number>();
+  for (const note of creditNotes ?? []) {
+    creditedByLine.set(
+      note.jobCardPartId,
+      (creditedByLine.get(note.jobCardPartId) ?? 0) + note.quantity,
+    );
+  }
   const creditableLines =
-    lines?.filter((l) => l.kind === "issue" && !l.backordered) ?? [];
+    lines
+      ?.filter((line) => line.kind === "issue" && !line.backordered)
+      .map((line) => ({
+        ...line,
+        availableToCredit: Math.max(
+          0,
+          line.quantity - (creditedByLine.get(line.id) ?? 0),
+        ),
+      }))
+      .filter((line) => line.availableToCredit > 0) ?? [];
 
   const toggleChecklist = async (idx: number) => {
     const next = card.checklist.map((c, i) => (i === idx ? { ...c, done: !c.done } : c));
@@ -296,11 +423,67 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
     externalLines?.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0) ?? 0;
   const partsTotal = internalPartsTotal + externalPartsTotal;
   const laborTotal = card.laborHours * card.laborRate;
+  const linkedInvoice = serviceInvoices?.find((item) => item.jobCardId === card.id);
+  const preview = estimatePreview.data;
+  const previewPartsTotal =
+    preview?.lines
+      .filter((line) => line.kind === "part")
+      .reduce((total, line) => total + line.amount, 0) ?? 0;
+  const previewLabourTotal =
+    preview?.lines
+      .filter((line) => line.kind === "labour")
+      .reduce((total, line) => total + line.amount, 0) ?? 0;
+  const previewTaxTotal =
+    preview?.lines
+      .filter((line) => line.kind === "tax")
+      .reduce((total, line) => total + line.amount, 0) ?? 0;
+  const previewSurchargeTotal =
+    preview?.lines
+      .filter((line) => line.kind === "surcharge")
+      .reduce((total, line) => total + line.amount, 0) ?? 0;
+  const customerApprovedCurrent =
+    preview?.decision.state === "approved" &&
+    preview.decision.id != null;
+  const staffAcknowledgedCurrent =
+    customerApprovedCurrent &&
+    card.estimateStaffAcknowledgedVersion === preview?.estimateVersion &&
+    card.estimateStaffAcknowledgedDecisionId === preview?.decision.id;
+
+  const sendQuote = async () => {
+    setEstimateActionError(null);
+    try {
+      const outcome = await resendEstimate.mutateAsync({ id: card.id });
+      await invalidate();
+      toast({
+        title: "Quote queued",
+        description: outcome.message,
+      });
+    } catch (error: unknown) {
+      const message = apiErrorMessage(error, "Could not queue the current quote.");
+      setEstimateActionError({ action: "send", message });
+      toast({ title: "Quote not queued", description: message, variant: "destructive" });
+    }
+  };
+
+  const acknowledgeCustomerAuthorization = async () => {
+    setEstimateActionError(null);
+    try {
+      await acknowledgeEstimate.mutateAsync({ id: card.id });
+      await invalidate();
+      toast({
+        title: "Authorization receipt recorded",
+        description: "Chargeable work can proceed once the remaining job requirements are met.",
+      });
+    } catch (error: unknown) {
+      const message = apiErrorMessage(error, "Could not record authorization receipt.");
+      setEstimateActionError({ action: "acknowledge", message });
+      toast({ title: "Authorization receipt not recorded", description: message, variant: "destructive" });
+    }
+  };
 
   const NEXT: Record<string, JobCard["status"] | undefined> = {
     open: "in_progress",
     in_progress: "completed",
-    on_hold: "in_progress",
     completed: "closed",
   };
   const next = NEXT[card.status];
@@ -339,6 +522,18 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
               <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
                 <Phone className="w-3 h-3" />
                 <span>Job contact: {customerPhoneSnapshot}</span>
+              </div>
+            )}
+            {serviceOrder?.customerName && (
+              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                <User className="w-3 h-3" />
+                {serviceOrder.customerId ? (
+                  <Link href={`/customers/${serviceOrder.customerId}`} className="hover:text-primary hover:underline">
+                    Customer: {serviceOrder.customerName}
+                  </Link>
+                ) : (
+                  <span>Customer: {serviceOrder.customerName}</span>
+                )}
               </div>
             )}
             {(card.startedAt || card.completedAt) && (
@@ -383,6 +578,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                 <DetailDatum label="Payment" value={serviceOrder.payType?.replaceAll("_", " ") ?? "Not recorded"} />
               </div>
             )}
+            <WaitingSection card={card} onChanged={invalidate} />
 
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
               <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -420,7 +616,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
               <Package className="w-3 h-3" /> Parts
             </span>
             <span>
-              Parts {money.gyd(partsTotal)} · Labour {money.gyd(laborTotal)}
+              Net parts {money.gyd(partsTotal)} · Labour {money.gyd(laborTotal)}
             </span>
           </div>
           <div className="py-2 border-b border-white/5 mb-2">
@@ -557,12 +753,17 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                 }
               }}
             />
-            {creditableLines.length > 0 && (
+            {isApprover && creditableLines.length > 0 && (
               <CreateRecordDialog
                 title="Credit Note — return unused parts"
                 description="Restores stock and reduces this job's parts total. Internal adjustment only — no cash refund."
                 pending={createCreditNote.isPending}
                 submitLabel="Issue credit note"
+                open={creditNoteDialogOpen}
+                onOpenChange={(open) => {
+                  setCreditNoteDialogOpen(open);
+                  if (open) renewCreditNoteIdempotencyKey();
+                }}
                 trigger={
                   <Button size="sm" variant="outline" className="rounded-full border-white/15 gap-1.5 text-xs">
                     <Receipt className="w-3.5 h-3.5" /> Credit note
@@ -577,11 +778,28 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                     span: "full",
                     options: creditableLines.map((l) => ({
                       value: String(l.id),
-                      label: `${l.partName} × ${l.quantity} @ ${money.gyd(l.unitPrice)}`,
+                      label: `${l.partName} · ${l.availableToCredit} of ${l.quantity} available @ ${money.gyd(l.unitPrice)}`,
                     })),
+                    onChange: renewCreditNoteIdempotencyKey,
                   },
-                  { name: "quantity", label: "Quantity to credit", type: "number", required: true, span: "half", defaultValue: "1" },
-                  { name: "reason", label: "Reason", type: "text", required: true, span: "full", placeholder: "e.g. Part unused — customer declined the repair" },
+                  {
+                    name: "quantity",
+                    label: "Quantity to credit",
+                    type: "number",
+                    required: true,
+                    span: "half",
+                    defaultValue: "1",
+                    onChange: renewCreditNoteIdempotencyKey,
+                  },
+                  {
+                    name: "reason",
+                    label: "Reason",
+                    type: "text",
+                    required: true,
+                    span: "full",
+                    placeholder: "e.g. Part unused — customer declined the repair",
+                    onChange: renewCreditNoteIdempotencyKey,
+                  },
                 ]}
                 onSubmit={async (values) => {
                   const v = values as Record<string, unknown>;
@@ -594,6 +812,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                         reason: String(v.reason ?? ""),
                       },
                     });
+                    // Keep this key for a failed retry, then rotate it only
+                    // after the server has accepted this exact submission.
+                    renewCreditNoteIdempotencyKey();
                     invalidate();
                     toast({ title: "Credit note issued", description: "Stock restored and parts total reduced." });
                   } catch (e: unknown) {
@@ -622,42 +843,204 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
               ))}
             </div>
           )}
+          {linkedInvoice && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs">
+              <div className="font-medium">Linked invoice financial position</div>
+              <div className="mt-1 grid gap-1 text-muted-foreground sm:grid-cols-3">
+                <span>Issued total: {money.gyd(linkedInvoice.originalTotal)}</span>
+                <span>Adjusted document total: {money.gyd(linkedInvoice.total)}</span>
+                <span>Outstanding balance: {money.gyd(linkedInvoice.balance)}</span>
+              </div>
+              {linkedInvoice.customerCreditBalance > 0 && (
+                <p className="mt-1.5 text-foreground">
+                  Customer account credit: {money.gyd(linkedInvoice.customerCreditBalance)}
+                  {linkedInvoice.creditReconciliationStatus === "pending_collision_settlement"
+                    ? " · pending collision settlement reconciliation."
+                    : " · available only through the documented refund or future-application process."}
+                </p>
+              )}
+            </div>
+          )}
         </div>
           </TabsContent>
 
           <TabsContent value="commercial" className="space-y-3">
-        {(card.quoteTotal ?? 0) > 0 && (
-          <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">
-                Customer quote
-              </div>
-              <div className="font-medium text-base tracking-tight">
-                {money.gyd(card.quoteTotal ?? 0)}
-              </div>
+        {estimatePreview.isLoading ? (
+          <div className="flex min-h-40 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03]">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+        ) : estimatePreview.isError || !preview ? (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm">
+            <div className="flex items-center gap-2 font-medium text-rose-200">
+              <AlertTriangle className="h-4 w-4" />
+              Quote preview unavailable
             </div>
-            {card.quoteApprovedAt ? (
-              <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1">
-                <CheckCircle2 className="w-3 h-3" />
-                Approved {formatDealerDateShort(card.quoteApprovedAt)}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {apiErrorMessage(estimatePreview.error, "Reload the job card before sending or acknowledging a quote.")}
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Customer quote · version {preview.estimateVersion}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Recipient: <span className="text-foreground">{preview.customerRecipient ?? "No customer email on this service order"}</span>
+                </p>
+              </div>
+              <Badge className={`${estimateDeliveryBadgeClass(preview.delivery.state)} border-none rounded-full text-[10px] font-bold uppercase tracking-widest`}>
+                {estimateDeliveryLabel(preview.delivery.state)}
               </Badge>
-            ) : technicianView ? (
-              <Badge className="bg-white/[0.06] text-muted-foreground border-none rounded-full text-[10px] font-bold uppercase tracking-widest">
-                Awaiting approval
-              </Badge>
-            ) : (
-              <Button
-                size="sm"
-                disabled={update.isPending}
-                className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs gap-1.5"
-                onClick={async () => {
-                  await update.mutateAsync({ id: card.id, data: { approveQuote: true } });
-                  invalidate();
-                  toast({ title: "Quote approved", description: "Customer approval recorded." });
-                }}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" /> Approve Quote
-              </Button>
+            </div>
+
+            <section className="rounded-lg border border-white/10 p-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">1</span>
+                <h4 className="text-sm font-medium">Review the current itemized quote</h4>
+              </div>
+              <div className="mt-3 divide-y divide-white/10 rounded-md border border-white/10">
+                {preview.lines.map((line, index) => (
+                  <div key={`${line.kind}-${line.description}-${index}`} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
+                    <div>
+                      <p>{line.description}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {line.kind === "labour" ? "Servicing / labour" : line.kind}
+                        {line.quantity != null ? ` · ${line.quantity}` : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-medium">{money.gyd(line.amount)}</span>
+                  </div>
+                ))}
+                <div className="space-y-1 bg-white/[0.02] px-3 py-3 text-xs">
+                  <QuoteSummaryRow label="Parts" amount={previewPartsTotal} money={money.gyd} />
+                  <QuoteSummaryRow label="Servicing / labour" amount={previewLabourTotal} money={money.gyd} />
+                  <QuoteSummaryRow label="Tax" amount={previewTaxTotal} money={money.gyd} />
+                  <QuoteSummaryRow label="Surcharge" amount={previewSurchargeTotal} money={money.gyd} />
+                  <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2 text-sm font-semibold">
+                    <span>Total quote</span>
+                    <span>{money.gyd(preview.total)}</span>
+                  </div>
+                  <p className="pt-1 text-[10px] text-muted-foreground">All quote amounts are shown to the cent.</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-white/10 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">2</span>
+                  <h4 className="text-sm font-medium">Send quote to customer</h4>
+                </div>
+                {canActOnCurrentEstimate && card.payType === "customer" && preview.total > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full text-xs"
+                    disabled={resendEstimate.isPending}
+                    onClick={sendQuote}
+                  >
+                    {resendEstimate.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                    {preview.decision.state === "approved" ? "Send revised quote" : "Send quote"}
+                  </Button>
+                )}
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                <p>
+                  Email delivery status: <span className="font-medium text-foreground">{estimateDeliveryLabel(preview.delivery.state)}</span>
+                  {preview.delivery.recipient ? ` · ${preview.delivery.recipient}` : ""}
+                </p>
+                <p className="mt-1">
+                  Customer decision: <span className="font-medium text-foreground">{estimateDecisionLabel(preview.decision.state)}</span>
+                </p>
+                {preview.delivery.sentAt && <p className="mt-1">Sent {formatDealerDayTime(preview.delivery.sentAt)}.</p>}
+                {preview.delivery.deliveredAt && <p className="mt-1">Delivered {formatDealerDayTime(preview.delivery.deliveredAt)}.</p>}
+                {preview.delivery.lastError && (
+                  <p className="mt-1 text-rose-300">Delivery error: {preview.delivery.lastError}</p>
+                )}
+                {preview.delivery.attempts > 0 && (
+                  <p className="mt-1">Delivery attempts: {preview.delivery.attempts}.</p>
+                )}
+                {card.payType === "customer" && preview.total <= 0 && (
+                  <p className="mt-1 text-amber-300">A positive customer quote is required before it can be sent.</p>
+                )}
+                {card.payType !== "customer" && (
+                  <p className="mt-1">Customer authorization is not required for this payment type.</p>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-white/10 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">3</span>
+                  <h4 className="text-sm font-medium">Record authorization received</h4>
+                </div>
+                {canActOnCurrentEstimate && preview.total > 0 && customerApprovedCurrent && !staffAcknowledgedCurrent && (
+                  <Button
+                    size="sm"
+                    className="rounded-full text-xs"
+                    disabled={acknowledgeEstimate.isPending}
+                    onClick={acknowledgeCustomerAuthorization}
+                  >
+                    {acknowledgeEstimate.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                    Confirm authorization received
+                  </Button>
+                )}
+              </div>
+              {card.payType !== "customer" ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  This payment type does not require customer quote authorization.
+                </p>
+              ) : preview.total <= 0 ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  A zero-cost job does not require customer quote authorization.
+                </p>
+              ) : staffAcknowledgedCurrent ? (
+                <div className="mt-2 text-xs text-primary">
+                  <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+                  Authorization receipt recorded by {card.estimateStaffAcknowledgedByName ?? "service staff"}
+                  {card.estimateStaffAcknowledgedAt ? ` · ${formatDealerDayTime(card.estimateStaffAcknowledgedAt)}` : ""}.
+                </div>
+              ) : customerApprovedCurrent ? (
+                <p className="mt-2 text-xs text-amber-300">
+                  Customer authorization is recorded for this exact quote version. Chargeable work remains blocked until staff confirms receipt.
+                </p>
+              ) : preview.decision.state === "declined" ? (
+                <p className="mt-2 text-xs text-amber-300">
+                  The customer declined this quote. Chargeable work remains blocked until a revised quote is sent, authorized, and acknowledged by staff.
+                </p>
+              ) : preview.decision.state === "expired" || preview.decision.state === "stale" ? (
+                <p className="mt-2 text-xs text-amber-300">
+                  This quote is no longer current. Chargeable work remains blocked until the current quote is sent, authorized, and acknowledged by staff.
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Waiting for customer authorization of the current quote. Chargeable work remains blocked until the customer authorizes and staff confirms receipt.
+                </p>
+              )}
+              {preview.decision.decidedAt && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Customer decision recorded {formatDealerDayTime(preview.decision.decidedAt)}.
+                </p>
+              )}
+            </section>
+
+            {estimateActionError && (
+              <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-100">
+                <p className="font-medium">Quote action needs attention</p>
+                <p className="mt-1">{estimateActionError.message}</p>
+                {estimateActionError.action === "send" ? (
+                  <p className="mt-1 text-rose-200/80">
+                    Update the customer email on the service order, or ask a dealership administrator to resolve email delivery configuration. Do not enter credentials here; use the delivery status above to confirm the result.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-rose-200/80">
+                    Reload the current quote and confirm that the customer authorization is still for this exact version before trying again.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -899,6 +1282,159 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+const WAITING_REASONS: { value: JobCardWaitingUpdateReason; label: string }[] = [
+  { value: "ordered_parts", label: "Ordered parts" },
+  { value: "technician_availability", label: "Technician availability" },
+  { value: "diagnostics", label: "Diagnostics" },
+  { value: "escalation_verdict", label: "Escalation verdict" },
+  { value: "warranty_decision", label: "Warranty decision" },
+  { value: "customer_decision", label: "Customer decision" },
+  { value: "other", label: "Other" },
+];
+
+function waitingReasonLabel(reason: string | null | undefined) {
+  return WAITING_REASONS.find((item) => item.value === reason)?.label ?? "Not recorded";
+}
+
+function WaitingSection({ card, onChanged }: { card: JobCard; onChanged: () => void }) {
+  const { toast } = useToast();
+  const waiting = useUpdateJobCardWaiting();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<JobCardWaitingUpdateReason>("ordered_parts");
+  const [nextAction, setNextAction] = useState("");
+  const [followUpDate, setFollowUpDate] = useState("");
+  // Every resume, including older holds without a named reason, goes through
+  // the dedicated endpoint so pending rollover sign-off cannot be bypassed.
+  const isWaiting = card.status === "on_hold";
+  const active = card.status === "open" || card.status === "in_progress";
+
+  const fail = (error: unknown) => {
+    const message =
+      (error as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+      "Could not update the workshop wait.";
+    toast({ title: "Workshop wait", description: message, variant: "destructive" });
+  };
+
+  const resume = async () => {
+    try {
+      await waiting.mutateAsync({ id: card.id, data: { action: "resume" } });
+      onChanged();
+      toast({
+        title: "Work resumed",
+        description: "The wait was recorded. Existing rollover controls still apply.",
+      });
+    } catch (error) {
+      fail(error);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Workshop status</div>
+          <div className="mt-1 text-sm font-medium">
+            {isWaiting ? `Waiting: ${waitingReasonLabel(card.waitingReason)}` : "Work is not on a recorded wait"}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Responsible: {card.technicianName ?? "Unassigned"}
+            {card.nextAction ? ` · Next action: ${card.nextAction}` : ""}
+            {card.followUpDate ? ` · Follow up ${formatGuyanaDate(card.followUpDate)}` : ""}
+          </p>
+        </div>
+        {isWaiting ? (
+          <Button size="sm" variant="outline" className="rounded-full" disabled={waiting.isPending} onClick={() => void resume()}>
+            {waiting.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1.5 h-3.5 w-3.5" />}
+            Resume work
+          </Button>
+        ) : active ? (
+          <Button size="sm" variant="outline" className="rounded-full" onClick={() => {
+            setReason("ordered_parts");
+            setNextAction("");
+            setFollowUpDate("");
+            setOpen(true);
+          }}>
+            <Pause className="mr-1.5 h-3.5 w-3.5" /> Record a wait
+          </Button>
+        ) : null}
+      </div>
+      {card.waitingHistory && card.waitingHistory.length > 0 && (
+        <div className="border-t border-white/10 pt-3">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Wait history</div>
+          <div className="space-y-2">
+            {[...card.waitingHistory].reverse().map((event, index) => (
+              <div key={`${event.at}-${index}`} className="border-l-2 border-primary/30 pl-2 text-xs">
+                <span className="font-medium">{event.action === "hold" ? "Wait recorded" : "Work resumed"}</span>
+                {event.reason && <span> · {waitingReasonLabel(event.reason)}</span>}
+                <span className="text-muted-foreground"> · {event.byName} · {formatDealerDayTime(event.at)}</span>
+                {event.nextAction && <div className="mt-0.5 text-muted-foreground">Next action: {event.nextAction}{event.followUpDate ? ` · Follow up ${formatGuyanaDate(event.followUpDate)}` : ""}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record a workshop wait</DialogTitle>
+            <DialogDescription>
+              This keeps the job open and preserves diagnostics and intake evidence. It does not mark work complete.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Waiting reason</Label>
+              <Select value={reason} onValueChange={(value) => {
+                const selected = WAITING_REASONS.find((item) => item.value === value);
+                if (selected) setReason(selected.value);
+              }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{WAITING_REASONS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={`waiting-next-action-${card.id}`}>Next action</Label>
+              <Textarea id={`waiting-next-action-${card.id}`} value={nextAction} onChange={(event) => setNextAction(event.target.value)} maxLength={2000} placeholder="What needs to happen before work can continue?" rows={3} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={`waiting-follow-up-${card.id}`}>Expected follow-up date</Label>
+              <Input id={`waiting-follow-up-${card.id}`} type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-full" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              className="rounded-full"
+              disabled={waiting.isPending || !nextAction.trim()}
+              onClick={async () => {
+                try {
+                  await waiting.mutateAsync({
+                    id: card.id,
+                    data: {
+                      action: "hold",
+                      reason,
+                      nextAction: nextAction.trim(),
+                      ...(followUpDate ? { followUpDate } : {}),
+                    },
+                  });
+                  onChanged();
+                  setOpen(false);
+                  toast({ title: "Wait recorded", description: "The job remains open with its follow-up plan." });
+                } catch (error) {
+                  fail(error);
+                }
+              }}
+            >
+              {waiting.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Record wait
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
@@ -1320,6 +1856,24 @@ function TimerReadout({ card }: { card: JobCard }) {
     </span>
   );
 }
+
+function QuoteSummaryRow({
+  label,
+  amount,
+  money,
+}: {
+  label: string;
+  amount: number;
+  money: (amount: number) => string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span>{money(amount)}</span>
+    </div>
+  );
+}
+
 function formatWorkedSeconds(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);

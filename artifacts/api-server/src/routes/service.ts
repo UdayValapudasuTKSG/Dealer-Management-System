@@ -9,14 +9,22 @@ import {
 import {
   dealerTimezone,
   formatDealerDate,
+  formatDealerDateTime,
   zonedDayKey,
   zonedParts,
   zonedTimeToUtc,
 } from "../lib/timezone";
 import { getServiceSettings } from "../lib/service-settings";
+import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
+import {
+  clearEstimateStaffAcknowledgement,
+  hasCurrentChargeableWorkAuthorization,
+} from "../lib/service-estimate-gate";
+import { invalidateServiceEstimate } from "../lib/service-estimate-invalidation";
+import { renderReportExport } from "../lib/report-export";
 import { queueCustomerSync } from "../lib/erpnext/entities";
 import { dealerExchangeRate } from "../lib/invoicing";
-import { and, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, gte, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   db,
   serviceOrdersTable,
@@ -49,6 +57,7 @@ import {
   vehicleOnboardingRequestsTable,
   vehicleOnboardingMediaTable,
   type JobCard,
+  type JobWaitingReason,
   type ServiceInvoice,
 } from "@workspace/db";
 import {
@@ -137,6 +146,17 @@ import {
   CreateJobCardCreditNoteParams,
   CreateJobCardCreditNoteBody,
   CreateJobCardCreditNoteResponse,
+  ListWorkshopWipQueryParams,
+  ListWorkshopWipResponse,
+  UpdateJobCardWaitingParams,
+  UpdateJobCardWaitingBody,
+  UpdateJobCardWaitingResponse,
+  ResendJobCardEstimateParams,
+  ResendJobCardEstimateResponse,
+  AcknowledgeJobCardEstimateParams,
+  AcknowledgeJobCardEstimateResponse,
+  GetJobCardEstimatePreviewParams,
+  GetJobCardEstimatePreviewResponse,
 } from "@workspace/api-zod";
 import { checkLowStockCrossing } from "./parts";
 import {
@@ -144,14 +164,19 @@ import {
   enqueuePurchaseOrderSync,
 } from "../lib/erpnext/parts-sync";
 import {
+  queueServiceInvoiceCreditSync,
+  queueServiceInvoiceSync,
+} from "../lib/erpnext/service-invoice-credits";
+import {
   onServiceOrderBooked,
   onServiceOrderStatusChanged,
   onJobCardRolloverApproved,
   onServiceInvoiceIssued,
   onJobCardIntakeRecorded,
-  onServiceEstimateReady,
   onServiceAppointmentChanged,
   onJobCardStatusChanged,
+  preflightServiceEstimateQuote,
+  queueServiceEstimateQuote,
 } from "../lib/email-triggers";
 import {
   enqueueEmail,
@@ -164,6 +189,7 @@ import {
 } from "../lib/email";
 import { generalManagers } from "../lib/notify-matrix";
 import { activeDealerId } from "../middlewares/rbac";
+import { idempotent } from "../middlewares/idempotency";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
 import { computeServiceTax, ensureDealerTaxes } from "../lib/taxes";
@@ -184,6 +210,7 @@ import {
 
 const router: IRouter = Router();
 const objectStorage = new ObjectStorageService();
+const ACTIVE_JOB_CARD_STATUSES = ["open", "in_progress", "on_hold"] as const;
 
 /**
  * Service Manager / Management sign-off check for rollover approvals and
@@ -843,6 +870,10 @@ router.post("/service-orders", async (req, res): Promise<void> => {
         estimatedHours,
         dealerId: createDealerId,
         scheduledDate: scheduledDateStr,
+        createdByUserId: res.locals.user?.id ?? null,
+        createdByName:
+          res.locals.user?.name ?? res.locals.user?.email ?? "System",
+        createdOrigin: res.locals.user?.id != null ? "staff" : "system",
       })
       .returning();
     return row;
@@ -2113,6 +2144,30 @@ async function computeLateSurcharge(order: {
 }
 
 /**
+ * A card begins with no parts, but its planned labour (and an already-applied
+ * surcharge) is still a customer-visible taxable quote. Persist this same
+ * canonical headline at creation so preview, send, and invoice agree before
+ * any part line is added.
+ */
+async function initialJobCardQuoteTotal(input: {
+  dealerId: number;
+  laborHours: number;
+  laborRate: number;
+  surchargeStatus?: string;
+  surchargeAmount?: number;
+}): Promise<number> {
+  const labour = Math.round(input.laborHours * input.laborRate * 100) / 100;
+  const surcharge = input.surchargeStatus === "applied"
+    ? Math.round((input.surchargeAmount ?? 0) * 100) / 100
+    : 0;
+  const taxRules = await ensureDealerTaxes(input.dealerId);
+  return computeServiceTax(
+    Math.round((labour + surcharge) * 100) / 100,
+    taxRules,
+  ).total;
+}
+
+/**
  * Auto-create the initial job card when a booking lands (walk-in intake).
  * Inherits technician, pay type, hours and schedule from the case. Swallows
  * the one-active-card-per-asset conflict — the booking itself still stands.
@@ -2121,6 +2176,15 @@ async function autoCreateJobCard(
   order: typeof serviceOrdersTable.$inferSelect,
 ): Promise<void> {
   const surcharge = await computeLateSurcharge(order);
+  const laborHours = order.estimatedHours;
+  const laborRate = 120;
+  const quoteTotal = await initialJobCardQuoteTotal({
+    dealerId: order.dealerId,
+    laborHours,
+    laborRate,
+    ...surcharge,
+  });
+  const customerQuotePending = order.payType === "customer" && quoteTotal > 0;
   const customerPhoneSnapshot = (order as any).customerPhoneSnapshot ?? await resolveCustomerPhoneSnapshot(
     order.customerId,
     order.dealerId,
@@ -2133,13 +2197,19 @@ async function autoCreateJobCard(
       title:
         order.complaint?.trim() ||
         `${order.type.replace(/_/g, " ")} — ${order.vehicleInfo}`,
-      status: "open",
+      status: customerQuotePending ? "on_hold" : "open",
       payType: order.payType,
       technicianUserId: order.technicianUserId,
       technicianName: order.technician,
       scheduledAt: new Date(`${order.scheduledDate}T09:00:00`),
       durationMins: Math.round(order.estimatedHours * 60),
-      laborHours: order.estimatedHours,
+      laborHours,
+      laborRate,
+      quoteTotal,
+      ...(customerQuotePending ? {
+        waitingReason: "customer_decision",
+        nextAction: "Send the Service & Parts Quote and wait for customer confirmation",
+      } : {}),
       customerPhoneSnapshot,
       ...surcharge,
     });
@@ -2253,9 +2323,121 @@ router.get("/job-cards/history", async (req, res): Promise<void> => {
           : undefined,
       ),
     )
-    .orderBy(desc(jobCardsTable.createdAt))
-    .limit(100);
+    .orderBy(desc(jobCardsTable.createdAt), desc(jobCardsTable.id));
   res.json(ListJobCardHistoryResponse.parse(rows));
+});
+
+// Current workshop WIP, calculated against the dealer's calendar day rather
+// than browser/UTC midnight. A future booking is never WIP, even if its card
+// was auto-created on an earlier day.
+router.get("/job-cards/wip", async (req, res): Promise<void> => {
+  const query = ListWorkshopWipQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const today = zonedDayKey(new Date(), await dealerTimezone(dealerId));
+  const viewer = res.locals.user;
+  const rows = await db
+    .select({
+      id: jobCardsTable.id,
+      serviceOrderId: jobCardsTable.serviceOrderId,
+      title: jobCardsTable.title,
+      customerName: serviceOrdersTable.customerName,
+      vehicleInfo: serviceOrdersTable.vehicleInfo,
+      receivedAt: jobCardsTable.receivedAt,
+      startedAt: jobCardsTable.startedAt,
+      status: jobCardsTable.status,
+      technicianUserId: jobCardsTable.technicianUserId,
+      technicianName: jobCardsTable.technicianName,
+      waitingReason: jobCardsTable.waitingReason,
+      nextAction: jobCardsTable.nextAction,
+      followUpDate: jobCardsTable.followUpDate,
+    })
+    .from(jobCardsTable)
+    .innerJoin(serviceOrdersTable, and(
+      eq(serviceOrdersTable.id, jobCardsTable.serviceOrderId),
+      eq(serviceOrdersTable.dealerId, jobCardsTable.dealerId),
+    ))
+    .where(and(
+      eq(jobCardsTable.dealerId, dealerId),
+      inArray(jobCardsTable.status, [...ACTIVE_JOB_CARD_STATUSES]),
+      // scheduledDate is the booking's business day; exclude future work.
+      lte(serviceOrdersTable.scheduledDate, today),
+      query.data.technicianUserId != null
+        ? eq(jobCardsTable.technicianUserId, query.data.technicianUserId)
+        : undefined,
+      query.data.waitingReason
+        ? eq(jobCardsTable.waitingReason, query.data.waitingReason)
+        : undefined,
+      isTechnicianRole(viewer)
+        ? eq(jobCardsTable.technicianUserId, viewer!.id)
+        : undefined,
+    ))
+    .orderBy(jobCardsTable.createdAt);
+  const tz = await dealerTimezone(dealerId);
+  const receivedRows = rows.filter(
+    (row): row is typeof row & { receivedAt: Date | null; startedAt: Date } =>
+      row.receivedAt != null || row.startedAt != null,
+  );
+  const output = receivedRows.map((row) => {
+    const receivedAt = row.receivedAt ?? row.startedAt;
+    const receivedDay = zonedDayKey(receivedAt, tz);
+    const elapsedDays = Math.max(
+      0,
+      Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${receivedDay}T00:00:00Z`)) / 86_400_000),
+    );
+    return {
+      ...row,
+      receivedAt,
+      receivedSource: row.receivedAt ? "intake" as const : "legacy_started" as const,
+      elapsedDays,
+      carryOver: receivedDay < today,
+    };
+  }).filter((row) =>
+    (query.data.carryOver !== "1" || row.carryOver) &&
+    (query.data.carryOver !== "0" || !row.carryOver) &&
+    (query.data.followUp !== "overdue" || (row.followUpDate != null && row.followUpDate < today)) &&
+    (query.data.followUp !== "today" || row.followUpDate === today) &&
+    (query.data.followUp !== "upcoming" || (row.followUpDate != null && row.followUpDate > today)) &&
+    (query.data.followUp !== "none" || row.followUpDate == null) &&
+    (query.data.minAgeDays == null || row.elapsedDays >= query.data.minAgeDays!),
+  );
+  if (query.data.format) {
+    const [dealer] = await db.select().from(dealersTable)
+      .where(eq(dealersTable.id, dealerId));
+    await renderReportExport(res, {
+      type: "service_workshop_wip",
+      label: "Service & Workshop — Live WIP",
+      from: today,
+      to: today,
+      kpis: [
+        { label: "Open WIP", value: String(output.length), sub: "Dealer-day scoped" },
+        { label: "Carry-over", value: String(output.filter((row) => row.carryOver).length) },
+        { label: "On hold", value: String(output.filter((row) => row.status === "on_hold").length) },
+        { label: "Follow-ups due", value: String(output.filter((row) => row.followUpDate != null && row.followUpDate <= today).length) },
+      ],
+      chart: { kind: "bar", valueLabel: "Open jobs", points: [] },
+      table: {
+        columns: ["Job card", "Customer", "Vehicle", "Received / first known work", "Technician", "Status", "Waiting reason", "Next action", "Follow-up", "Age", "Carry-over"],
+        rows: output.map((row) => [
+          `JC #${row.id}`, row.customerName ?? "—", row.vehicleInfo,
+          `${formatDealerDateTime(row.receivedAt, tz)}${row.receivedSource === "legacy_started" ? " (legacy work-start; intake unknown)" : ""}`,
+          row.technicianName ?? "Unassigned", row.status,
+          row.waitingReason ?? "—", row.nextAction ?? "—",
+          row.followUpDate ?? "—", `${row.elapsedDays} d`,
+          row.carryOver ? "Yes" : "No",
+        ]),
+      },
+    }, query.data.format, {
+      dealerName: dealer?.name ?? `Dealer ${dealerId}`,
+      usdExchangeRate: dealer?.usdExchangeRate ?? 0,
+      timezone: tz,
+    });
+    return;
+  }
+  res.json(ListWorkshopWipResponse.parse(output));
 });
 
 router.get("/job-cards", async (req, res): Promise<void> => {
@@ -2279,8 +2461,16 @@ router.get("/job-cards", async (req, res): Promise<void> => {
   ].filter((f): f is NonNullable<typeof f> => Boolean(f));
 
   const rows = await db
-    .select()
+    .select({
+      ...getTableColumns(jobCardsTable),
+      customerName: serviceOrdersTable.customerName,
+      vehicleInfo: serviceOrdersTable.vehicleInfo,
+    })
     .from(jobCardsTable)
+    .innerJoin(serviceOrdersTable, and(
+      eq(serviceOrdersTable.id, jobCardsTable.serviceOrderId),
+      eq(serviceOrdersTable.dealerId, jobCardsTable.dealerId),
+    ))
     .where(and(
       ...filters,
       isTechnicianRole(me)
@@ -2330,7 +2520,35 @@ router.get("/job-cards/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Job card not found" });
     return;
   }
-  res.json(GetJobCardResponse.parse(row));
+  const partTotals = await db.select({
+    net: sql<number>`coalesce(sum(case when ${jobCardPartsTable.kind} = 'return' then -${jobCardPartsTable.quantity} * ${jobCardPartsTable.unitPrice} else ${jobCardPartsTable.quantity} * ${jobCardPartsTable.unitPrice} end), 0)`,
+  }).from(jobCardPartsTable).where(and(
+    eq(jobCardPartsTable.jobCardId, row.jobCard.id),
+    eq(jobCardPartsTable.dealerId, row.jobCard.dealerId),
+  ));
+  const [latestEstimate] = await db.select({
+    decision: serviceEstimateDecisionsTable.decision,
+    invalidatedAt: serviceEstimateDecisionsTable.invalidatedAt,
+    expiresAt: serviceEstimateDecisionsTable.expiresAt,
+  }).from(serviceEstimateDecisionsTable).where(and(
+    eq(serviceEstimateDecisionsTable.dealerId, row.jobCard.dealerId),
+    eq(serviceEstimateDecisionsTable.jobCardId, row.jobCard.id),
+    eq(serviceEstimateDecisionsTable.estimateVersion, row.jobCard.estimateVersion),
+  )).orderBy(desc(serviceEstimateDecisionsTable.createdAt)).limit(1);
+  const latestEstimateState =
+    !latestEstimate ? "not_sent" :
+    latestEstimate.invalidatedAt ? "stale" :
+    latestEstimate.decision ?? (latestEstimate.expiresAt <= new Date() ? "expired" : "open");
+  res.json(GetJobCardResponse.parse({
+    ...row,
+    jobCard: {
+      ...row.jobCard,
+      customerName: row.serviceOrder.customerName,
+      vehicleInfo: row.serviceOrder.vehicleInfo,
+      netPartsTotal: Number(partTotals[0]?.net ?? 0),
+      latestEstimateState,
+    },
+  }));
 });
 
 router.post("/job-cards", async (req, res): Promise<void> => {
@@ -2368,6 +2586,16 @@ router.post("/job-cards", async (req, res): Promise<void> => {
   // snapshot or linked customer.
   const customerPhoneSnapshot =
     submittedPhone || (order as any).customerPhoneSnapshot || (await resolveCustomerPhoneSnapshot(order.customerId, order.dealerId));
+  const payType = parsed.data.payType ?? order.payType;
+  const laborHours = parsed.data.laborHours ?? 0;
+  const laborRate = parsed.data.laborRate ?? 120;
+  const quoteTotal = await initialJobCardQuoteTotal({
+    dealerId: order.dealerId,
+    laborHours,
+    laborRate,
+    ...surcharge,
+  });
+  const customerQuotePending = payType === "customer" && quoteTotal > 0;
 
   let card: typeof jobCardsTable.$inferSelect | undefined;
   try {
@@ -2378,7 +2606,15 @@ router.post("/job-cards", async (req, res): Promise<void> => {
         ...parsed.data,
         ...surcharge,
         assetId: order.assetId ?? null,
-        payType: parsed.data.payType ?? order.payType,
+        payType,
+        laborHours,
+        laborRate,
+        quoteTotal,
+        status: customerQuotePending ? "on_hold" : "open",
+        ...(customerQuotePending ? {
+          waitingReason: "customer_decision",
+          nextAction: "Send the Service & Parts Quote and wait for customer confirmation",
+        } : {}),
         scheduledAt: parsed.data.scheduledAt
           ? new Date(parsed.data.scheduledAt)
           : null,
@@ -2489,6 +2725,350 @@ router.post("/job-cards/:id/technician-notes", async (req, res): Promise<void> =
   res.status(201).json(note);
 });
 
+router.patch("/job-cards/:id/waiting", async (req, res): Promise<void> => {
+  const params = UpdateJobCardWaitingParams.safeParse(req.params);
+  const parsed = UpdateJobCardWaitingBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: (params.success ? parsed : params).error?.message ?? "Invalid waiting update" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [current] = await db.select().from(jobCardsTable).where(and(
+    eq(jobCardsTable.id, params.data.id), eq(jobCardsTable.dealerId, dealerId),
+  ));
+  if (!current) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (!canActOnJobCard(res.locals.user, current)) {
+    res.status(403).json({ error: "Only the assigned technician or a service approver can change waiting status" });
+    return;
+  }
+  if (!ACTIVE_JOB_CARD_STATUSES.includes(current.status as (typeof ACTIVE_JOB_CARD_STATUSES)[number])) {
+    res.status(422).json({ error: "Only an active job card can be put on hold or resumed" });
+    return;
+  }
+  if (parsed.data.action === "resume" && current.rolloverStatus === "pending") {
+    res.status(409).json({ error: "This carry-over is awaiting required rollover sign-off and cannot be resumed yet" });
+    return;
+  }
+  if (parsed.data.action === "resume" && !hasCurrentChargeableWorkAuthorization(current)) {
+    res.status(422).json({
+      error: "The customer must approve and service staff must acknowledge the current estimate version before chargeable work can resume.",
+      unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
+    });
+    return;
+  }
+  if (parsed.data.action === "hold" && !parsed.data.reason) {
+    res.status(422).json({ error: "Choose a waiting reason before placing work on hold" });
+    return;
+  }
+  const actor = res.locals.user?.name ?? res.locals.user?.email ?? "System";
+  const at = new Date();
+  const event = {
+    action: parsed.data.action,
+    reason: (parsed.data.action === "hold" ? parsed.data.reason! : current.waitingReason) as JobWaitingReason | null,
+    nextAction: parsed.data.action === "hold" ? parsed.data.nextAction?.trim() || null : current.nextAction,
+    followUpDate: parsed.data.action === "hold"
+      ? (parsed.data.followUpDate ? parsed.data.followUpDate.toISOString().slice(0, 10) : null)
+      : current.followUpDate,
+    byUserId: res.locals.user?.id ?? null,
+    byName: actor,
+    at: at.toISOString(),
+  };
+  const [card] = await db.update(jobCardsTable).set(
+    parsed.data.action === "hold"
+      ? {
+          status: "on_hold", waitingReason: parsed.data.reason!,
+          nextAction: parsed.data.nextAction?.trim() || null,
+          followUpDate: parsed.data.followUpDate ? parsed.data.followUpDate.toISOString().slice(0, 10) : null,
+          waitingHistory: [...(current.waitingHistory ?? []), event],
+          timerSeconds: foldedTimerSeconds, timerStartedAt: null,
+        }
+      : {
+          status: "in_progress", waitingReason: null,
+          waitingHistory: [...(current.waitingHistory ?? []), event],
+          timerStartedAt: new Date(),
+        },
+  ).where(and(
+    eq(jobCardsTable.id, current.id), eq(jobCardsTable.dealerId, dealerId),
+    eq(jobCardsTable.status, current.status),
+    eq(jobCardsTable.estimateVersion, current.estimateVersion),
+    eq(jobCardsTable.rolloverStatus, current.rolloverStatus),
+    current.estimateStaffAcknowledgedVersion == null
+      ? isNull(jobCardsTable.estimateStaffAcknowledgedVersion)
+      : eq(jobCardsTable.estimateStaffAcknowledgedVersion, current.estimateStaffAcknowledgedVersion),
+    current.estimateStaffAcknowledgedDecisionId == null
+      ? isNull(jobCardsTable.estimateStaffAcknowledgedDecisionId)
+      : eq(jobCardsTable.estimateStaffAcknowledgedDecisionId, current.estimateStaffAcknowledgedDecisionId),
+  )).returning();
+  if (!card) {
+    res.status(409).json({ error: "Job card changed — reload and retry" });
+    return;
+  }
+  res.json(UpdateJobCardWaitingResponse.parse(card));
+});
+
+router.post("/job-cards/:id/estimate/resend", async (req, res): Promise<void> => {
+  const params = ResendJobCardEstimateParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [card] = await db.select().from(jobCardsTable).where(and(
+    eq(jobCardsTable.id, params.data.id), eq(jobCardsTable.dealerId, dealerId),
+  ));
+  if (!card) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (!canActOnJobCard(res.locals.user, card)) {
+    res.status(403).json({ error: "Only the assigned technician or a service approver can resend this estimate" });
+    return;
+  }
+  if (card.payType !== "customer") {
+    res.status(422).json({ error: "A customer-pay estimate is required before it can be sent." });
+    return;
+  }
+  const [order] = await db.select().from(serviceOrdersTable).where(and(
+    eq(serviceOrdersTable.id, card.serviceOrderId),
+    eq(serviceOrdersTable.dealerId, dealerId),
+  ));
+  if (!order) {
+    res.status(404).json({ error: "Service order not found" });
+    return;
+  }
+  // Do not revoke a valid customer link merely to discover after the fact that
+  // this dealer cannot deliver the replacement quote.
+  const preflight = await preflightServiceEstimateQuote(order);
+  if (!preflight.ok) {
+    res.status(422).json({ error: preflight.message, code: preflight.code });
+    return;
+  }
+  // The helper owns the sole destructive transaction: it rechecks this exact
+  // version under lock, replaces its decision, and persists the linked outbox
+  // row before committing. Never revise the card in this route first.
+  const queued = await queueServiceEstimateQuote(order, card, {
+    resendKey: String(Date.now()),
+  });
+  if (queued.outcome !== "queued") {
+    res.status(queued.code === "quote_changed" || queued.code === "quote_already_open" ? 409 : 422)
+      .json({ error: queued.message, code: queued.code });
+    return;
+  }
+  // The committed queue transaction advanced the estimate version. Read that
+  // resulting authoritative card only after it reports durable queue success.
+  const [sentCard] = await db.select().from(jobCardsTable).where(and(
+    eq(jobCardsTable.id, card.id),
+    eq(jobCardsTable.dealerId, dealerId),
+  ));
+  if (!sentCard) {
+    res.status(409).json({ error: "The quote was queued but the job card is no longer available. Reload the workshop." });
+    return;
+  }
+  res.status(202).json(ResendJobCardEstimateResponse.parse({
+    jobCard: sentCard,
+    ...queued,
+  }));
+});
+
+/**
+ * Records the required internal receipt of a customer's approval. This is not
+ * a substitute for customer consent: the selected decision must be approved,
+ * current and still valid while the job card is locked.
+ */
+router.post("/job-cards/:id/estimate/acknowledge", async (req, res): Promise<void> => {
+  const params = AcknowledgeJobCardEstimateParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const user = res.locals.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "An authenticated staff identity is required to acknowledge an estimate." });
+    return;
+  }
+  const [card] = await db.select().from(jobCardsTable).where(and(
+    eq(jobCardsTable.id, params.data.id),
+    eq(jobCardsTable.dealerId, dealerId),
+  ));
+  if (!card) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (!canActOnJobCard(user, card)) {
+    res.status(403).json({ error: "Only the assigned service staff member or a service approver can acknowledge this estimate." });
+    return;
+  }
+  const acknowledged = await db.transaction(async (tx) => {
+    const [lockedCard] = await tx.select().from(jobCardsTable).where(and(
+      eq(jobCardsTable.id, card.id),
+      eq(jobCardsTable.dealerId, dealerId),
+      eq(jobCardsTable.serviceOrderId, card.serviceOrderId),
+    )).for("update");
+    if (!lockedCard) return { kind: "missing" as const };
+    if (
+      lockedCard.estimateStaffAcknowledgedVersion === lockedCard.estimateVersion &&
+      lockedCard.estimateStaffAcknowledgedDecisionId != null
+    ) {
+      const [existingDecision] = await tx.select({ id: serviceEstimateDecisionsTable.id })
+        .from(serviceEstimateDecisionsTable)
+        .where(and(
+          eq(serviceEstimateDecisionsTable.id, lockedCard.estimateStaffAcknowledgedDecisionId),
+          eq(serviceEstimateDecisionsTable.dealerId, dealerId),
+          eq(serviceEstimateDecisionsTable.jobCardId, lockedCard.id),
+          eq(serviceEstimateDecisionsTable.estimateVersion, lockedCard.estimateVersion),
+          eq(serviceEstimateDecisionsTable.decision, "approved"),
+          isNull(serviceEstimateDecisionsTable.invalidatedAt),
+        ))
+        .for("update");
+      if (existingDecision) return { kind: "ok" as const, card: lockedCard };
+    }
+    const [decision] = await tx.select()
+      .from(serviceEstimateDecisionsTable)
+      .where(and(
+        eq(serviceEstimateDecisionsTable.dealerId, dealerId),
+        eq(serviceEstimateDecisionsTable.jobCardId, lockedCard.id),
+        eq(serviceEstimateDecisionsTable.serviceOrderId, lockedCard.serviceOrderId),
+        eq(serviceEstimateDecisionsTable.estimateVersion, lockedCard.estimateVersion),
+        eq(serviceEstimateDecisionsTable.decision, "approved"),
+        isNull(serviceEstimateDecisionsTable.invalidatedAt),
+      ))
+      .orderBy(desc(serviceEstimateDecisionsTable.decidedAt), desc(serviceEstimateDecisionsTable.id))
+      .limit(1)
+      .for("update");
+    if (
+      !decision ||
+      lockedCard.estimateApprovedVersion !== lockedCard.estimateVersion
+    ) {
+      return { kind: "not_approved" as const };
+    }
+    const [updated] = await tx.update(jobCardsTable).set({
+      estimateStaffAcknowledgedVersion: lockedCard.estimateVersion,
+      estimateStaffAcknowledgedDecisionId: decision.id,
+      estimateStaffAcknowledgedByUserId: user.id,
+      estimateStaffAcknowledgedByName: user.name ?? user.email ?? `User #${user.id}`,
+      estimateStaffAcknowledgedAt: new Date(),
+    }).where(and(
+      eq(jobCardsTable.id, lockedCard.id),
+      eq(jobCardsTable.dealerId, dealerId),
+      eq(jobCardsTable.estimateVersion, lockedCard.estimateVersion),
+      eq(jobCardsTable.estimateApprovedVersion, lockedCard.estimateVersion),
+    )).returning();
+    return updated
+      ? { kind: "ok" as const, card: updated }
+      : { kind: "changed" as const };
+  });
+  if (acknowledged.kind === "missing") {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (acknowledged.kind === "not_approved") {
+    res.status(422).json({
+      error: "A current, non-stale customer-approved estimate decision is required before staff can acknowledge receipt.",
+      unmet: ["customer_estimate_approval_required"],
+    });
+    return;
+  }
+  if (acknowledged.kind === "changed") {
+    res.status(409).json({ error: "The estimate changed — reload and retry acknowledgement." });
+    return;
+  }
+  res.json(AcknowledgeJobCardEstimateResponse.parse(acknowledged.card));
+});
+
+/** Staff-only canonical quote preview. Bearer tokens and customer decision
+ * evidence are never returned; delivery data comes only from the email outbox. */
+router.get("/job-cards/:id/estimate/preview", async (req, res): Promise<void> => {
+  const params = GetJobCardEstimatePreviewParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [joined] = await db.select({ card: jobCardsTable, order: serviceOrdersTable })
+    .from(jobCardsTable)
+    .innerJoin(serviceOrdersTable, and(
+      eq(serviceOrdersTable.id, jobCardsTable.serviceOrderId),
+      eq(serviceOrdersTable.dealerId, jobCardsTable.dealerId),
+    ))
+    .where(and(
+      eq(jobCardsTable.id, params.data.id),
+      eq(jobCardsTable.dealerId, dealerId),
+    ));
+  if (!joined) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (!canActOnJobCard(res.locals.user, joined.card)) {
+    res.status(403).json({ error: "Only the assigned service staff member or a service approver can preview this estimate." });
+    return;
+  }
+  const [decision] = await db.select({
+    id: serviceEstimateDecisionsTable.id,
+    decision: serviceEstimateDecisionsTable.decision,
+    invalidatedAt: serviceEstimateDecisionsTable.invalidatedAt,
+    expiresAt: serviceEstimateDecisionsTable.expiresAt,
+    decidedAt: serviceEstimateDecisionsTable.decidedAt,
+  }).from(serviceEstimateDecisionsTable).where(and(
+    eq(serviceEstimateDecisionsTable.dealerId, dealerId),
+    eq(serviceEstimateDecisionsTable.jobCardId, joined.card.id),
+    eq(serviceEstimateDecisionsTable.serviceOrderId, joined.order.id),
+    eq(serviceEstimateDecisionsTable.estimateVersion, joined.card.estimateVersion),
+  )).orderBy(desc(serviceEstimateDecisionsTable.createdAt), desc(serviceEstimateDecisionsTable.id)).limit(1);
+  const [outbox] = await db.select({
+    id: emailLogsTable.id,
+    recipient: emailLogsTable.recipient,
+    status: emailLogsTable.status,
+    deliveryStatus: emailLogsTable.deliveryStatus,
+    attempts: emailLogsTable.attempts,
+    lastError: emailLogsTable.lastError,
+    sentAt: emailLogsTable.sentAt,
+    deliveredAt: emailLogsTable.deliveredAt,
+  }).from(emailLogsTable).where(and(
+    eq(emailLogsTable.dealerId, dealerId),
+    eq(emailLogsTable.template, "service.estimate.ready"),
+    decision
+      ? eq(emailLogsTable.serviceEstimateDecisionId, decision.id)
+      : sql`false`,
+  )).orderBy(desc(emailLogsTable.createdAt), desc(emailLogsTable.id)).limit(1);
+  const breakdown = await buildServiceEstimateBreakdown(db, joined.card);
+  const recipient = await customerEmail(joined.order.customerId, dealerId);
+  const state = !decision ? "draft" :
+    decision.invalidatedAt ? "stale" :
+    decision.decision ?? (decision.expiresAt <= new Date() ? "expired" : "open");
+  res.json(GetJobCardEstimatePreviewResponse.parse({
+    estimateVersion: joined.card.estimateVersion,
+    total: breakdown.total,
+    lines: breakdown.lines,
+    customerRecipient: recipient.email,
+    decision: {
+      id: decision?.id ?? null,
+      state,
+      decidedAt: decision?.decidedAt ?? null,
+    },
+    delivery: outbox
+      ? {
+          state: outbox.deliveryStatus ?? outbox.status,
+          recipient: outbox.recipient,
+          attempts: outbox.attempts,
+          lastError: outbox.lastError,
+          sentAt: outbox.sentAt,
+          deliveredAt: outbox.deliveredAt,
+        }
+      : {
+          state: "not_queued",
+          recipient: recipient.email,
+          attempts: 0,
+          lastError: null,
+          sentAt: null,
+          deliveredAt: null,
+        },
+  }));
+});
+
 router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   const params = UpdateJobCardParams.safeParse(req.params);
   const parsed = UpdateJobCardBody.safeParse(req.body);
@@ -2534,12 +3114,60 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   } = parsed.data as typeof parsed.data & { customerPhoneSnapshot?: unknown };
   const patch: Record<string, unknown> = { ...updateFields };
   if (scheduledAt !== undefined) patch.scheduledAt = new Date(scheduledAt);
-  // Quote approval is a one-way timestamp: customer signed off on the estimate.
-  if (approveQuote && !existing.quoteApprovedAt) {
-    patch.quoteApprovedAt = new Date();
+  if (parsed.data.intake !== undefined && !existing.intake && existing.receivedAt == null) {
+    patch.receivedAt = new Date();
+  }
+  if (approveQuote) {
+    res.status(422).json({
+      error: "Customer approval must be recorded through the exact-version estimate link; staff cannot approve a quote on the customer's behalf.",
+    });
+    return;
+  }
+  const chargesChanging =
+    parsed.data.quoteTotal !== undefined ||
+    parsed.data.laborHours !== undefined ||
+    parsed.data.laborRate !== undefined ||
+    parsed.data.payType !== undefined;
+  const nextPayType = parsed.data.payType ?? existing.payType;
+  const chargeChangeRequiresCustomerHold =
+    chargesChanging &&
+    nextPayType === "customer" &&
+    (parsed.data.quoteTotal ?? existing.quoteTotal) > 0;
+  if (
+    parsed.data.status === "in_progress" &&
+    !hasCurrentChargeableWorkAuthorization(existing)
+  ) {
+    res.status(422).json({
+      error: "Customer approval and staff acknowledgement are required for this exact estimate version before chargeable work can proceed.",
+      unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
+    });
+    return;
+  }
+  if (parsed.data.status === "in_progress" && existing.rolloverStatus === "pending") {
+    res.status(409).json({ error: "Complete the pending rollover approvals before resuming this job card." });
+    return;
+  }
+  if (chargesChanging) {
+    // Staff-entered quote totals are never an approval/invoice authority. The
+    // locked transaction below overwrites this with the canonical breakdown.
+    delete patch.quoteTotal;
+    patch.estimateVersion = sql`${jobCardsTable.estimateVersion} + 1`;
+    patch.estimateApprovedVersion = null;
+    patch.estimateApprovalAt = null;
+    patch.estimateApprovalEvidence = null;
+    patch.quoteApprovedAt = null;
+    Object.assign(patch, clearEstimateStaffAcknowledgement);
+    if (chargeChangeRequiresCustomerHold) {
+      patch.status = "on_hold";
+      patch.waitingReason = "customer_decision";
+      patch.nextAction = "Send the revised estimate and wait for customer confirmation";
+      patch.timerSeconds = foldedTimerSeconds;
+      patch.timerStartedAt = null;
+    }
   }
   if (
     parsed.data.status === "in_progress" &&
+    !chargeChangeRequiresCustomerHold &&
     existing.status === "open" &&
     !existing.startedAt
   ) {
@@ -2548,7 +3176,11 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   // Work timer follows the status machine: entering in_progress starts a
   // segment (unless one is already running); leaving it folds the running
   // segment into the accumulated total.
-  if (parsed.data.status && parsed.data.status !== existing.status) {
+  if (
+    parsed.data.status &&
+    parsed.data.status !== existing.status &&
+    !chargeChangeRequiresCustomerHold
+  ) {
     if (parsed.data.status === "in_progress") {
       // Start a segment unless one is already running (SQL keeps this
       // race-free against a concurrent resume).
@@ -2561,6 +3193,17 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     }
   }
   if (parsed.data.status === "completed" && existing.status !== "completed") {
+    if (!hasCurrentChargeableWorkAuthorization(existing)) {
+      res.status(422).json({
+        error: "The customer must approve and service staff must acknowledge the current estimate version before chargeable work can be completed.",
+        unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
+      });
+      return;
+    }
+    if (existing.rolloverStatus === "pending") {
+      res.status(409).json({ error: "Complete the pending rollover approvals before completing this job card." });
+      return;
+    }
     // Completion write-up is mandatory: the technician must record their
     // analysis of the service AND what work was performed before the card
     // can be marked completed (either in this request or already saved).
@@ -2584,6 +3227,48 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
 
   let becameReady = false;
   const card = await db.transaction(async (tx) => {
+    const [lockedCard] = await tx.select().from(jobCardsTable).where(and(
+      eq(jobCardsTable.id, existing.id),
+      eq(jobCardsTable.dealerId, existing.dealerId),
+    )).for("update");
+    if (!lockedCard || lockedCard.estimateVersion !== existing.estimateVersion ||
+        lockedCard.status !== existing.status) {
+      return undefined;
+    }
+    if (
+      ["in_progress", "completed"].includes(parsed.data.status ?? "") &&
+       (!hasCurrentChargeableWorkAuthorization(lockedCard) ||
+        lockedCard.rolloverStatus === "pending")
+    ) {
+      throw Object.assign(new Error("locked_execution_gate"), { status: 422 });
+    }
+    if (chargesChanging) {
+      const [issuedInvoice] = await tx.select({ id: serviceInvoicesTable.id })
+        .from(serviceInvoicesTable)
+        .where(and(
+          eq(serviceInvoicesTable.jobCardId, lockedCard.id),
+          eq(serviceInvoicesTable.dealerId, lockedCard.dealerId),
+        ))
+        .for("update");
+      if (issuedInvoice) {
+        throw Object.assign(new Error("issued_invoice_charge_mutation"), { status: 422 });
+      }
+      const prospectiveCard = {
+        ...lockedCard,
+        payType: parsed.data.payType ?? lockedCard.payType,
+        laborHours: parsed.data.laborHours ?? lockedCard.laborHours,
+        laborRate: parsed.data.laborRate ?? lockedCard.laborRate,
+      };
+      const breakdown = await buildServiceEstimateBreakdown(tx, prospectiveCard);
+      patch.quoteTotal = breakdown.total;
+      if ((parsed.data.payType ?? lockedCard.payType) === "customer" && breakdown.total > 0) {
+        patch.status = "on_hold";
+        patch.waitingReason = "customer_decision";
+        patch.nextAction = "Send the revised estimate and wait for customer confirmation";
+        patch.timerSeconds = foldedTimerSeconds;
+        patch.timerStartedAt = null;
+      }
+    }
     const [updatedCard] = await tx
       .update(jobCardsTable)
       .set(patch)
@@ -2591,11 +3276,8 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
         and(
           eq(jobCardsTable.id, params.data.id),
           eq(jobCardsTable.dealerId, existing.dealerId),
-          (parsed.data.quoteTotal !== undefined ||
-            parsed.data.laborHours !== undefined ||
-            parsed.data.laborRate !== undefined)
-            ? isNull(jobCardsTable.quoteApprovedAt)
-            : undefined,
+          eq(jobCardsTable.status, existing.status),
+          eq(jobCardsTable.estimateVersion, existing.estimateVersion),
         ),
       )
       .returning();
@@ -2648,16 +3330,30 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
       }
     }
     return updatedCard;
+  }).catch((error) => {
+    const failure = error as Error & { status?: number };
+    if (failure.status === 422) {
+      res.status(422).json({
+        error: (failure.message === "locked_execution_gate")
+          ? "The current estimate authorization, staff acknowledgement, or rollover state changed — reload before resuming or completing work."
+          : "An issued invoice is immutable; record a linked financial adjustment instead.",
+      });
+      return undefined;
+    }
+    throw error;
   });
+  if (!card) {
+    if (res.headersSent) return;
+    res.status(409).json({ error: "Job card changed — reload and retry" });
+    return;
+  }
 
   // An edited quote invalidates every open public decision before the fresh
   // secure invitation is queued. Public approval also compares its snapshot
   // total transactionally, so an edit/approve race fails closed.
   if (
     card &&
-    (parsed.data.quoteTotal !== undefined ||
-      parsed.data.laborHours !== undefined ||
-      parsed.data.laborRate !== undefined) &&
+    chargesChanging &&
     (card.quoteTotal !== existing.quoteTotal ||
       card.laborHours !== existing.laborHours ||
       card.laborRate !== existing.laborRate)
@@ -2669,7 +3365,6 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
         and(
           eq(serviceEstimateDecisionsTable.dealerId, card.dealerId),
           eq(serviceEstimateDecisionsTable.jobCardId, card.id),
-          isNull(serviceEstimateDecisionsTable.decision),
           isNull(serviceEstimateDecisionsTable.invalidatedAt),
         ),
       );
@@ -2693,37 +3388,10 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     }
     if (
       order &&
-      card.quoteTotal > 0 &&
-      (existing.quoteTotal !== card.quoteTotal ||
-        existing.laborHours !== card.laborHours ||
-        existing.laborRate !== card.laborRate ||
-        existing.quoteTotal <= 0)
-    ) {
-      onServiceEstimateReady(order, card);
-    }
-    if (
-      order &&
       order.status === "acknowledged" &&
       existing.scheduledAt?.toISOString() !== card.scheduledAt?.toISOString()
     ) {
       onServiceAppointmentChanged(order);
-    }
-    if (order && !existing.quoteApprovedAt && card.quoteApprovedAt) {
-      const recipient = await customerEmail(order.customerId, order.dealerId);
-      if (recipient.email) {
-        await enqueueEmail({
-          dealerId: order.dealerId,
-          template: "service.estimate.decision",
-          to: recipient.email,
-          customerId: order.customerId,
-          dedupeKey: `svc:${order.id}:estimate-approved`,
-          data: {
-            vehicle: order.vehicleInfo,
-            decision: "approve",
-            total: `GY$${card.quoteTotal.toLocaleString("en-US")}`,
-          },
-        });
-      }
     }
     if (
       parsed.data.status === "completed" &&
@@ -2823,6 +3491,17 @@ router.post("/job-cards/:id/timer", async (req, res): Promise<void> => {
   // AND the timer is in the expected state, so concurrent pause/resume/status
   // requests cannot double-fold or drop a running segment.
   const pausing = body.data.action === "pause";
+  if (!pausing && !hasCurrentChargeableWorkAuthorization(existing)) {
+    res.status(422).json({
+      error: "The customer must approve and service staff must acknowledge the current estimate version before this timer can resume.",
+      unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
+    });
+    return;
+  }
+  if (!pausing && existing.rolloverStatus === "pending") {
+    res.status(409).json({ error: "Complete the pending rollover approvals before resuming this timer." });
+    return;
+  }
   const [card] = await db
     .update(jobCardsTable)
     .set(
@@ -2835,6 +3514,22 @@ router.post("/job-cards/:id/timer", async (req, res): Promise<void> => {
         eq(jobCardsTable.id, existing.id),
         eq(jobCardsTable.dealerId, existing.dealerId),
         eq(jobCardsTable.status, "in_progress"),
+        !pausing
+          ? eq(jobCardsTable.estimateVersion, existing.estimateVersion)
+          : undefined,
+        !pausing
+          ? eq(jobCardsTable.rolloverStatus, existing.rolloverStatus)
+          : undefined,
+        !pausing
+          ? existing.estimateStaffAcknowledgedVersion == null
+            ? isNull(jobCardsTable.estimateStaffAcknowledgedVersion)
+            : eq(jobCardsTable.estimateStaffAcknowledgedVersion, existing.estimateStaffAcknowledgedVersion)
+          : undefined,
+        !pausing
+          ? existing.estimateStaffAcknowledgedDecisionId == null
+            ? isNull(jobCardsTable.estimateStaffAcknowledgedDecisionId)
+            : eq(jobCardsTable.estimateStaffAcknowledgedDecisionId, existing.estimateStaffAcknowledgedDecisionId)
+          : undefined,
         pausing
           ? sql`${jobCardsTable.timerStartedAt} is not null`
           : isNull(jobCardsTable.timerStartedAt),
@@ -2909,6 +3604,17 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
     });
     return;
   }
+  if (!hasCurrentChargeableWorkAuthorization(existing)) {
+    res.status(422).json({
+      error: "The customer must approve and service staff must acknowledge the current estimate version before this job can be reopened.",
+      unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
+    });
+    return;
+  }
+  if (existing.rolloverStatus === "pending") {
+    res.status(409).json({ error: "Complete the pending rollover approvals before reopening this job card." });
+    return;
+  }
   let card: JobCard | undefined;
   try {
     [card] = await db
@@ -2925,7 +3631,28 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
             }
           : {}),
       })
-      .where(eq(jobCardsTable.id, existing.id))
+      .where(and(
+        eq(jobCardsTable.id, existing.id),
+        eq(jobCardsTable.dealerId, existing.dealerId),
+        eq(jobCardsTable.status, existing.status),
+        eq(jobCardsTable.estimateVersion, existing.estimateVersion),
+        eq(jobCardsTable.rolloverStatus, existing.rolloverStatus),
+        existing.estimateApprovedVersion == null
+          ? isNull(jobCardsTable.estimateApprovedVersion)
+          : eq(jobCardsTable.estimateApprovedVersion, existing.estimateApprovedVersion),
+        existing.estimateStaffAcknowledgedVersion == null
+          ? isNull(jobCardsTable.estimateStaffAcknowledgedVersion)
+          : eq(jobCardsTable.estimateStaffAcknowledgedVersion, existing.estimateStaffAcknowledgedVersion),
+        existing.estimateStaffAcknowledgedDecisionId == null
+          ? isNull(jobCardsTable.estimateStaffAcknowledgedDecisionId)
+          : eq(jobCardsTable.estimateStaffAcknowledgedDecisionId, existing.estimateStaffAcknowledgedDecisionId),
+        sql`not exists (
+          select 1 from ${serviceInvoicesTable}
+          where ${serviceInvoicesTable.jobCardId} = ${jobCardsTable.id}
+            and ${serviceInvoicesTable.dealerId} = ${jobCardsTable.dealerId}
+            and ${serviceInvoicesTable.status} = 'paid'
+        )`,
+      ))
       .returning();
   } catch (err) {
     // Partial unique index: one active job card per asset at a time.
@@ -3266,23 +3993,6 @@ router.post("/job-cards/:id/surcharge", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Job card not found" });
     return;
   }
-  // Invoiced cards are settled — the surcharge decision must precede billing.
-  const [invoiced] = await db
-    .select({ id: serviceInvoicesTable.id })
-    .from(serviceInvoicesTable)
-    .where(
-      and(
-        eq(serviceInvoicesTable.jobCardId, card.id),
-        eq(serviceInvoicesTable.dealerId, dealerId),
-      ),
-    )
-    .limit(1);
-  if (invoiced) {
-    res.status(422).json({
-      error: `Invoice #${invoiced.id} already issued — adjust the invoice instead`,
-    });
-    return;
-  }
   const settings = await getServiceSettings(dealerId);
   const decidedBy = res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
   const apply = parsed.data.action === "apply";
@@ -3290,18 +4000,61 @@ router.post("/job-cards/:id/surcharge", async (req, res): Promise<void> => {
     ? parsed.data.amount ??
       (card.surchargeAmount > 0 ? card.surchargeAmount : settings.lateSurchargeFee)
     : card.surchargeAmount;
-  const [updated] = await db
-    .update(jobCardsTable)
-    .set({
+  const [updated] = await db.transaction(async (tx) => {
+    // Card is the shared serialization point for invoice, surcharge and every
+    // billable-line mutation. Never check invoice state outside this lock.
+    const [current] = await tx.select().from(jobCardsTable).where(and(
+      eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId),
+    )).for("update");
+    if (!current || current.estimateVersion !== card.estimateVersion) return [];
+    const [invoiced] = await tx.select({ id: serviceInvoicesTable.id })
+      .from(serviceInvoicesTable)
+      .where(and(eq(serviceInvoicesTable.jobCardId, card.id), eq(serviceInvoicesTable.dealerId, dealerId)))
+      .for("update");
+    if (invoiced) throw Object.assign(new Error(`Invoice #${invoiced.id} already issued — adjust the invoice instead`), { status: 422 });
+    const nextAmount = apply ? amount : 0;
+    const breakdown = await buildServiceEstimateBreakdown(tx, {
+      ...current,
       surchargeStatus: apply ? "applied" : "waived",
-      surchargeAmount: amount,
+      surchargeAmount: nextAmount,
+    });
+    const [changed] = await tx.update(jobCardsTable).set({
+      surchargeStatus: apply ? "applied" : "waived",
+      surchargeAmount: nextAmount,
       surchargeDecidedBy: decidedBy,
       surchargeDecidedAt: new Date(),
-    })
-    .where(
-      and(eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId)),
-    )
-    .returning();
+      quoteTotal: breakdown.total,
+      estimateVersion: sql`${jobCardsTable.estimateVersion} + 1`,
+      estimateApprovedVersion: null,
+      estimateApprovalAt: null,
+      estimateApprovalEvidence: null,
+      quoteApprovedAt: null,
+      ...clearEstimateStaffAcknowledgement,
+      ...(current.payType === "customer" && breakdown.total > 0 ? {
+        status: "on_hold",
+        waitingReason: "customer_decision",
+        nextAction: "Send the revised estimate and wait for customer confirmation",
+        timerSeconds: foldedTimerSeconds,
+        timerStartedAt: null,
+      } : {}),
+    }).where(and(
+      eq(jobCardsTable.id, current.id), eq(jobCardsTable.dealerId, dealerId),
+      eq(jobCardsTable.estimateVersion, current.estimateVersion),
+    )).returning();
+    if (changed) await invalidateServiceEstimate(tx, dealerId, changed.id);
+    return changed ? [changed] : [];
+  }).catch((error) => {
+    const failure = error as Error & { status?: number };
+    if (failure.status === 422) {
+      res.status(422).json({ error: failure.message });
+      return [];
+    }
+    throw error;
+  });
+  if (!updated) {
+    if (!res.headersSent) res.status(409).json({ error: "Job card changed — reload and retry" });
+    return;
+  }
   res.json(DecideJobCardSurchargeResponse.parse(updated));
 });
 
@@ -3357,6 +4110,12 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     return;
   }
   const kind = parsed.data.kind ?? "issue";
+  if (kind === "return") {
+    res.status(422).json({
+      error: "Operational returns must be recorded through the linked part-credit-note workflow so issued quantity, stock, and financial credit remain reconciled.",
+    });
+    return;
+  }
 
   const [card] = await db
     .select()
@@ -3369,6 +4128,13 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     );
   if (!card) {
     res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  const [existingInvoice] = await db.select({ id: serviceInvoicesTable.id }).from(serviceInvoicesTable)
+    .where(and(eq(serviceInvoicesTable.dealerId, card.dealerId), eq(serviceInvoicesTable.jobCardId, card.id)))
+    .limit(1);
+  if (existingInvoice) {
+    res.status(422).json({ error: "This job has an issued invoice. Use a linked invoice adjustment; do not add or return operational part lines." });
     return;
   }
   let [part] = await db
@@ -3407,11 +4173,32 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
 
   // Backorder path: an issue that exceeds stock does NOT fail — the line is
   // flagged backordered, the job card goes on hold, and a draft PO is raised.
-  const backordered = kind === "issue" && part.stock < parsed.data.quantity;
-  const currentPart = part;
+  let backordered = false;
+  let currentPart = part;
 
   let backorderPoId: number | null = null;
   const [line] = await db.transaction(async (tx) => {
+    // Serialize every billable line change with invoice issue and other price
+    // mutations before inserting a line or touching stock.
+    const [lockedCard] = await tx.select().from(jobCardsTable).where(and(
+      eq(jobCardsTable.id, card.id),
+      eq(jobCardsTable.dealerId, card.dealerId),
+    )).for("update");
+    if (!lockedCard || lockedCard.estimateVersion !== card.estimateVersion) {
+      throw new Error("job_card_changed");
+    }
+    const [invoice] = await tx.select({ id: serviceInvoicesTable.id })
+      .from(serviceInvoicesTable)
+      .where(and(eq(serviceInvoicesTable.jobCardId, card.id), eq(serviceInvoicesTable.dealerId, card.dealerId)))
+      .for("update");
+    if (invoice) throw new Error("job_card_invoiced");
+    const [lockedPart] = await tx.select().from(partsTable).where(and(
+      eq(partsTable.id, currentPart.id),
+      eq(partsTable.dealerId, card.dealerId),
+    )).for("update");
+    if (!lockedPart) throw new Error("Part was removed while adding it to the job card");
+    currentPart = lockedPart;
+    backordered = currentPart.stock < parsed.data.quantity;
     const inserted = await tx
       .insert(jobCardPartsTable)
       .values({
@@ -3430,7 +4217,15 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
       const shortfall = parsed.data.quantity - currentPart.stock;
       await tx
         .update(jobCardsTable)
-        .set({ status: "on_hold" })
+        .set({
+          status: "on_hold",
+          waitingReason: card.payType === "customer" ? "customer_decision" : "ordered_parts",
+          nextAction: card.payType === "customer"
+            ? "Send the revised estimate and wait for customer confirmation"
+            : "Await ordered parts",
+          timerSeconds: foldedTimerSeconds,
+          timerStartedAt: null,
+        })
         .where(
           and(
             eq(jobCardsTable.id, card.id),
@@ -3468,9 +4263,34 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
           and(
             eq(partsTable.id, currentPart.id),
             eq(partsTable.dealerId, card.dealerId),
+            kind === "issue" ? gte(partsTable.stock, parsed.data.quantity) : undefined,
           ),
         );
     }
+    // Every operational part change creates a new customer-cost version. The
+    // old approval is invalidated in the same transaction as stock/line state,
+    // so no reader can invoice the altered work on a stale approval.
+    const breakdown = await buildServiceEstimateBreakdown(tx, lockedCard);
+    await tx.update(jobCardsTable).set({
+      quoteTotal: breakdown.total,
+      estimateVersion: sql`${jobCardsTable.estimateVersion} + 1`,
+      estimateApprovedVersion: null,
+      estimateApprovalAt: null,
+      estimateApprovalEvidence: null,
+      quoteApprovedAt: null,
+      ...clearEstimateStaffAcknowledgement,
+      ...(card.payType === "customer" && breakdown.total > 0
+        ? {
+            status: "on_hold",
+            waitingReason: "customer_decision",
+            nextAction: "Send the revised estimate and wait for customer confirmation",
+            timerSeconds: foldedTimerSeconds,
+            timerStartedAt: null,
+          }
+        : {}),
+    }).where(and(eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, card.dealerId)))
+      .returning();
+    await invalidateServiceEstimate(tx, card.dealerId, card.id);
     return inserted;
   });
 
@@ -3541,30 +4361,6 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     });
   }
 
-  // Parts are part of the read-only public estimate snapshot. Any issued or
-  // returned line makes a pending decision stale, even when staff have not
-  // recalculated the headline quote total yet.
-  if (card.quoteTotal > 0) {
-    const invalidated = await db
-      .update(serviceEstimateDecisionsTable)
-      .set({ invalidatedAt: new Date() })
-      .where(
-        and(
-          eq(serviceEstimateDecisionsTable.dealerId, card.dealerId),
-          eq(serviceEstimateDecisionsTable.jobCardId, card.id),
-          isNull(serviceEstimateDecisionsTable.decision),
-          isNull(serviceEstimateDecisionsTable.invalidatedAt),
-        ),
-      )
-      .returning({ id: serviceEstimateDecisionsTable.id });
-    if (invalidated.length) {
-      const [order] = await db.select().from(serviceOrdersTable).where(
-        and(eq(serviceOrdersTable.id, card.serviceOrderId), eq(serviceOrdersTable.dealerId, card.dealerId)),
-      );
-      if (order) onServiceEstimateReady(order, card);
-    }
-  }
-
   res.status(201).json(AddJobCardPartResponse.parse(line));
 });
 
@@ -3592,13 +4388,17 @@ router.get("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
   res.json(ListJobCardCreditNotesResponse.parse(rows));
 });
 
-router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
+router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.create"), async (req, res): Promise<void> => {
   const params = CreateJobCardCreditNoteParams.safeParse(req.params);
   const parsed = CreateJobCardCreditNoteBody.safeParse(req.body);
   if (!params.success || !parsed.success) {
     res.status(400).json({
       error: (params.success ? parsed : params).error?.message ?? "Invalid",
     });
+    return;
+  }
+  if (!isServiceApprover(res.locals.user)) {
+    res.status(403).json({ error: "Only the Service Manager or Management can issue a part credit note." });
     return;
   }
   const dealerId = activeDealerId(res);
@@ -3615,7 +4415,7 @@ router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Job card not found" });
     return;
   }
-  const [line] = await db
+  let [line] = await db
     .select()
     .from(jobCardPartsTable)
     .where(
@@ -3654,7 +4454,43 @@ router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
     return;
   }
 
+  let creditFailure: string | null = null;
+  let creditInvoice: { id: number; taxAmount: number; grossAmount: number } | null = null;
   const note = await db.transaction(async (tx) => {
+    // Lock the card before a credit line or invoice lookup. Invoice issuance
+    // takes this same lock, so it cannot commit between return insertion and
+    // the financial adjustment decision.
+    const [lockedCard] = await tx.select().from(jobCardsTable).where(and(
+      eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId),
+    )).for("update");
+    if (!lockedCard || lockedCard.estimateVersion !== card.estimateVersion) {
+      throw new Error("part_credit_card_changed");
+    }
+    const [lockedLine] = await tx.select().from(jobCardPartsTable).where(and(
+      eq(jobCardPartsTable.id, line.id),
+      eq(jobCardPartsTable.jobCardId, card.id),
+      eq(jobCardPartsTable.dealerId, dealerId),
+    )).for("update");
+    if (!lockedLine || lockedLine.kind !== "issue" || lockedLine.backordered) {
+      throw new Error("part_credit_line_changed");
+    }
+    line = lockedLine;
+    const [invoice] = await tx.select().from(serviceInvoicesTable).where(and(
+      eq(serviceInvoicesTable.jobCardId, card.id),
+      eq(serviceInvoicesTable.dealerId, dealerId),
+    )).for("update");
+    // Serialize partial credits per original issue line. This lock makes the
+    // remaining-quantity check authoritative under concurrent requests.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`part-credit-${dealerId}-${line.id}`}))`);
+    const [{ credited: currentCredited }] = await tx.select({
+      credited: sql<number>`coalesce(sum(${partCreditNotesTable.quantity}), 0)::int`,
+    }).from(partCreditNotesTable).where(and(
+      eq(partCreditNotesTable.jobCardPartId, line.id),
+      eq(partCreditNotesTable.dealerId, dealerId),
+    ));
+    if (parsed.data.quantity > line.quantity - currentCredited) {
+      throw new Error("part_credit_quantity_conflict");
+    }
     const [inserted] = await tx
       .insert(partCreditNotesTable)
       .values({
@@ -3690,9 +4526,106 @@ router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
       .where(
         and(eq(partsTable.id, line.partId), eq(partsTable.dealerId, dealerId)),
       );
+    const creditAmount = Math.round(line.unitPrice * parsed.data.quantity * 100) / 100;
+    // The operational return and the financial credit are intentionally
+    // separate. An issued document remains immutable in its line totals; its
+    // outstanding amount changes through an auditable adjustment only.
+    if (invoice) {
+      if (invoice.status === "void") throw new Error("part_credit_void_invoice");
+      const [collision] = await tx.select({ id: collisionClaimsTable.id })
+        .from(collisionClaimsTable)
+        .where(and(
+          eq(collisionClaimsTable.serviceInvoiceId, invoice.id),
+          eq(collisionClaimsTable.dealerId, dealerId),
+        ));
+      const taxableBase = invoice.partsTotal + invoice.laborTotal + invoice.surchargeTotal;
+      const taxCredit = taxableBase > 0
+        ? Math.round((creditAmount * invoice.tax / taxableBase) * 100) / 100
+        : 0;
+      const grossCredit = creditAmount + taxCredit;
+      // Discounts and earlier credits can make the original part value larger
+      // than the amount ever collectible/refundable. Reject rather than clip:
+      // clipping would leave stock history and ERP credit amounts dishonest.
+      const priorAdjustments = (invoice.adjustments ?? []).reduce(
+        (sum, adjustment) => sum + adjustment.amount,
+        0,
+      );
+      const financialRemaining = invoice.status === "issued"
+        ? Math.max(0, invoice.balance)
+        : Math.max(0, invoice.total + priorAdjustments);
+      if (grossCredit > financialRemaining + 0.005) {
+        throw new Error("part_credit_financial_overage");
+      }
+      creditInvoice = { id: invoice.id, taxAmount: taxCredit, grossAmount: grossCredit };
+      const adjustment = {
+        amount: -grossCredit,
+        reason: `Part credit #${inserted.id}: ${line.partName} — ${parsed.data.reason} (tax credit GY$${taxCredit.toFixed(2)})`,
+        by: res.locals.user?.name ?? res.locals.user?.email ?? "Staff",
+        at: new Date().toISOString(),
+      };
+      await tx.update(serviceInvoicesTable).set({
+        adjustments: [...(invoice.adjustments ?? []), adjustment],
+        // A paid invoice receives account credit rather than an automatic cash
+        // refund. Collision credits are explicitly held for the claim
+        // settlement allocator; neither silently rewrites paid/split balances.
+        ...(invoice.status === "issued" && !collision ? {
+          total: sql`greatest(0, ${serviceInvoicesTable.total} - ${grossCredit})`,
+          balance: sql`greatest(0, ${serviceInvoicesTable.balance} - ${grossCredit})`,
+        } : {}),
+        ...(invoice.status === "paid" && !collision ? {
+          customerCreditBalance: sql`${serviceInvoicesTable.customerCreditBalance} + ${grossCredit}`,
+        } : {}),
+        ...(collision ? {
+          creditReconciliationStatus: "pending_collision_settlement",
+        } : {}),
+      }).where(and(eq(serviceInvoicesTable.id, invoice.id), eq(serviceInvoicesTable.dealerId, dealerId)));
+    }
+    // Every return immediately updates the live net parts and quote total.
+    // The issued invoice retains its immutable original totals and is changed
+    // only through the linked adjustment above. Post-invoice credits must not,
+    // however, reopen terminal operational work.
+    const revisedBreakdown = await buildServiceEstimateBreakdown(tx, lockedCard);
+    await tx.update(jobCardsTable).set({
+      quoteTotal: revisedBreakdown.total,
+      estimateVersion: sql`${jobCardsTable.estimateVersion} + 1`,
+      estimateApprovedVersion: null,
+      estimateApprovalAt: null,
+      estimateApprovalEvidence: null,
+      quoteApprovedAt: null,
+      ...clearEstimateStaffAcknowledgement,
+      ...(!invoice && lockedCard.payType === "customer" && revisedBreakdown.total > 0 ? {
+          status: "on_hold",
+          waitingReason: "customer_decision",
+          nextAction: "Send the revised estimate and wait for customer confirmation",
+          timerSeconds: foldedTimerSeconds,
+          timerStartedAt: null,
+      } : {}),
+    }).where(and(eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId)));
+    await invalidateServiceEstimate(tx, dealerId, card.id);
     return inserted;
     // (ERPNext Material Receipt for this return is enqueued after commit.)
+  }).catch((error) => {
+    if (error instanceof Error && [
+      "part_credit_quantity_conflict",
+      "part_credit_card_changed",
+      "part_credit_line_changed",
+    ].includes(error.message)) return null;
+    if (error instanceof Error && ["part_credit_void_invoice", "part_credit_financial_overage"].includes(error.message)) {
+      creditFailure = error.message;
+      return null;
+    }
+    throw error;
   });
+  if (!note) {
+    const messages: Record<string, string> = {
+      part_credit_void_invoice: "A void invoice cannot receive a part credit.",
+      part_credit_financial_overage: "This return exceeds the invoice amount remaining after discounts and earlier credits.",
+    };
+    res.status(creditFailure ? 422 : 409).json({
+      error: creditFailure ? messages[creditFailure] : "This part line was credited by another request — reload and retry.",
+    });
+    return;
+  }
   const [restockedPart] = await db
     .select()
     .from(partsTable)
@@ -3712,6 +4645,17 @@ router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
     remark: `AURA job card #${card.id} — credit note return (${line.partName})`,
     dedupeKey: `erp:se:credit:${dealerId}:${note.id}`,
   });
+  const syncedCredit = creditInvoice as { id: number; taxAmount: number; grossAmount: number } | null;
+  if (syncedCredit) {
+    queueServiceInvoiceCreditSync({
+      dealerId,
+      serviceInvoiceId: syncedCredit.id,
+      creditNoteId: note.id,
+      netAmount: note.amount,
+      taxAmount: syncedCredit.taxAmount,
+      grossAmount: syncedCredit.grossAmount,
+    });
+  }
 
   res.status(201).json(CreateJobCardCreditNoteResponse.parse(note));
 });
@@ -3731,6 +4675,13 @@ async function issueServiceInvoice(
   | { ok: true; invoice: ServiceInvoice }
   | { ok: false; status: number; error: string }
 > {
+  if (card.status !== "completed") {
+    return {
+      ok: false,
+      status: 422,
+      error: "Complete the job card before issuing its service invoice.",
+    };
+  }
   const [existing] = await db
     .select()
     .from(serviceInvoicesTable)
@@ -3858,6 +4809,14 @@ async function issueServiceInvoice(
         "Cannot issue a zero-value collision invoice — add the final parts, labour, or approved invoice adjustment before invoicing",
     };
   }
+  if (!hasCurrentChargeableWorkAuthorization(card)) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "Customer approval and service staff acknowledgement are required for the current estimate version before an invoice can be issued.",
+    };
+  }
 
   // Issue + collision binding in ONE transaction with the claim row locked
   // FOR UPDATE: the invoice can never exist while the split stamping loses a
@@ -3866,6 +4825,28 @@ async function issueServiceInvoice(
   let issued: ServiceInvoice | undefined;
   try {
     issued = await db.transaction(async (tx) => {
+      // This is the serialization point shared with all billable-part and
+      // quote mutations. A caller's pre-transaction snapshot is never enough
+      // to issue against a changed estimate.
+      const [lockedCard] = await tx.select().from(jobCardsTable).where(and(
+        eq(jobCardsTable.id, card.id),
+        eq(jobCardsTable.dealerId, card.dealerId),
+      )).for("update");
+      if (
+        !lockedCard ||
+        lockedCard.status !== "completed" ||
+        lockedCard.estimateVersion !== card.estimateVersion ||
+        !hasCurrentChargeableWorkAuthorization(lockedCard)
+      ) {
+        throw Object.assign(new Error("estimate-version-changed"), { issueCode: 409 });
+      }
+      if (lockedCard.surchargeStatus === "suggested") {
+        throw Object.assign(new Error("surcharge-undecided"), { issueCode: 422 });
+      }
+      const lockedBreakdown = await buildServiceEstimateBreakdown(tx, lockedCard);
+      if (Math.abs(lockedCard.quoteTotal - lockedBreakdown.total) > 0.005) {
+        throw Object.assign(new Error("estimate-total-mismatch"), { issueCode: 409 });
+      }
       // Serialize against collision-claim intake on the shared repair order,
       // then re-read the claim after the lock. This closes the "both observed
       // no row" race between normal invoicing and claim creation.
@@ -3955,12 +4936,14 @@ async function issueServiceInvoice(
           customerId: order.customerId,
           customerName: order.customerName,
           vehicleInfo: order.vehicleInfo,
-          partsTotal: Math.round(partsTotal * 100) / 100,
-          externalPartsTotal: Math.round(externalPartsTotal * 100) / 100,
-          laborTotal: Math.round(laborTotal * 100) / 100,
-          surchargeTotal: Math.round(surchargeTotal * 100) / 100,
-          tax,
-          total,
+          partsTotal: lockedBreakdown.internalPartsTotal + lockedBreakdown.externalPartsTotal,
+          externalPartsTotal: lockedBreakdown.externalPartsTotal,
+          laborTotal: lockedBreakdown.labourTotal,
+          surchargeTotal: lockedBreakdown.surchargeTotal,
+          tax: lockedBreakdown.tax,
+          total: lockedBreakdown.total,
+          originalTotal: lockedBreakdown.total,
+          balance: lockedBreakdown.total,
           status: "issued",
           // Totals lock at issue (FR-SR-09); discount approval and the
           // adjustment endpoint are the only sanctioned paths that change them.
@@ -4052,6 +5035,27 @@ async function issueServiceInvoice(
   }
   const invoice = issued;
 
+  // Snapshot the issued financial document, never its subsequently mutable
+  // job card. ERPNext uses this original mapping as the only return-against
+  // target for later service credits.
+  if (invoice) {
+    const issuedLines = [
+      ...(invoice.partsTotal > 0 ? [{ description: "Parts", amount: Math.round(invoice.partsTotal * 100) / 100 }] : []),
+      ...(invoice.laborTotal > 0 ? [{ description: "Labour", amount: Math.round(invoice.laborTotal * 100) / 100 }] : []),
+      ...(invoice.surchargeTotal > 0 ? [{ description: "Service surcharge", amount: Math.round(invoice.surchargeTotal * 100) / 100 }] : []),
+    ];
+    queueServiceInvoiceSync({
+      dealerId: invoice.dealerId,
+      serviceInvoiceId: invoice.id,
+      customerId: invoice.customerId ?? null,
+      customerName: invoice.customerName ?? "Walk-in customer",
+      vehicleInfo: invoice.vehicleInfo,
+      originalTotal: invoice.originalTotal,
+      tax: invoice.tax,
+      issuedAt: invoice.createdAt,
+      lines: issuedLines,
+    });
+  }
   // FR-COM: customer gets the invoice PDF by email (deduped per invoice).
   if (invoice) onServiceInvoiceIssued(invoice);
   if (invoice && claim) {
@@ -4231,6 +5235,7 @@ router.patch("/service-invoices/:id", async (req, res): Promise<void> => {
       patch.paymentReference = paymentReference?.trim() || null;
       patch.paidBy = res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
       patch.paidAt = new Date();
+      patch.balance = 0;
     }
     if (signedCopyFiled) {
       patch.signedCopyFiledBy =
@@ -4322,9 +5327,9 @@ router.post(
       res.status(422).json({ error: "A discount has already been approved" });
       return;
     }
-    const preDiscount =
-      invoice.partsTotal + invoice.laborTotal + invoice.surchargeTotal + invoice.tax;
-    if (parsed.data.amount > preDiscount) {
+    // The balance is the only collectible amount after prior returns/credits;
+    // immutable original component totals are not a discount authority.
+    if (parsed.data.amount > Math.max(0, invoice.balance)) {
       res.status(422).json({
         error: "Discount cannot exceed the invoice total",
       });
@@ -4346,9 +5351,16 @@ router.post(
         and(
           eq(serviceInvoicesTable.id, invoice.id),
           eq(serviceInvoicesTable.dealerId, dealerId),
+          eq(serviceInvoicesTable.status, "issued"),
+          eq(serviceInvoicesTable.discountStatus, invoice.discountStatus),
+          gte(serviceInvoicesTable.balance, parsed.data.amount),
         ),
       )
       .returning();
+    if (!updated) {
+      res.status(409).json({ error: "Invoice balance or discount state changed — reload and retry." });
+      return;
+    }
     const managerIds = await generalManagers(dealerId);
     if (managerIds.length) {
       const dueDate = zonedDayKey(new Date(), await dealerTimezone(dealerId));
@@ -4424,19 +5436,11 @@ router.post(
     }
     const approve = parsed.data.action === "approve";
     const requested = invoice.discountRequestedAmount ?? 0;
-    const preDiscount =
-      Math.round(
-        (invoice.partsTotal +
-          invoice.laborTotal +
-          invoice.surchargeTotal +
-          invoice.tax) *
-          100,
-      ) / 100;
-    const discount = approve ? Math.min(requested, preDiscount) : 0;
-    const adjustmentSum = (invoice.adjustments ?? []).reduce(
-      (s, a) => s + a.amount,
-      0,
-    );
+    // A prior return/credit may already have reduced the collectible balance.
+    // Never recreate the pre-credit amount from immutable component totals.
+    const discount = approve
+      ? Math.min(requested, Math.max(0, invoice.balance))
+      : 0;
     const [updated] = await db
       .update(serviceInvoicesTable)
       .set({
@@ -4446,9 +5450,8 @@ router.post(
         discountDecidedAt: new Date(),
         ...(approve
           ? {
-              total:
-                Math.round((preDiscount - discount + adjustmentSum) * 100) /
-                100,
+              total: Math.max(0, Math.round((invoice.total - discount) * 100) / 100),
+              balance: Math.max(0, Math.round((invoice.balance - discount) * 100) / 100),
             }
           : {}),
       })
@@ -4456,9 +5459,17 @@ router.post(
         and(
           eq(serviceInvoicesTable.id, invoice.id),
           eq(serviceInvoicesTable.dealerId, dealerId),
+          eq(serviceInvoicesTable.discountStatus, "pending"),
+          eq(serviceInvoicesTable.status, "issued"),
+          eq(serviceInvoicesTable.total, invoice.total),
+          eq(serviceInvoicesTable.balance, invoice.balance),
         ),
       )
       .returning();
+    if (!updated) {
+      res.status(409).json({ error: "Invoice discount state changed — reload and retry." });
+      return;
+    }
     await db
       .update(tasksTable)
       .set({ status: "done", completedAt: new Date(), updatedAt: new Date() })
@@ -4542,8 +5553,9 @@ router.post("/service-invoices/:id/adjust", async (req, res): Promise<void> => {
     at: new Date().toISOString(),
   };
   const nextTotal = Math.round((invoice.total + entry.amount) * 100) / 100;
-  if (nextTotal < 0) {
-    res.status(422).json({ error: "Adjustment would make the total negative" });
+  const nextBalance = Math.round((invoice.balance + entry.amount) * 100) / 100;
+  if (nextTotal < 0 || nextBalance < 0) {
+    res.status(422).json({ error: "Adjustment would make the total or outstanding balance negative" });
     return;
   }
   // Conditional on status + unchanged total so a concurrent adjustment or
@@ -4553,6 +5565,7 @@ router.post("/service-invoices/:id/adjust", async (req, res): Promise<void> => {
     .set({
       adjustments: [...(invoice.adjustments ?? []), entry],
       total: nextTotal,
+      balance: nextBalance,
     })
     .where(
       and(
@@ -4560,6 +5573,7 @@ router.post("/service-invoices/:id/adjust", async (req, res): Promise<void> => {
         eq(serviceInvoicesTable.dealerId, dealerId),
         eq(serviceInvoicesTable.status, "issued"),
         eq(serviceInvoicesTable.total, invoice.total),
+        eq(serviceInvoicesTable.balance, invoice.balance),
       ),
     )
     .returning();

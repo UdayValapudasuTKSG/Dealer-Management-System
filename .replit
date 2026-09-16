@@ -130,6 +130,9 @@ WHATSAPP_WABA_ID = "2022178818418962"
 WHATSAPP_APP_ID = "1071080835286400"
 WHATSAPP_APP_SECRET = "1fe1a80018e411ecfe4809816891a6be"
 
+[userenv.production]
+SERVICE_QUOTE_PUBLIC_URL = "https://automotive-aura-journey.replit.app"
+
 [objectStorage]
 defaultBucketID = "replit-objstore-f344ae42-7e40-44eb-8f65-d4aa608cb80d"
 

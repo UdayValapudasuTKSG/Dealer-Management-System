@@ -40,6 +40,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuthz } from "@/lib/auth";
 import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +70,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { DocumentsCard } from "@/components/documents-card";
+import { ListPagination } from "@/components/list-pagination";
 import { cn } from "@/lib/utils";
 import {
   CarFront,
@@ -842,6 +844,11 @@ export function CollisionTab() {
     ...(lossFrom && { lossFrom }),
     ...(lossTo && { lossTo }),
   });
+  const pager = useListPagination(
+    claims ?? [],
+    JSON.stringify({ status, insurer: insurer.trim(), lossFrom, lossTo }),
+    10,
+  );
 
   return (
     <div className="space-y-6">
@@ -895,11 +902,12 @@ export function CollisionTab() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {(claims ?? []).map((c) => (
+          {pager.items.map((c) => (
             <ClaimCard key={c.id} claim={c} />
           ))}
         </div>
       )}
+      {!isLoading && <ListPagination {...pager} label="collision claims" />}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   receiptsTable,
   serviceInvoicesTable,
   serviceOrdersTable,
+  serviceEstimateDecisionsTable,
   jobCardsTable,
   tasksTable,
   timelineEventsTable,
@@ -95,6 +96,62 @@ export const SYSTEM_MAIL_HEADER = "X-AURA-System";
 // ---------------------------------------------------------------------------
 
 export type TemplateData = Record<string, string>;
+
+/**
+ * A send-quote action needs to fail before it creates a customer decision link
+ * when the owning dealership cannot send mail. This deliberately resolves only
+ * that dealer's connection; it never supplies a shared/global sender.
+ */
+export type DealerEmailSenderPreflight =
+  | { ok: true; fromEmail: string }
+  | {
+      ok: false;
+      code:
+        | "sender_not_configured"
+        | "sender_disabled"
+        | "sender_credentials_missing"
+        | "sender_unavailable";
+      message: string;
+    };
+
+export async function preflightDealerEmailSender(
+  dealerId: number,
+): Promise<DealerEmailSenderPreflight> {
+  try {
+    const smtp = await resolveDealerSmtp(dealerId);
+    if (smtp.ok) return { ok: true, fromEmail: smtp.fromEmail };
+    switch (smtp.reason) {
+      case "disabled":
+        return {
+          ok: false,
+          code: "sender_disabled",
+          message: "Email sending is paused for this dealership.",
+        };
+      case "missing_password":
+        return {
+          ok: false,
+          code: "sender_credentials_missing",
+          message:
+            "The dealership email connection has no usable password saved.",
+        };
+      default:
+        return {
+          ok: false,
+          code: "sender_not_configured",
+          message:
+            "This dealership has not configured an email sender. No quote was sent.",
+        };
+    }
+  } catch (err) {
+    logger.error({ err, dealerId }, "dealer email sender preflight failed");
+    return {
+      ok: false,
+      code: "sender_unavailable",
+      message:
+        "The dealership email sender could not be verified. No quote was sent.",
+    };
+  }
+}
 
 type TemplateDef = {
   label: string;
@@ -834,6 +891,102 @@ const escapeHtml = (s: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
+type ServiceEstimateQuoteLinePayload = {
+  kind: "part" | "labour" | "surcharge" | "tax";
+  description: string;
+  quantity: number | null;
+  unitRateCents: number | null;
+  amountCents: number;
+};
+
+type ServiceEstimateQuotePayload = {
+  customerName: string;
+  vehicle: string;
+  reference: string;
+  estimateVersion: number;
+  expiresAt: string;
+  totalCents: number;
+  lines: ServiceEstimateQuoteLinePayload[];
+};
+
+/**
+ * This is intentionally parsed from the outbox payload rather than recalculated
+ * from live job-card/parts data. An email retry must display precisely the
+ * quote snapshot that was authorized for delivery.
+ */
+function serviceEstimateQuotePayload(
+  encoded: string | undefined,
+): ServiceEstimateQuotePayload | null {
+  if (!encoded) return null;
+  try {
+    const value = JSON.parse(encoded) as Record<string, unknown>;
+    const estimateVersion = value.estimateVersion;
+    const totalCents = value.totalCents;
+    if (
+      typeof value.customerName !== "string" ||
+      typeof value.vehicle !== "string" ||
+      typeof value.reference !== "string" ||
+      !Number.isInteger(estimateVersion) ||
+      typeof value.expiresAt !== "string" ||
+      !Number.isInteger(totalCents) ||
+      !Array.isArray(value.lines)
+    ) return null;
+    const lines: ServiceEstimateQuoteLinePayload[] = [];
+    for (const raw of value.lines) {
+      if (!raw || typeof raw !== "object") return null;
+      const line = raw as Record<string, unknown>;
+      const kind = line.kind;
+      const description = line.description;
+      const quantity = line.quantity;
+      const unitRateCents = line.unitRateCents;
+      const amountCents = line.amountCents;
+      if (
+        !["part", "labour", "surcharge", "tax"].includes(String(kind)) ||
+        typeof description !== "string" ||
+        !(quantity == null || typeof quantity === "number") ||
+        !(unitRateCents == null || typeof unitRateCents === "number") ||
+        !Number.isInteger(amountCents)
+      ) return null;
+      lines.push({
+        kind: kind as ServiceEstimateQuoteLinePayload["kind"],
+        description,
+        quantity: quantity ?? null,
+        unitRateCents: unitRateCents ?? null,
+        amountCents: Number(amountCents),
+      });
+    }
+    return {
+      customerName: value.customerName,
+      vehicle: value.vehicle,
+      reference: value.reference,
+      estimateVersion: Number(estimateVersion),
+      expiresAt: value.expiresAt,
+      totalCents: Number(totalCents),
+      lines,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const quoteMoney = (cents: number): string =>
+  `GY$${(cents / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+function safeQuoteUrl(value: string | undefined): string {
+  if (!value) return "#";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : "#";
+  } catch {
+    return "#";
+  }
+}
+
 /** Detect the mime/extension of an uploaded logo from its magic bytes. */
 export function sniffImageMime(buf: Buffer): { mime: string; ext: string } {
   if (buf.length > 2 && buf[0] === 0x89 && buf[1] === 0x50)
@@ -946,6 +1099,65 @@ export function renderEmail(
             <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Automotive Dealership</div>`
       : `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#111111;">AURA<span style="color:#e01313;">.OS</span></div>
             <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Dealership Operating System</div>`;
+  const serviceQuote = template === "service.estimate.ready"
+    ? serviceEstimateQuotePayload(data.quoteSnapshotJson)
+    : null;
+  // Quote delivery uses a fixed, itemized layout even if a dealer has
+  // customized general lifecycle copy. A custom paragraph must never replace
+  // the immutable commercial terms that the customer is being asked to accept.
+  if (serviceQuote) {
+    const kindLabel: Record<ServiceEstimateQuoteLinePayload["kind"], string> = {
+      part: "Parts",
+      labour: "Labour",
+      surcharge: "Surcharge",
+      tax: "Tax",
+    };
+    const rows = serviceQuote.lines
+      .map((line) => `<tr>
+        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;color:#374151;">
+          <div style="font-weight:600;">${escapeHtml(line.description)}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px;">${kindLabel[line.kind]}</div>
+        </td>
+        <td align="right" style="padding:10px 8px;border-bottom:1px solid #e5e7eb;color:#374151;white-space:nowrap;">${line.quantity == null ? "—" : escapeHtml(String(line.quantity))}</td>
+        <td align="right" style="padding:10px 8px;border-bottom:1px solid #e5e7eb;color:#374151;white-space:nowrap;">${line.unitRateCents == null ? "—" : quoteMoney(line.unitRateCents)}</td>
+        <td align="right" style="padding:10px 0 10px 8px;border-bottom:1px solid #e5e7eb;color:#111111;font-weight:600;white-space:nowrap;">${quoteMoney(line.amountCents)}</td>
+      </tr>`)
+      .join("");
+    const reviewHref = safeQuoteUrl(data.link);
+    const authorizeHref = safeQuoteUrl(data.authorizeLink ?? data.link);
+    const declineHref = safeQuoteUrl(data.declineLink ?? data.link);
+    const footerName = escapeHtml(brandName || "AURA Dealership");
+    return {
+      subject,
+      html: `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 16px;"><tr><td align="center">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border:1px solid #e6e6e6;border-radius:16px;overflow:hidden;">
+      <tr><td style="height:5px;background:linear-gradient(90deg,#1fa34a 0%,#1fa34a 33%,#f5d800 33%,#f5d800 66%,#e01313 66%,#e01313 100%);font-size:0;line-height:0;">&nbsp;</td></tr>
+      <tr><td style="padding:36px 44px 8px;">${headerHtml}</td></tr>
+      <tr><td style="padding:28px 44px 0;"><div style="font-size:26px;font-weight:600;color:#111;">Service &amp; Parts Quote.</div></td></tr>
+      <tr><td style="padding:16px 44px 0;font-size:15px;color:#444;line-height:1.6;">Hello ${escapeHtml(serviceQuote.customerName)}, please review the fixed quote below for your ${escapeHtml(serviceQuote.vehicle)}. It expires on <strong>${escapeHtml(serviceQuote.expiresAt)}</strong>.</td></tr>
+      <tr><td style="padding:22px 44px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;"><tr>
+        <td style="padding:10px 12px;color:#6b7280;">Reference<br/><strong style="color:#111;">${escapeHtml(serviceQuote.reference)}</strong></td>
+        <td style="padding:10px 12px;color:#6b7280;">Quote version<br/><strong style="color:#111;">${serviceQuote.estimateVersion}</strong></td>
+      </tr></table></td></tr>
+      <tr><td style="padding:22px 44px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+        <tr style="background:#f4f5f7;"><th align="left" style="padding:9px 8px;color:#374151;">Item</th><th align="right" style="padding:9px 8px;color:#374151;">Qty</th><th align="right" style="padding:9px 8px;color:#374151;">Rate</th><th align="right" style="padding:9px 0 9px 8px;color:#374151;">Amount</th></tr>
+        ${rows}
+        <tr><td colspan="3" align="right" style="padding:16px 8px 4px;color:#111;font-size:15px;font-weight:700;">Quote total</td><td align="right" style="padding:16px 0 4px 8px;color:#111;font-size:16px;font-weight:700;white-space:nowrap;">${quoteMoney(serviceQuote.totalCents)}</td></tr>
+      </table></td></tr>
+      <tr><td style="padding:24px 44px 0;font-size:13px;color:#555;line-height:1.5;">Authorize or decline the whole quote using a secure link. The itemized terms, quantities and rates above are the terms that will be presented for your decision.</td></tr>
+      <tr><td style="padding:20px 44px 0;">
+        <a href="${authorizeHref}" style="display:inline-block;background:#111;color:#fff;font-size:12px;font-weight:700;letter-spacing:1px;padding:12px 18px;border-radius:999px;text-decoration:none;">AUTHORIZE QUOTE</a>
+        <a href="${declineHref}" style="display:inline-block;margin-left:8px;background:#fff;color:#a61b1b;font-size:12px;font-weight:700;letter-spacing:1px;padding:10px 16px;border:1px solid #d99;border-radius:999px;text-decoration:none;">DECLINE QUOTE</a>
+      </td></tr>
+      <tr><td style="padding:14px 44px 0;font-size:12px;"><a href="${reviewHref}" style="color:#374151;">Review quote securely</a></td></tr>
+      <tr><td style="padding:30px 44px 32px;"><div style="border-top:1px solid #e6e6e6;padding-top:20px;font-size:11px;color:#8a8a8a;line-height:1.6;">${footerName} — Service Department<br/>You are receiving this because of your relationship with our dealership.</div></td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`,
+    };
+  }
   if (template === "leads.source.report.daily" && !override) {
     const safeDate = escapeHtml(d(x, "date", "Yesterday"));
     const safeTotal = escapeHtml(d(x, "total", "0"));
@@ -1146,6 +1358,8 @@ export type EnqueueOptions = {
   dealerId: number;
   customerId?: number | null;
   leadId?: number | null;
+  /** Immutable owner for a service-estimate delivery audit trail. */
+  serviceEstimateDecisionId?: number | null;
   data?: TemplateData;
   /** Idempotency — a second enqueue with the same key is a no-op. */
   dedupeKey?: string;
@@ -1157,6 +1371,14 @@ export type EnqueueOptions = {
    * sends. Stored in the payload so the worker can act on it.
    */
   notifyUserId?: number;
+  /**
+   * Use the caller's transaction when an outbox row must commit atomically
+   * with its domain record. Worker scheduling remains the caller's
+   * responsibility when this is set.
+   */
+  tx?: any;
+  /** Do not start an outbox pass until the surrounding transaction commits. */
+  deferProcessing?: boolean;
 };
 
 /** Parse only positive integer lead ids; payload values remain untrusted text. */
@@ -1232,7 +1454,32 @@ async function isRecipientEmailOptedOut(
   }
 }
 
+export type EmailRecipientPreflight =
+  | { ok: true }
+  | { ok: false; code: "recipient_suppressed"; message: string };
+
+/**
+ * Quote actions use this before revoking an existing decision link. `enqueue`
+ * repeats the check at write/send time, so a consent change races safely by
+ * rolling back the quote transaction rather than creating an orphan token.
+ */
+export async function preflightEmailRecipient(
+  dealerId: number,
+  recipient: string,
+): Promise<EmailRecipientPreflight> {
+  if (await isRecipientEmailOptedOut(dealerId, recipient)) {
+    return {
+      ok: false,
+      code: "recipient_suppressed",
+      message:
+        "Email communication is disabled for this recipient. No quote was sent.",
+    };
+  }
+  return { ok: true };
+}
+
 export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
+  const outboxDb = opts.tx ?? db;
   const resolvedLeadId = await validatedOutboxLeadId(
     opts.dealerId,
     opts.leadId,
@@ -1273,12 +1520,13 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
     controlledImportSuppressed ||
     legacyDisposition !== "allow"
   ) {
-    const [suppressed] = await db
+    const [suppressed] = await outboxDb
       .insert(emailLogsTable)
       .values({
         dealerId: opts.dealerId,
         customerId: opts.customerId ?? null,
         leadId: resolvedLeadId,
+        serviceEstimateDecisionId: opts.serviceEstimateDecisionId ?? null,
         recipient: opts.to,
         subject,
         template: opts.template,
@@ -1298,18 +1546,19 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
       .onConflictDoNothing({ target: emailLogsTable.dedupeKey })
       .returning();
     if (suppressed) return suppressed;
-    const [existing] = await db
+    const [existing] = await outboxDb
       .select()
       .from(emailLogsTable)
       .where(eq(emailLogsTable.dedupeKey, opts.dedupeKey!));
     return existing!;
   }
-  const [row] = await db
+  const [row] = await outboxDb
     .insert(emailLogsTable)
     .values({
       dealerId: opts.dealerId,
       customerId: opts.customerId ?? null,
       leadId: resolvedLeadId,
+      serviceEstimateDecisionId: opts.serviceEstimateDecisionId ?? null,
       recipient: opts.to,
       subject,
       template: opts.template,
@@ -1328,14 +1577,14 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
     .returning();
   if (!row) {
     // Duplicate dedupeKey — return the existing item (idempotent enqueue).
-    const [existing] = await db
+    const [existing] = await outboxDb
       .select()
       .from(emailLogsTable)
       .where(eq(emailLogsTable.dedupeKey, opts.dedupeKey!));
     return existing!;
   }
   // Kick the worker soon so sends feel immediate.
-  setTimeout(() => void processQueue(), 50);
+  if (!opts.deferProcessing) setTimeout(() => void processQueue(), 50);
   return row;
 }
 
@@ -1482,6 +1731,147 @@ async function recheckOutboxStatus(
     .where(and(eq(emailLogsTable.id, id), eq(emailLogsTable.status, status)))
     .returning({ id: emailLogsTable.id });
   return Boolean(current);
+}
+
+/**
+ * A service-estimate email is valid only while its linked immutable decision
+ * remains the current, undecided revision. The quote-send transaction cancels
+ * stale outbox rows, but this final guard also closes the CAS→SMTP race.
+ */
+async function serviceEstimateDeliveryIsCurrent(
+  item: Pick<EmailLog, "id" | "dealerId" | "serviceEstimateDecisionId">,
+  queryDb: any = db,
+  lockJobCard = false,
+): Promise<boolean> {
+  const decisionId = item.serviceEstimateDecisionId;
+  if (decisionId == null) return true;
+  const getDecision = () =>
+    queryDb
+    .select({
+      decisionId: serviceEstimateDecisionsTable.id,
+      jobCardId: serviceEstimateDecisionsTable.jobCardId,
+      serviceOrderId: serviceEstimateDecisionsTable.serviceOrderId,
+      invalidatedAt: serviceEstimateDecisionsTable.invalidatedAt,
+      decision: serviceEstimateDecisionsTable.decision,
+      expiresAt: serviceEstimateDecisionsTable.expiresAt,
+      estimateVersion: serviceEstimateDecisionsTable.estimateVersion,
+      estimateTotal: serviceEstimateDecisionsTable.estimateTotal,
+    })
+      .from(serviceEstimateDecisionsTable)
+      .where(
+        and(
+          eq(serviceEstimateDecisionsTable.id, decisionId),
+          eq(serviceEstimateDecisionsTable.dealerId, item.dealerId),
+        ),
+      )
+      .limit(1);
+  let [bound] = await getDecision();
+  if (!bound) return false;
+  const cardQuery = queryDb
+    .select({
+      cardVersion: jobCardsTable.estimateVersion,
+      cardTotal: jobCardsTable.quoteTotal,
+    })
+    .from(jobCardsTable)
+    .where(
+      and(
+        eq(jobCardsTable.id, bound.jobCardId),
+        eq(jobCardsTable.dealerId, item.dealerId),
+        eq(jobCardsTable.serviceOrderId, bound.serviceOrderId),
+      ),
+    );
+  // Quote repricing takes this same (and only this) card-row lock before it
+  // invalidates decisions and cancels linked outbox rows. Avoid locking the
+  // decision join here: the consistent order is card → outbox for every
+  // quote path, preventing a worker/reprice lock-order deadlock.
+  const [card] = lockJobCard
+    ? await cardQuery.for("update")
+    : await cardQuery.limit(1);
+  if (!card) return false;
+  // The first decision read can have raced a repricing transaction while we
+  // waited for its card lock. Re-read after acquiring that lock; repricing can
+  // no longer mutate this decision until this SMTP handoff finishes.
+  if (lockJobCard) [bound] = await getDecision();
+  return Boolean(
+    bound &&
+      bound.invalidatedAt == null &&
+      bound.decision == null &&
+      bound.expiresAt.getTime() > Date.now() &&
+      bound.estimateVersion === card.cardVersion &&
+      Math.round(bound.estimateTotal * 100) ===
+        Math.round(card.cardTotal * 100),
+  );
+}
+
+/**
+ * Hold the quote's job-card row lock from the final validity check through
+ * provider handoff and the terminal outbox CAS. Non-quote emails deliberately
+ * do not take this path, preserving their existing worker concurrency.
+ */
+async function handoffCurrentServiceEstimate(
+  item: Pick<
+    EmailLog,
+    "id" | "dealerId" | "recipient" | "serviceEstimateDecisionId"
+  >,
+  send: () => Promise<{ accepted?: unknown[] }>,
+): Promise<"sent" | "cancelled"> {
+  return db.transaction(async (tx) => {
+    if (!(await serviceEstimateDeliveryIsCurrent(item, tx, true))) {
+      await tx
+        .update(emailLogsTable)
+        .set({
+          status: "cancelled",
+          nextAttemptAt: null,
+          lastError:
+            "cancelled: linked Service & Parts Quote is no longer current",
+        })
+        .where(
+          and(
+            eq(emailLogsTable.id, item.id),
+            eq(emailLogsTable.status, "sending"),
+          ),
+        );
+      return "cancelled";
+    }
+    // The job-card lock serializes quote work; this CAS still protects against
+    // any unrelated cancellation that happened before the lock was acquired.
+    const [claimed] = await tx
+      .select({ id: emailLogsTable.id })
+      .from(emailLogsTable)
+      .where(
+        and(
+          eq(emailLogsTable.id, item.id),
+          eq(emailLogsTable.status, "sending"),
+        ),
+      )
+      .for("update");
+    if (!claimed) return "cancelled";
+    const sendResult = await send();
+    const intendedRecipient = item.recipient.trim().toLowerCase();
+    const accepted = (sendResult.accepted ?? []).some(
+      (recipient) =>
+        String(recipient).trim().toLowerCase() === intendedRecipient,
+    );
+    if (!accepted) {
+      throw new Error("SMTP provider did not accept the intended recipient");
+    }
+    const [sent] = await tx
+      .update(emailLogsTable)
+      .set({
+        status: "sent",
+        deliveryStatus: "accepted",
+        sentAt: new Date(),
+        lastError: null,
+      })
+      .where(
+        and(
+          eq(emailLogsTable.id, item.id),
+          eq(emailLogsTable.status, "sending"),
+        ),
+      )
+      .returning({ id: emailLogsTable.id });
+    return sent ? "sent" : "cancelled";
+  });
 }
 
 async function legacyOutboxReviewDisposition(
@@ -3286,11 +3676,7 @@ export async function processQueue(): Promise<void> {
           /"/g,
           "",
         );
-        // This conditional no-op update is the final atomic ownership check.
-        // The importer holds the same advisory identity while it installs
-        // suppression, so it cannot commit between this check and sendMail.
-        if (!(await recheckOutboxStatus(item.id, "sending"))) return;
-        const sendResult = await smtp.transport.sendMail({
+        const send = () => smtp.transport.sendMail({
           from: `"${(smtp.fromName ?? fromName).replace(/"/g, "")}" <${smtp.fromEmail}>`,
           ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
           to: item.recipient,
@@ -3302,23 +3688,41 @@ export async function processQueue(): Promise<void> {
           ...(attachments ? { attachments } : {}),
           ...(icalEvent ? { icalEvent } : {}),
         });
-        const intendedRecipient = item.recipient.trim().toLowerCase();
-        const accepted = (sendResult.accepted ?? []).some(
-          (recipient: unknown) =>
-            String(recipient).trim().toLowerCase() === intendedRecipient,
-        );
-        if (!accepted) {
-          throw new Error("SMTP provider did not accept the intended recipient");
+        if (item.serviceEstimateDecisionId != null) {
+          const handoff = await handoffCurrentServiceEstimate(item, send);
+          if (handoff === "cancelled") return;
+        } else {
+          // This conditional no-op update is the final atomic ownership check.
+          // The importer holds the same advisory identity while it installs
+          // suppression, so it cannot commit between this check and sendMail.
+          if (!(await recheckOutboxStatus(item.id, "sending"))) return;
+          const sendResult = await send();
+          const intendedRecipient = item.recipient.trim().toLowerCase();
+          const accepted = (sendResult.accepted ?? []).some(
+            (recipient: unknown) =>
+              String(recipient).trim().toLowerCase() === intendedRecipient,
+          );
+          if (!accepted) {
+            throw new Error("SMTP provider did not accept the intended recipient");
+          }
+          // Never turn a concurrently cancelled outbox row back into sent.
+          const [sent] = await db
+            .update(emailLogsTable)
+            .set({
+              status: "sent",
+              deliveryStatus: "accepted",
+              sentAt: new Date(),
+              lastError: null,
+            })
+            .where(
+              and(
+                eq(emailLogsTable.id, item.id),
+                eq(emailLogsTable.status, "sending"),
+              ),
+            )
+            .returning({ id: emailLogsTable.id });
+          if (!sent) return;
         }
-        await db
-          .update(emailLogsTable)
-          .set({
-            status: "sent",
-            deliveryStatus: "accepted",
-            sentAt: new Date(),
-            lastError: null,
-          })
-          .where(eq(emailLogsTable.id, item.id));
         await markQuoteDelivered(item, "email");
         if (item.customerId) {
           await db.insert(timelineEventsTable).values({

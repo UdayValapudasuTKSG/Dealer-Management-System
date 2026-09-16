@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, isNull, like } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, or } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -14,14 +14,19 @@ import {
   dealersTable,
   emailLogsTable,
   jobCardsTable,
-  jobCardPartsTable,
   serviceEstimateDecisionsTable,
   serviceInvoicesTable,
   feedbackInvitationsTable,
   type JobCard,
-  type ServiceEstimateLine,
 } from "@workspace/db";
-import { enqueueEmail, type TemplateData } from "./email";
+import {
+  enqueueEmail,
+  preflightEmailRecipient,
+  preflightDealerEmailSender,
+  processQueue,
+  type TemplateData,
+} from "./email";
+import { buildServiceEstimateBreakdown } from "./service-estimate-breakdown";
 
 /** Name + phone of the lead's assigned (round-robin) sales advisor. */
 export async function leadAdvisorContact(
@@ -104,6 +109,8 @@ async function customerEmail(
       and(
         eq(customersTable.id, customerId),
         eq(customersTable.dealerId, dealerId),
+        isNull(customersTable.deletedAt),
+        isNull(customersTable.erasedAt),
       ),
     );
   return { email: c?.email ?? null, name: c?.name ?? null };
@@ -172,6 +179,34 @@ function publicAppOrigin(): string | null {
   const dev = process.env.REPLIT_DEV_DOMAIN?.trim();
   const host = prod || dev;
   return host ? `https://${host}` : null;
+}
+
+/**
+ * Service quote decisions are contractual customer links. Production uses the
+ * explicitly published application origin only; REPLIT_DOMAINS may describe a
+ * workspace/proxy host rather than the public customer application. Other
+ * lifecycle email links intentionally retain `publicAppOrigin` compatibility.
+ */
+function serviceQuotePublicOrigin(): string | null {
+  if (process.env.NODE_ENV !== "production") return publicAppOrigin();
+  const configured = process.env.SERVICE_QUOTE_PUBLIC_URL?.trim();
+  if (!configured) return null;
+  try {
+    const url = new URL(configured);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      (url.pathname !== "/" && url.pathname !== "")
+    ) {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
 }
 
 /** Self-service test-drive booking URL for a lead's invite token. */
@@ -730,79 +765,492 @@ export function onJobCardIntakeRecorded(order: ServiceOrder, card: JobCard): voi
   });
 }
 
-/** Quote total first becomes available → secure whole-estimate decision link. */
-export function onServiceEstimateReady(order: ServiceOrder, card: JobCard): void {
-  fire("service_estimate_ready", async () => {
-    if (card.quoteTotal <= 0) return;
-    const c = await customerEmail(order.dealerId, order.customerId);
-    if (!c.email) return;
-    const [existing] = await db
-      .select({ id: serviceEstimateDecisionsTable.id })
-      .from(serviceEstimateDecisionsTable)
-      .where(
-        and(
-          eq(serviceEstimateDecisionsTable.dealerId, order.dealerId),
-          eq(serviceEstimateDecisionsTable.jobCardId, card.id),
-          isNull(serviceEstimateDecisionsTable.decision),
-          isNull(serviceEstimateDecisionsTable.invalidatedAt),
-        ),
-      )
-      .limit(1);
-    if (existing) return;
-    const parts = await db
-      .select()
-      .from(jobCardPartsTable)
-      .where(
-        and(
-          eq(jobCardPartsTable.dealerId, order.dealerId),
-          eq(jobCardPartsTable.jobCardId, card.id),
-        ),
-      )
-      .orderBy(jobCardPartsTable.id);
-    const lines: ServiceEstimateLine[] = parts
-      .filter((p) => p.kind === "issue")
-      .map((p) => ({
-        kind: "part",
-        description: p.partName,
-        quantity: p.quantity,
-        amount: p.quantity * p.unitPrice,
-      }));
-    if (card.laborHours > 0) {
-      lines.push({
-        kind: "labour",
-        description: "Labour",
-        quantity: card.laborHours,
-        amount: card.laborHours * card.laborRate,
-      });
+export type ServiceEstimateQuoteErrorCode =
+  | "recipient_missing"
+  | "recipient_invalid"
+  | "public_origin_missing"
+  | "sender_not_configured"
+  | "sender_disabled"
+  | "sender_credentials_missing"
+  | "sender_unavailable"
+  | "recipient_changed"
+  | "quote_not_ready"
+  | "quote_changed"
+  | "quote_not_canonical"
+  | "quote_queue_failed";
+
+export type ServiceEstimateQuoteOutcome =
+  | {
+      outcome: "queued";
+      code: "queued";
+      message: string;
+      decisionId: number;
+      emailLogId: number;
+      /**
+       * `queued` has not reached SMTP. `dispatched` is in worker hand-off;
+       * `sent` means the SMTP provider accepted it; `delivered`/`read` are
+       * provider receipt states when available.
+       */
+      deliveryStatus: "queued" | "dispatched" | "sent" | "delivered" | "read";
     }
+  | {
+      outcome: "suppressed";
+      code: "recipient_suppressed" | "quote_already_open";
+      message: string;
+      decisionId: number | null;
+      emailLogId: number | null;
+      deliveryStatus: "cancelled" | null;
+    }
+  | {
+      outcome: "error";
+      code: ServiceEstimateQuoteErrorCode;
+      message: string;
+      decisionId: number | null;
+      emailLogId: number | null;
+      deliveryStatus: null;
+    };
+
+const quoteCents = (amount: number): number => Math.round(amount * 100);
+const quoteMoney = (amount: number): string =>
+  `GY$${(quoteCents(amount) / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+const quoteEmailAddress = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+class ServiceEstimateQuoteSuppressed extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ServiceEstimateQuoteSuppressed";
+  }
+}
+
+export type ServiceEstimateQuotePreflight =
+  | {
+      ok: true;
+      recipient: string;
+      customerName: string;
+      origin: string;
+    }
+  | {
+      ok: false;
+      code:
+        | "recipient_missing"
+        | "recipient_invalid"
+        | "public_origin_missing"
+        | "sender_not_configured"
+        | "sender_disabled"
+        | "sender_credentials_missing"
+        | "sender_unavailable"
+        | "recipient_suppressed"
+        | "quote_queue_failed";
+      message: string;
+    };
+
+/**
+ * Run this before a resend route invalidates an existing token or increments
+ * its quote version. It proves the customer recipient, public secure-link
+ * origin, and the *owning dealer's* sender are usable without queuing or
+ * sending any message.
+ */
+export async function preflightServiceEstimateQuote(
+  order: ServiceOrder,
+): Promise<ServiceEstimateQuotePreflight> {
+  try {
+    const customer = await customerEmail(order.dealerId, order.customerId);
+    const recipient = customer.email?.trim() ?? "";
+    if (!recipient) {
+      return {
+        ok: false,
+        code: "recipient_missing",
+        message: "This customer has no email address on file. No quote was sent.",
+      };
+    }
+    if (!quoteEmailAddress.test(recipient)) {
+      return {
+        ok: false,
+        code: "recipient_invalid",
+        message: "This customer's email address is invalid. No quote was sent.",
+      };
+    }
+    const origin = serviceQuotePublicOrigin();
+    if (!origin) {
+      return {
+        ok: false,
+        code: "public_origin_missing",
+        message: "The secure quote link is not configured. No quote was sent.",
+      };
+    }
+    const sender = await preflightDealerEmailSender(order.dealerId);
+    if (!sender.ok) return sender;
+    const recipientPolicy = await preflightEmailRecipient(
+      order.dealerId,
+      recipient,
+    );
+    if (!recipientPolicy.ok) return recipientPolicy;
+    return {
+      ok: true,
+      recipient,
+      customerName: customer.name?.trim() || order.customerName?.trim() || "Customer",
+      origin,
+    };
+  } catch (err) {
+    logger.error(
+      { err, dealerId: order.dealerId, serviceOrderId: order.id },
+      "service estimate quote preflight failed",
+    );
+    return {
+      ok: false,
+      code: "quote_queue_failed",
+      message:
+        "The customer recipient could not be verified. No quote was sent.",
+    };
+  }
+}
+
+/**
+ * Preflight and queue the customer-approved Service & Parts Quote.
+ *
+ * This is deliberately awaited by the staff "Send quote" action. It only
+ * reports a durable outbox outcome: `queued` means the owning dealer's SMTP
+ * worker still has to hand the message to its provider; it is never presented
+ * as delivered. The serialized quote in the outbox is copied from the same
+ * locked snapshot persisted with the decision token, so retries cannot render
+ * later parts, rates, taxes, or totals.
+ */
+export async function queueServiceEstimateQuote(
+  order: ServiceOrder,
+  card: JobCard,
+  opts?: { resendKey?: string },
+): Promise<ServiceEstimateQuoteOutcome> {
+  const preflight = await preflightServiceEstimateQuote(order);
+  if (!preflight.ok) {
+    if (preflight.code === "recipient_suppressed") {
+      return {
+        outcome: "suppressed",
+        code: preflight.code,
+        message: preflight.message,
+        decisionId: null,
+        emailLogId: null,
+        deliveryStatus: null,
+      };
+    }
+    return {
+      outcome: "error",
+      code: preflight.code,
+      message: preflight.message,
+      decisionId: null,
+      emailLogId: null,
+      deliveryStatus: null,
+    };
+  }
+  const { recipient, customerName, origin } = preflight;
+
+  try {
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await db.insert(serviceEstimateDecisionsTable).values({
-      dealerId: order.dealerId,
-      serviceOrderId: order.id,
-      jobCardId: card.id,
-      tokenHash,
-      estimateTotal: card.quoteTotal,
-      linesSnapshot: lines,
-      expiresAt,
-    });
-    const origin = publicAppOrigin();
-    if (!origin) return;
-    await enqueueEmail({
-      dealerId: order.dealerId,
-      template: "service.estimate.ready",
-      to: c.email,
-      customerId: order.customerId,
-      dedupeKey: `svc:${order.id}:estimate:${card.id}:${card.quoteTotal}`,
-      data: {
+    const created = await db.transaction(async (tx) => {
+      // This row lock is the serialization point for every estimate send. An
+      // asynchronous trigger can arrive late, but it may never produce a
+      // second active link for a newer price/version.
+      const [lockedCard] = await tx
+        .select()
+        .from(jobCardsTable)
+        .where(
+          and(
+            eq(jobCardsTable.id, card.id),
+            eq(jobCardsTable.dealerId, order.dealerId),
+            eq(jobCardsTable.serviceOrderId, order.id),
+          ),
+        )
+        .for("update");
+      if (!lockedCard || lockedCard.estimateVersion !== card.estimateVersion) {
+        return { state: "changed" as const };
+      }
+      // Re-read and lock the exact same active customer chosen by preflight.
+      // A deletion, erasure, or recipient edit between preview and click must
+      // leave the old link/version untouched.
+      if (order.customerId == null) return { state: "recipient_changed" as const };
+      const [lockedCustomer] = await tx
+        .select({ email: customersTable.email })
+        .from(customersTable)
+        .where(
+          and(
+            eq(customersTable.id, order.customerId),
+            eq(customersTable.dealerId, order.dealerId),
+            isNull(customersTable.deletedAt),
+            isNull(customersTable.erasedAt),
+          ),
+        )
+        .for("update");
+      if (
+        !lockedCustomer?.email ||
+        lockedCustomer.email.trim().toLowerCase() !== recipient.toLowerCase()
+      ) {
+        return { state: "recipient_changed" as const };
+      }
+      const breakdown = await buildServiceEstimateBreakdown(tx, lockedCard);
+      // The frozen line breakdown is canonical. A labour-only card can have a
+      // zero stored total until this explicit reviewed-send action; never use
+      // that stale headline as quote eligibility or the customer-facing sum.
+      if (!Number.isFinite(breakdown.total) || breakdown.total <= 0) {
+        return { state: "not_ready" as const };
+      }
+      // A send always opens a fresh immutable quote version. This includes
+      // resend: the previous decision and any queued stale delivery are
+      // invalidated only after all preflight and canonical-price checks above
+      // have passed, and all writes below commit with the replacement outbox.
+      const [revisedCard] = await tx
+        .update(jobCardsTable)
+        .set({
+          estimateVersion: lockedCard.estimateVersion + 1,
+          quoteTotal: breakdown.total,
+          estimateApprovedVersion: null,
+          estimateApprovalAt: null,
+          estimateApprovalEvidence: null,
+          quoteApprovedAt: null,
+          estimateStaffAcknowledgedVersion: null,
+          estimateStaffAcknowledgedDecisionId: null,
+          estimateStaffAcknowledgedByUserId: null,
+          estimateStaffAcknowledgedByName: null,
+          estimateStaffAcknowledgedAt: null,
+        })
+        .where(
+          and(
+            eq(jobCardsTable.id, lockedCard.id),
+            eq(jobCardsTable.dealerId, order.dealerId),
+            eq(jobCardsTable.estimateVersion, lockedCard.estimateVersion),
+          ),
+        )
+        .returning();
+      if (!revisedCard) return { state: "changed" as const };
+      const staleDecisions = await tx
+        .select({ id: serviceEstimateDecisionsTable.id })
+        .from(serviceEstimateDecisionsTable)
+        .where(
+          and(
+            eq(serviceEstimateDecisionsTable.dealerId, order.dealerId),
+            eq(serviceEstimateDecisionsTable.jobCardId, lockedCard.id),
+            isNull(serviceEstimateDecisionsTable.decision),
+            isNull(serviceEstimateDecisionsTable.invalidatedAt),
+          ),
+        );
+      // Freeze the display payload before inserting the decision. The
+      // decision snapshot gets the same rate metadata, while retaining the
+      // established public `amount` representation.
+      const quoteLines = breakdown.lines.map((line) => {
+        const quantity = line.quantity == null ? null : Number(line.quantity);
+        const amountCents = quoteCents(line.amount);
+        const unitRateCents =
+          line.kind === "labour"
+            ? quoteCents(revisedCard.laborRate)
+            : line.kind === "part" &&
+                quantity != null &&
+                quantity !== 0 &&
+                Number.isInteger(amountCents / quantity)
+              ? amountCents / quantity
+              : null;
+        return {
+          kind: line.kind,
+          description: line.description,
+          quantity,
+          unitRateCents,
+          amountCents,
+          amount: line.amount,
+        };
+      });
+      const decisionLines = breakdown.lines.map((line, index) => ({
+        ...line,
+        amountCents: quoteLines[index]!.amountCents,
+        unitRateCents: quoteLines[index]!.unitRateCents,
+      }));
+      if (staleDecisions.length > 0) {
+        // A queued item for a superseded decision must not survive to deliver
+        // after the staff member has sent this replacement. Sent history is
+        // immutable; only dispatchable rows are cancelled here.
+        await tx
+          .update(emailLogsTable)
+          .set({
+            status: "cancelled",
+            nextAttemptAt: null,
+            lastError: "cancelled: superseded by a newer Service & Parts Quote",
+          })
+          .where(
+            and(
+              eq(emailLogsTable.dealerId, order.dealerId),
+              or(
+                inArray(
+                  emailLogsTable.serviceEstimateDecisionId,
+                  staleDecisions.map((decision) => decision.id),
+                ),
+                // Covers legacy rows created before the durable decision FK
+                // existed; the specific order/card prefix cannot touch a
+                // different customer quote.
+                like(
+                  emailLogsTable.dedupeKey,
+                  `svc:${order.id}:estimate:${card.id}:%`,
+                ),
+              ),
+              inArray(emailLogsTable.status, ["queued", "failed", "sending"]),
+            ),
+          );
+      }
+      // Old-version links cannot coexist as active fallbacks. This also
+      // repairs legacy duplicate rows while preserving their audit history.
+      await tx
+        .update(serviceEstimateDecisionsTable)
+        .set({ invalidatedAt: new Date() })
+        .where(
+          and(
+            eq(serviceEstimateDecisionsTable.dealerId, order.dealerId),
+            eq(serviceEstimateDecisionsTable.jobCardId, lockedCard.id),
+            isNull(serviceEstimateDecisionsTable.decision),
+            isNull(serviceEstimateDecisionsTable.invalidatedAt),
+          ),
+        );
+      const [decision] = await tx
+        .insert(serviceEstimateDecisionsTable)
+        .values({
+          dealerId: order.dealerId,
+          serviceOrderId: order.id,
+          jobCardId: lockedCard.id,
+          tokenHash,
+          estimateTotal: breakdown.total,
+          linesSnapshot: decisionLines,
+          estimateVersion: revisedCard.estimateVersion,
+          expiresAt,
+        })
+        .returning({ id: serviceEstimateDecisionsTable.id });
+      if (!decision) throw new Error("service_estimate_decision_insert_failed");
+
+      const reference = `SO-${String(order.id).padStart(5, "0")}/JC-${String(lockedCard.id).padStart(5, "0")}`;
+      const quoteSnapshot = {
+        customerName,
         vehicle: order.vehicleInfo,
-        total: money(card.quoteTotal),
-        expires: expiresAt.toISOString().slice(0, 10),
-        link: `${origin}/service-estimate/${token}`,
-      },
+        reference,
+        estimateVersion: revisedCard.estimateVersion,
+        expiresAt: expiresAt.toISOString(),
+        totalCents: quoteCents(breakdown.total),
+        lines: quoteLines.map(({ amount, ...line }) => line),
+      };
+      const reviewLink = `${origin}/service-estimate/${token}`;
+      const outbox = await enqueueEmail({
+        tx,
+        deferProcessing: true,
+        dealerId: order.dealerId,
+        template: "service.estimate.ready",
+        to: recipient,
+        customerId: order.customerId,
+        serviceEstimateDecisionId: decision.id,
+        dedupeKey: `svc:${order.id}:estimate:${card.id}:v${revisedCard.estimateVersion}${opts?.resendKey ? `:resend:${opts.resendKey}` : ""}`,
+        data: {
+          name: quoteSnapshot.customerName,
+          vehicle: quoteSnapshot.vehicle,
+          reference: quoteSnapshot.reference,
+          version: String(revisedCard.estimateVersion),
+          total: quoteMoney(breakdown.total),
+          totalCents: String(quoteSnapshot.totalCents),
+          expires: quoteSnapshot.expiresAt,
+          link: reviewLink,
+          authorizeLink: `${reviewLink}?decision=approved`,
+          declineLink: `${reviewLink}?decision=declined`,
+          quoteSnapshotJson: JSON.stringify(quoteSnapshot),
+          serviceEstimateDecisionId: String(decision.id),
+        },
+      });
+      if (outbox.status === "cancelled") {
+        throw new ServiceEstimateQuoteSuppressed(
+          outbox.lastError ??
+            "Email communication for this recipient is suppressed. No quote was sent.",
+        );
+      }
+      return {
+        state: "created" as const,
+        decisionId: decision.id,
+        estimateVersion: revisedCard.estimateVersion,
+        total: breakdown.total,
+        outbox,
+      };
     });
-  });
+
+    if (created.state === "changed") {
+      return {
+        outcome: "error",
+        code: "quote_changed",
+        message: "The quote changed before it could be sent. Reload and review it again.",
+        decisionId: null,
+        emailLogId: null,
+        deliveryStatus: null,
+      };
+    }
+    if (created.state === "recipient_changed") {
+      return {
+        outcome: "error",
+        code: "recipient_changed",
+        message:
+          "The customer email changed or is no longer active. Review the customer record before sending.",
+        decisionId: null,
+        emailLogId: null,
+        deliveryStatus: null,
+      };
+    }
+    if (created.state === "not_ready") {
+      return {
+        outcome: "error",
+        code: "quote_not_ready",
+        message: "A positive, reviewed quote total is required before it can be sent.",
+        decisionId: null,
+        emailLogId: null,
+        deliveryStatus: null,
+      };
+    }
+    // `enqueueEmail` was deferred until the transaction committed, so a worker
+    // can never observe an outbox row without its frozen decision snapshot.
+    setTimeout(() => void processQueue(), 50);
+    const outbox = created.outbox;
+    return {
+      outcome: "queued",
+      code: "queued",
+      message: "The Service & Parts Quote is queued for this dealership's email sender.",
+      decisionId: created.decisionId,
+      emailLogId: outbox.id,
+      deliveryStatus:
+        outbox.deliveryStatus === "delivered" ||
+        outbox.deliveryStatus === "read"
+          ? outbox.deliveryStatus
+          : outbox.status === "sent"
+            ? "sent"
+            : outbox.status === "sending" || outbox.deliveryStatus === "accepted"
+              ? "dispatched"
+              : "queued",
+    };
+  } catch (err) {
+    if (err instanceof ServiceEstimateQuoteSuppressed) {
+      return {
+        outcome: "suppressed",
+        code: "recipient_suppressed",
+        message: err.message,
+        // The insertion was intentionally rolled back with the decision/card
+        // mutation, so there is no durable decision or email-log id to report.
+        decisionId: null,
+        emailLogId: null,
+        deliveryStatus: null,
+      };
+    }
+    logger.error(
+      { err, dealerId: order.dealerId, jobCardId: card.id },
+      "service estimate quote preparation failed",
+    );
+    return {
+      outcome: "error",
+      code: "quote_queue_failed",
+      message: "The quote could not be queued. No delivery was confirmed.",
+      decisionId: null,
+      emailLogId: null,
+      deliveryStatus: null,
+    };
+  }
 }
 
 /**

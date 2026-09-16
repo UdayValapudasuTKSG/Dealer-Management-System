@@ -1574,6 +1574,9 @@ router.patch("/deliveries/:id/pdi", async (req, res): Promise<void> => {
         vehicleInfo: vehicleLabel,
         type: "repair",
         status: "open",
+        createdOrigin: "system",
+        createdByUserId: null,
+        createdByName: "System — PDI rectification",
         scheduledDate: zonedDayKey(
           new Date(),
           await dealerTimezone(delivery.dealerId),
