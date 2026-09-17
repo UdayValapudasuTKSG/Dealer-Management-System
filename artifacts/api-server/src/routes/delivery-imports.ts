@@ -36,6 +36,8 @@ import {
   PRE_IMPORT_SALES_DELIVERY_TEMPLATES,
   reviewedOutboxCommunicationLockKeys,
   requiresApplyIdentityConfirmation,
+  REVIEWED_GT_AUGUST_BATCH_FINGERPRINT,
+  REVIEWED_GT_AUGUST_BATCH_KEY,
 } from "../lib/reviewed-delivery-import-policy";
 import {
   normalizePowertrain,
@@ -47,13 +49,12 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
 });
-const BATCH_KEY = "gt-automotive-august-2026-reviewed";
+const BATCH_KEY = REVIEWED_GT_AUGUST_BATCH_KEY;
 const EXPECTED_VIN_SET_DIGEST =
   "ce4a4dce84bbb62b52ea9f9aebe43171b3f11f2fef355a3aaa526c487b4a2e62";
 // SHA-256 of the approved worksheet bytes. It contains no source data, and
 // prevents a different ten-row sheet from masquerading as this named batch.
-const EXPECTED_SOURCE_DIGEST =
-  "b89d087d5f91ac6fc97b10f230a32286ece974d552684d564ea9200bdc203a0f";
+const EXPECTED_SOURCE_DIGEST = REVIEWED_GT_AUGUST_BATCH_FINGERPRINT;
 const reviewInput = z.object({
   dealershipId: z.number().int().positive(),
   modelYear: z.number().int().min(1886).max(2100),

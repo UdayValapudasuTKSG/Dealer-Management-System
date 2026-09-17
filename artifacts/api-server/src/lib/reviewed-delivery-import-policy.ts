@@ -1,5 +1,69 @@
 import { normalizePowertrain } from "./vehicle-compat";
 
+/**
+ * This is the only reviewed history batch that may later be acknowledged as
+ * settled and handed over outside AURA. Keep this allowlist deliberately
+ * source-row scoped: the batch digest alone must not make an arbitrary VIN
+ * eligible for the exception.
+ */
+export const REVIEWED_GT_AUGUST_BATCH_KEY =
+  "gt-automotive-august-2026-reviewed";
+export const REVIEWED_GT_AUGUST_BATCH_FINGERPRINT =
+  "b89d087d5f91ac6fc97b10f230a32286ece974d552684d564ea9200bdc203a0f";
+export const REVIEWED_GT_AUGUST_APPROVED_ROWS: Readonly<
+  Record<number, string>
+> = Object.freeze({
+  2: "LC0CE4CB7V4016852",
+  3: "LC0CE4CB5V4016851",
+  4: "LC0CE4CB1V4016863",
+  5: "LC0CE4CB7V4016883",
+  6: "LC0CE4CB9V4016867",
+  7: "LC0CE4CB0V4016885",
+  8: "LC0CE4CB1V4016846",
+  9: "LC0CE4CB5V4016879",
+  10: "LC0CE4CB2V4016869",
+  11: "LC0CE4CB7V4016866",
+});
+
+function normalizedReviewedVin(value: string | null | undefined): string {
+  return (value ?? "").trim().toUpperCase();
+}
+
+/**
+ * Pure, fail-closed policy for the explicitly approved historical settlement
+ * exception. This does not claim payment evidence or manufacture a handover
+ * time; it only recognizes the user's reviewed batch facts.
+ */
+export function isApprovedHistoricalSettlement(input: {
+  dealerId: number;
+  vin: string | null | undefined;
+  importMetadata: unknown;
+}): boolean {
+  if (input.dealerId !== 1 || !input.vin) return false;
+  if (
+    !input.importMetadata ||
+    typeof input.importMetadata !== "object" ||
+    Array.isArray(input.importMetadata)
+  )
+    return false;
+  const metadata = input.importMetadata as Record<string, unknown>;
+  const sourceRow = metadata.sourceRow;
+  const vin = normalizedReviewedVin(input.vin);
+  return (
+    metadata.kind === "reviewed_delivery_history" &&
+    metadata.batchKey === REVIEWED_GT_AUGUST_BATCH_KEY &&
+    metadata.batchFingerprint === REVIEWED_GT_AUGUST_BATCH_FINGERPRINT &&
+    metadata.sourceStatus === "Delivered" &&
+    metadata.suppressCustomerCommunications === true &&
+    metadata.paymentState === "UNRECORDED" &&
+    Number.isSafeInteger(sourceRow) &&
+    REVIEWED_GT_AUGUST_APPROVED_ROWS[sourceRow as number] === vin &&
+    normalizedReviewedVin(
+      typeof metadata.sourceVin === "string" ? metadata.sourceVin : null,
+    ) === vin
+  );
+}
+
 export function parseReviewedCandidateLeadId(value: string | undefined): number | null {
   const text = (value ?? "").trim();
   if (!text) return null;

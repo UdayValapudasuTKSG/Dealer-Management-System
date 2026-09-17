@@ -88,6 +88,7 @@ import {
   zonedParts,
   zonedTimeToUtc,
 } from "../lib/timezone";
+import { isApprovedHistoricalSettlement } from "../lib/reviewed-delivery-import-policy";
 
 const router: IRouter = Router();
 
@@ -114,6 +115,9 @@ export function addBusinessDays(from: Date, days: number, tz: string): Date {
 
 const money = (n: number) =>
   `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
+const HISTORICAL_SETTLEMENT_AUDIT_NOTE =
+  "Historical settlement and handover acknowledged as completed outside AURA; payment evidence and actual handover timestamp remain unrecorded.";
 
 async function leadIdForDelivery(
   delivery: Pick<Delivery, "dealId" | "dealerId">,
@@ -158,7 +162,10 @@ const pdiOk = (i: PdiItem) => i.status === "pass" || i.status === "waived";
  * name are validated at advance time). Powers both the 422 payload and the
  * readiness panel.
  */
-async function computeUnmet(d: Delivery): Promise<string[]> {
+async function computeUnmet(
+  d: Delivery,
+  opts: { historicalSettlementApproved?: boolean } = {},
+): Promise<string[]> {
   if (d.status === "completed") return [];
   const unmet: string[] = [];
   switch (d.currentStep as DeliveryStep) {
@@ -197,8 +204,11 @@ async function computeUnmet(d: Delivery): Promise<string[]> {
         );
       break;
     case "delivery": {
-      if (!d.deliveredAt)
+      if (!opts.historicalSettlementApproved && !d.deliveredAt)
         unmet.push("Actual handover date/time must be recorded");
+      // This approved exception acknowledges facts settled outside AURA. It
+      // must not be converted into a local receipt, payment, or handover time.
+      if (opts.historicalSettlementApproved) break;
       // Settlement guard: the vehicle never leaves with money outstanding.
       // The final invoice already nets reservation credit, trade-in and
       // financed amounts, so "paid" here means the customer balance is zero.
@@ -383,8 +393,19 @@ async function enrich(rows: Delivery[], dealerId: number): Promise<Enriched[]> {
       const a = advisors.find((x) => x.id === r.advisorUserId);
       const v = vehicles.find((x) => x.id === r.vehicleId);
       const deal = deals.find((x) => x.id === r.dealId);
+      const historicalSettlementApproved = isApprovedHistoricalSettlement({
+        dealerId: r.dealerId,
+        vin: v?.vin,
+        importMetadata: r.importMetadata,
+      });
       return {
         ...r,
+        importMetadata: r.importMetadata
+          ? {
+              ...r.importMetadata,
+              historicalSettlementConfirmed: historicalSettlementApproved,
+            }
+          : null,
         advisorName: a ? (a.name ?? a.email ?? `User #${a.id}`) : null,
         salesAdvisorUserId: deal?.salesAdvisorUserId ?? null,
         salesAdvisorName: deal?.salesAdvisor ?? null,
@@ -392,7 +413,9 @@ async function enrich(rows: Delivery[], dealerId: number): Promise<Enriched[]> {
           ? `${v.year} ${v.make} ${v.model}${v.vin ? ` · ${v.vin}` : ""}`
           : null,
         vin: v?.vin ?? null,
-        unmet: await computeUnmet(r),
+        unmet: await computeUnmet(r, {
+          historicalSettlementApproved,
+        }),
         registrationStuck: isRegistrationStuck(r),
         handoverVerification: await handoverVerificationFor(r),
       };
@@ -765,7 +788,42 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     return;
   }
 
+  const [deliveryVehicle] = await db
+    .select({ vin: vehiclesTable.vin })
+    .from(vehiclesTable)
+    .where(
+      and(
+        eq(vehiclesTable.id, delivery.vehicleId),
+        eq(vehiclesTable.dealerId, delivery.dealerId),
+      ),
+    )
+    .limit(1);
+  // Record-level recognition stays true through signature, warranty,
+  // feedback, and skipped-step finalization. The separate acknowledgement
+  // flag below is intentionally limited to completing the delivery step.
+  const historicalSettlementRecord = isApprovedHistoricalSettlement({
+    dealerId: delivery.dealerId,
+    vin: deliveryVehicle?.vin,
+    importMetadata: delivery.importMetadata,
+  });
+  const historicalSettlementApproved =
+    step === "delivery" && historicalSettlementRecord;
+
   const extra: Partial<Delivery> = {};
+  if (historicalSettlementApproved && parsed.data.skip !== true) {
+    // This is derived from the server-side allowlist above; clients cannot
+    // assert the exception by posting import metadata.
+    extra.importMetadata = {
+      ...(delivery.importMetadata ?? {}),
+      historicalSettlementConfirmed: true,
+      historicalSettlement: {
+        status: "confirmed_outside_aura",
+        paymentState: "UNRECORDED",
+        handoverStatus: "confirmed_outside_aura",
+        handoverAt: null,
+      },
+    };
+  }
 
   // Body-supplied values land on the row BEFORE gating so the unmet list is
   // evaluated against what the advisor just provided.
@@ -774,7 +832,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     extra.registrationNumber = parsed.data.registrationNumber;
     gated.registrationNumber = parsed.data.registrationNumber;
   }
-  if (parsed.data.deliveredAt) {
+  if (parsed.data.deliveredAt && !historicalSettlementRecord) {
     extra.deliveredAt = new Date(parsed.data.deliveredAt);
     gated.deliveredAt = extra.deliveredAt;
   }
@@ -792,10 +850,14 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
   // Steps are OPTIONAL: `skip: true` bypasses the readiness gates and marks
   // the step skipped so the workflow can move on without it.
   const skipping = parsed.data.skip === true;
+  const historicalSettlementAcknowledged =
+    historicalSettlementApproved && !skipping;
 
   // L7/L8 readiness gates — a single 422 shape { error, unmet[] }.
   if (!skipping || step === "delivery") {
-    const unmet = await computeUnmet(gated);
+    const unmet = await computeUnmet(gated, {
+      historicalSettlementApproved: historicalSettlementAcknowledged,
+    });
     if (step === "signature" && !parsed.data.signatureName) {
       unmet.push("Customer signature name is required");
     }
@@ -932,12 +994,17 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
   const actor =
     res.locals.user?.name ?? res.locals.user?.email ?? "Delivery desk";
   const now = new Date().toISOString();
+  const auditNote = historicalSettlementAcknowledged
+    ? [parsed.data.note, HISTORICAL_SETTLEMENT_AUDIT_NOTE]
+        .filter(Boolean)
+        .join(" — ")
+    : parsed.data.note;
   const steps: DeliveryStepState[] = delivery.steps.map((s) =>
     s.key === step
       ? {
           ...s,
           status: skipping ? "skipped" : "completed",
-          note: parsed.data.note ?? s.note ?? null,
+          note: auditNote ?? s.note ?? null,
           completedAt: now,
           completedBy: actor,
         }
@@ -975,7 +1042,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       domain: "delivery",
       kind: `delivery_${step}`,
       title: `${DELIVERY_STEP_LABELS[step]} completed`,
-      detail: parsed.data.note ?? null,
+      detail: auditNote ?? null,
       actor,
       isAgent: false,
       cause: `Delivery #${delivery.id} — deal #${delivery.dealId}`,
@@ -1180,10 +1247,14 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
           ),
         )
         .returning();
-      if (after) onDealStageChanged(before, after);
+      if (after && !historicalSettlementRecord)
+        onDealStageChanged(before, after);
     }
     // Handover celebration email (deduped per delivery).
-    if (!suppressesCustomerCommunications(delivery)) {
+    if (
+      !historicalSettlementRecord &&
+      !suppressesCustomerCommunications(delivery)
+    ) {
       onDeliveryCompleted({
         dealerId: delivery.dealerId,
         deliveryId: delivery.id,
@@ -1195,7 +1266,15 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     }
     // Lifetime Asset: the delivered vehicle joins the account's garage and is
     // handed off to a Service Advisor for the ownership phase.
-    if (delivery.customerId) {
+    // Historical imports have no truthful local handover timestamp, while the
+    // asset schema requires one. Do not manufacture a date just to create a
+    // lifetime asset; the outside-AURA acknowledgement remains in provenance
+    // and the step/timeline audit below.
+    if (
+      delivery.customerId &&
+      delivery.deliveredAt &&
+      !historicalSettlementRecord
+    ) {
       try {
         // Idempotent on the delivery itself: a retried completion can never
         // mint a second asset row for the same delivery.
@@ -1278,7 +1357,9 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
               vehicleId: delivery.vehicleId,
               dealId: delivery.dealId,
               deliveryId: delivery.id,
-              deliveredAt: delivery.deliveredAt ?? new Date(),
+              // The surrounding branch excludes historical records, whose
+              // outside-AURA handover date is intentionally unknown.
+              deliveredAt: delivery.deliveredAt!,
               serviceAdvisorUserId: serviceAdvisor?.id ?? null,
               status: "active",
             })
@@ -1345,7 +1426,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
             // 5 business days of delivery (dealership business calendar).
             const tz = await dealerTimezone(delivery.dealerId);
             const introDue = addBusinessDays(
-              delivery.deliveredAt ?? new Date(),
+              delivery.deliveredAt!,
               5,
               tz,
             );
@@ -1369,8 +1450,12 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
 
     // R6.2 #16 Feedback survey → customer (WhatsApp + Email), keyed on the
     // delivery (replaces the old single-channel feedback_request email).
-    if (!suppressesCustomerCommunications(delivery)) void (async () => {
-      const [customer] = delivery.customerId
+    if (
+      !historicalSettlementRecord &&
+      !suppressesCustomerCommunications(delivery)
+    )
+      void (async () => {
+        const [customer] = delivery.customerId
         ? await db
             .select({
               name: customersTable.name,
@@ -1385,18 +1470,18 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
               ),
             )
         : [];
-      notifyFeedbackSurvey({
-        dealerId: delivery.dealerId,
-        entityType: "delivery",
-        entityId: delivery.id,
-        leadId: before?.leadId ?? null,
-        customerId: delivery.customerId,
-        customerName: customer?.name ?? delivery.customerName ?? "Customer",
-        customerEmail: customer?.email ?? null,
-        customerPhone: customer?.phone ?? null,
-        vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
-      });
-    })().catch((err) => logger.error({ err }, "feedback survey notify failed"));
+        notifyFeedbackSurvey({
+          dealerId: delivery.dealerId,
+          entityType: "delivery",
+          entityId: delivery.id,
+          leadId: before?.leadId ?? null,
+          customerId: delivery.customerId,
+          customerName: customer?.name ?? delivery.customerName ?? "Customer",
+          customerEmail: customer?.email ?? null,
+          customerPhone: customer?.phone ?? null,
+          vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
+        });
+      })().catch((err) => logger.error({ err }, "feedback survey notify failed"));
   }
 
   res.json(AdvanceDeliveryResponse.parse((await enrich([updated!], activeDealerId(res)))[0]));

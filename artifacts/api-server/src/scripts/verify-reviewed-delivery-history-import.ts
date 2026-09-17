@@ -40,8 +40,41 @@ for (const required of [
   "if (!skipping || step === \"delivery\")",
   "A final settlement invoice is required before handover",
   "Imported settlement requires ledger-backed payment",
+  "isApprovedHistoricalSettlement",
+  "const historicalSettlementRecord = isApprovedHistoricalSettlement",
+  'step === "delivery" && historicalSettlementRecord',
+  "historicalSettlementConfirmed: true",
+  'paymentState: "UNRECORDED"',
+  "handoverAt: null",
+  "if (parsed.data.deliveredAt && !historicalSettlementRecord)",
+  "HISTORICAL_SETTLEMENT_AUDIT_NOTE",
+  "historicalSettlementAcknowledged",
+  "deliveredAt: delivery.deliveredAt!",
 ]) {
   if (!deliveries.includes(required)) throw new Error(`Handover gate regression: missing ${required}.`);
+}
+const finalizationStart = deliveries.indexOf("// Handover side effects on the final step.");
+if (finalizationStart < 0)
+  throw new Error("Handover gate regression: finalization block is missing.");
+if (deliveries.indexOf("const historicalSettlementRecord") > finalizationStart)
+  throw new Error("Historical finalization regression: record predicate is not available to finalization.");
+const finalization = deliveries.slice(finalizationStart);
+if (!finalization.includes("historicalSettlementRecord"))
+  throw new Error("Historical finalization regression: record-level guard is missing.");
+if (finalization.includes("historicalSettlementAcknowledged"))
+  throw new Error("Historical finalization regression: step-level acknowledgement leaked into finalization.");
+for (const terminalStep of ["signature", "warranty", "feedback"]) {
+  if (!deliveries.includes(`case "${terminalStep}"`))
+    throw new Error(`Historical finalization regression: ${terminalStep} path is missing.`);
+}
+if (!deliveries.includes('switch (skipping ? ("__skipped__" as DeliveryStep) : step)'))
+  throw new Error("Historical finalization regression: skipped-step path is missing.");
+for (const forbidden of [
+  "deliveredAt: delivery.deliveredAt ?? new Date()",
+  "delivery.deliveredAt ?? new Date()",
+]) {
+  if (deliveries.includes(forbidden))
+    throw new Error(`Historical handover regression: invented date fallback remains (${forbidden}).`);
 }
 for (const required of [
   "deliverySuppressesCustomerCommunications",

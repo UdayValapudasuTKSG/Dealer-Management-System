@@ -601,6 +601,8 @@ function DeliveryDetail({
     (s) => s.key === delivery.currentStep && delivery.status !== "completed",
   );
   const importedSuppressed = isCommunicationSuppressedImport(delivery);
+  const historicalSettlementConfirmed =
+    delivery.importMetadata?.historicalSettlementConfirmed === true;
 
   const handleAdvance = () => {
     if (
@@ -977,6 +979,15 @@ function DeliveryDetail({
           </div>
         );
       case "delivery":
+        if (historicalSettlementConfirmed) {
+          return (
+            <p className="text-sm text-muted-foreground">
+              Payment and handover were completed outside AURA for this reviewed
+              historical import. Confirming this step records the historical
+              handover acknowledgement, not a new payment or handover date.
+            </p>
+          );
+        }
         return (
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1057,7 +1068,9 @@ function DeliveryDetail({
           </p>
           {importedSuppressed && (
             <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800">
-              Reviewed import: source status is retained as provenance only. This is a pending workflow; payment is unrecorded, customer communications are permanently suppressed for this delivery, and final handover remains subject to the normal paid-in-full invoice gate.
+              {historicalSettlementConfirmed
+                ? "Historical delivery: payment and handover were completed outside AURA. This approved import does not require a new payment receipt or handover timestamp. Customer communications remain permanently suppressed."
+                : "Reviewed import: source status is retained as provenance only. This is a pending workflow; payment is unrecorded, customer communications are permanently suppressed for this delivery, and final handover remains subject to the normal paid-in-full invoice gate."}
             </div>
           )}
 
@@ -1571,6 +1584,8 @@ function DeliveryDetail({
                 )}
                 {pdiPending
                   ? "Complete the PDI checklist first"
+                  : historicalSettlementConfirmed && current.key === "delivery"
+                  ? "Acknowledge historical handover"
                   : `Mark "${current.label}" complete`}
               </button>
               <button
@@ -1589,7 +1604,9 @@ function DeliveryDetail({
               <div>
                 <p className="font-semibold">Handover complete</p>
                 <p className="text-sm text-muted-foreground">
-                  Delivered {fmtDate(delivery.completedAt)}
+                  {historicalSettlementConfirmed
+                    ? `Historical record completed in AURA ${fmtDate(delivery.completedAt)}`
+                    : `Delivered ${fmtDate(delivery.completedAt)}`}
                   {delivery.feedbackRating
                     ? ` · rated ${delivery.feedbackRating}/5`
                     : ""}

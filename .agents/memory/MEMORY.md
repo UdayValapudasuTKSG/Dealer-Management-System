@@ -74,3 +74,4 @@
 - [Import communication suppression](import-outbox-serialization.md) — conversion and provider hand-off must serialize; cancellation of pending rows alone cannot stop an already-claimed sender.
 - [Workshop cost confirmation](workshop-cost-confirmation.md) — preserve diagnostic preparation; exact-cost consent governs chargeable work, and financial credits must never restore stock twice.
 - [Timesheet history boundaries](timesheet-history-boundaries.md) — historical timer remainder has no verified technician/day; manual corrections remain authoritative over same-job/day capture.
+- [Historical delivery settlement](historical-delivery-settlement.md) — user confirmed the approved ten-vehicle GT history batch was paid and handed over externally; never fabricate local receipts or dates.

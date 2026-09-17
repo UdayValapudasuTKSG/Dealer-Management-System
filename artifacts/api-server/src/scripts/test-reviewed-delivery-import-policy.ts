@@ -3,14 +3,119 @@ import {
   canCreateCommittedDealForVehicle,
   hasUnsafeReusableFinance,
   identityImportPlan,
+  isApprovedHistoricalSettlement,
   isExplicitLeadOutboxSuppressed,
   isReusableCommittedDeal,
   legacyReviewedOutboxDisposition,
   matchesReviewedVehicle,
   parseReviewedCandidateLeadId,
+  REVIEWED_GT_AUGUST_APPROVED_ROWS,
   requiresApplyIdentityConfirmation,
   suppressesReviewedImportedLead,
 } from "../lib/reviewed-delivery-import-policy";
+
+const approvedHistoricalMetadata = {
+  kind: "reviewed_delivery_history",
+  batchKey: "gt-automotive-august-2026-reviewed",
+  batchFingerprint: "b89d087d5f91ac6fc97b10f230a32286ece974d552684d564ea9200bdc203a0f",
+  sourceStatus: "Delivered",
+  sourceRow: 8,
+  sourceVin: "LC0CE4CB1V4016846",
+  paymentState: "UNRECORDED",
+  suppressCustomerCommunications: true,
+};
+assert.equal(
+  isApprovedHistoricalSettlement({
+    dealerId: 1,
+    vin: "LC0CE4CB1V4016846",
+    importMetadata: approvedHistoricalMetadata,
+  }),
+  true,
+  "the exact approved GT row/VIN is eligible",
+);
+for (const [sourceRow, vin] of Object.entries(REVIEWED_GT_AUGUST_APPROVED_ROWS)) {
+  assert.equal(
+    isApprovedHistoricalSettlement({
+      dealerId: 1,
+      vin,
+      importMetadata: {
+        ...approvedHistoricalMetadata,
+        sourceRow: Number(sourceRow),
+        sourceVin: vin,
+      },
+    }),
+    true,
+    `approved source row ${sourceRow} and VIN are eligible`,
+  );
+}
+for (const impostor of [
+  { dealerId: 2, vin: "LC0CE4CB1V4016846", importMetadata: approvedHistoricalMetadata },
+  { dealerId: 1, vin: "LC0CE4CB1V4016846", importMetadata: { ...approvedHistoricalMetadata, batchKey: "other" } },
+  { dealerId: 1, vin: "LC0CE4CB1V4016846", importMetadata: { ...approvedHistoricalMetadata, batchFingerprint: "other" } },
+  { dealerId: 1, vin: "LC0CE4CB1V4016846", importMetadata: { ...approvedHistoricalMetadata, sourceStatus: "Pending" } },
+  { dealerId: 1, vin: "LC0CE4CB1V4016846", importMetadata: { ...approvedHistoricalMetadata, suppressCustomerCommunications: false } },
+  { dealerId: 1, vin: "LC0CE4CB1V4016851", importMetadata: approvedHistoricalMetadata },
+  { dealerId: 1, vin: "LC0CE4CB1V4016846", importMetadata: { ...approvedHistoricalMetadata, sourceRow: 3 } },
+  { dealerId: 1, vin: "LC0CE4CB1V4016846", importMetadata: { ...approvedHistoricalMetadata, sourceVin: "other" } },
+]) {
+  assert.equal(
+    isApprovedHistoricalSettlement(impostor),
+    false,
+    "historical settlement exception fails closed for impostors",
+  );
+}
+assert.equal(
+  isApprovedHistoricalSettlement({
+    dealerId: 1,
+    vin: "LC0CE4CB1V4016846",
+    importMetadata: {
+      ...approvedHistoricalMetadata,
+      historicalSettlementConfirmed: true,
+      historicalSettlement: {
+        status: "confirmed_outside_aura",
+        paymentState: "UNRECORDED",
+        handoverAt: null,
+      },
+    },
+  }),
+  true,
+  "server acknowledgement metadata does not weaken the original allowlist",
+);
+const ordinaryPendingMetadata = {
+  kind: "reviewed_delivery_history",
+  batchKey: "gt-automotive-august-2026-reviewed",
+  batchFingerprint: "b89d087d5f91ac6fc97b10f230a32286ece974d552684d564ea9200bdc203a0f",
+  sourceStatus: "Pending",
+  sourceRow: 2,
+  sourceVin: "LC0CE4CB7V4016852",
+  paymentState: "UNRECORDED",
+  suppressCustomerCommunications: true,
+  targetWorkflowStatus: "in_progress",
+};
+const ordinaryBefore = JSON.stringify(ordinaryPendingMetadata);
+assert.equal(
+  isApprovedHistoricalSettlement({
+    dealerId: 1,
+    vin: "LC0CE4CB7V4016852",
+    importMetadata: ordinaryPendingMetadata,
+  }),
+  false,
+  "ordinary pending imports retain normal settlement gates",
+);
+assert.equal(
+  JSON.stringify(ordinaryPendingMetadata),
+  ordinaryBefore,
+  "policy rejection does not invent a payment or handover date",
+);
+assert.equal(
+  isApprovedHistoricalSettlement({
+    dealerId: 1,
+    vin: "LC0CE4CB7V4016852",
+    importMetadata: { ...ordinaryPendingMetadata, batchFingerprint: "different" },
+  }),
+  false,
+  "re-fingerprinted pending imports retain normal settlement gates",
+);
 
 // Empty CSV cells mean no declared match, never the numeric candidate zero.
 for (const value of [undefined, "", " ", "\t", "0", "-1", "1.5", "invalid"]) {
