@@ -62,6 +62,7 @@ import {
   serviceEstimateDecisionsTable,
   vehicleOnboardingRequestsTable,
   vehicleOnboardingMediaTable,
+  webhookEventsTable,
   type JobCard,
   type JobWaitingReason,
   type ServiceInvoice,
@@ -2087,6 +2088,17 @@ router.delete("/service-orders/:id", async (req, res): Promise<void> => {
         and(
           eq(jobCardsTable.dealerId, dealerId),
           eq(jobCardsTable.serviceOrderId, order.id),
+        ),
+      );
+    // Keep the Message-ID ledger: deleting it would let the same email
+    // recreate the booking. Detach only the optional booking reference.
+    await tx
+      .update(webhookEventsTable)
+      .set({ serviceOrderId: null })
+      .where(
+        and(
+          eq(webhookEventsTable.dealerId, dealerId),
+          eq(webhookEventsTable.serviceOrderId, order.id),
         ),
       );
     await tx

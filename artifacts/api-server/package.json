@@ -32,6 +32,7 @@
     "test:job-card-estimate-contract": "tsx src/scripts/test-job-card-estimate-contract.ts",
     "test:service-labour-pricing": "tsx src/scripts/test-service-labour-pricing.ts",
     "verify:workshop-carryover": "VERIFY_WORKSHOP_CARRYOVER_DB=1 NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-workshop-carryover-customer-approval.ts",
+    "verify:service-order-delete": "NODE_ENV=development tsx src/scripts/verify-service-order-delete.ts",
     "test:service-booking-contract": "tsx src/scripts/test-service-booking-contract.ts",
     "test:service-appointment-whatsapp": "tsx src/scripts/test-service-appointment-whatsapp.ts",
     "diagnose:whatsapp-template": "NODE_ENV=production tsx src/scripts/diagnose-whatsapp-template.ts",
