@@ -5618,9 +5618,39 @@ export type TechnicianTimesheetEntrySource = typeof TechnicianTimesheetEntrySour
 
 export const TechnicianTimesheetEntrySource = {
   manual: 'manual',
+  automatic: 'automatic',
 } as const;
 
+/**
+ * Present when a pre-existing manual job/day entry visibly supersedes automatic work.
+ * @nullable
+ */
+export type AutomaticTimesheetSourceMetadataExclusionReason = typeof AutomaticTimesheetSourceMetadataExclusionReason[keyof typeof AutomaticTimesheetSourceMetadataExclusionReason] | null;
+
+
+export const AutomaticTimesheetSourceMetadataExclusionReason = {
+  manual_job_day_supersedes_automatic: 'manual_job_day_supersedes_automatic',
+} as const;
+
+export interface AutomaticTimesheetSourceMetadata {
+  /** Immutable timer-ledger segment id */
+  timerSegmentId: number;
+  /**
+     * Technician name captured when the segment began
+     * @nullable
+     */
+  technicianNameSnapshot: string | null;
+  /** Whether this automatic slice contributes to actuals */
+  counted: boolean;
+  /**
+     * Present when a pre-existing manual job/day entry visibly supersedes automatic work.
+     * @nullable
+     */
+  exclusionReason?: AutomaticTimesheetSourceMetadataExclusionReason;
+}
+
 export interface TechnicianTimesheetEntry {
+  /** Positive manual-entry id; negative virtual id for a read-only automatic ledger slice. */
   id: number;
   technicianUserId: number;
   /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
@@ -5632,13 +5662,30 @@ export interface TechnicianTimesheetEntry {
   /** @nullable */
   customerName?: string | null;
   /**
+     * Rounded display duration; automatic entries can exceed 1,440 minutes on a daylight-saving fall-back day.
      * @minimum 1
-     * @maximum 1440
      */
   durationMinutes: number;
+  /**
+     * Exact elapsed seconds for automatic work; null for manually rounded entries.
+     * @minimum 1
+     * @nullable
+     */
+  durationSeconds?: number | null;
+  /**
+     * Exact automatic segment start, or null for a manual entry.
+     * @nullable
+     */
+  startAt?: string | null;
+  /**
+     * Exact automatic segment end after clipping active work at request time, or null for a manual entry.
+     * @nullable
+     */
+  endAt?: string | null;
   /** @nullable */
   note?: string | null;
   source: TechnicianTimesheetEntrySource;
+  sourceMetadata?: null | AutomaticTimesheetSourceMetadata;
   createdAt: string;
   updatedAt: string;
 }
@@ -5711,6 +5758,13 @@ export const DailyTechnicianTimesheetRowAvailabilitySource = {
   override: 'override',
 } as const;
 
+export type DailyTechnicianTimesheetRowLegacyTimerScope = typeof DailyTechnicianTimesheetRowLegacyTimerScope[keyof typeof DailyTechnicianTimesheetRowLegacyTimerScope];
+
+
+export const DailyTechnicianTimesheetRowLegacyTimerScope = {
+  dealer_summary_only: 'dealer_summary_only',
+} as const;
+
 export interface DailyTechnicianTimesheetRow {
   technicianUserId: number;
   technicianName: string;
@@ -5720,17 +5774,29 @@ export interface DailyTechnicianTimesheetRow {
   approvedSoldHours: number;
   invoicedSoldHours: number;
   invoicedHoursKnown: boolean;
+  /** Manual actual hours counted for this dealer day */
+  manualActualHours: number;
+  /** Timer-ledger automatic actual hours counted for this dealer day */
+  automaticActualHours: number;
+  /** Manual plus automatic actual hours counted for this dealer day */
+  capturedActualHours: number;
+  /** Backward-compatible alias of capturedActualHours */
   loggedActualHours: number;
-  /** Cumulative timer total; not a daily actual */
+  /** All-time timer-ledger elapsed hours with a captured technician/session identity */
+  capturedTimerHours: number;
+  /** Always 0 per technician: cumulative timers cannot be verified against a current technician after reassignment. */
   existingTimerHours: number;
+  /** Always 0 per technician: residuals have no verified historical technician/day and appear only in the dealer summary. */
+  unallocatedTimerHours: number;
+  legacyTimerScope: DailyTechnicianTimesheetRowLegacyTimerScope;
   remainingCapacityHours: number;
   /**
-     * Approved sold hours / manual logged actual hours; null when actual is zero
+     * Approved sold hours / captured actual hours; null when actual is zero
      * @nullable
      */
   efficiencyPct: number | null;
   /**
-     * Invoiced sold hours / manual logged actual hours; null when actual is zero
+     * Invoiced sold hours / captured actual hours; null when actual is zero
      * @nullable
      */
   productivityPct: number | null;
@@ -5739,14 +5805,29 @@ export interface DailyTechnicianTimesheetRow {
   invoicedJobs: TechnicianTimesheetJob[];
 }
 
+export type DailyTechnicianTimesheetSummaryLegacyTimerScope = typeof DailyTechnicianTimesheetSummaryLegacyTimerScope[keyof typeof DailyTechnicianTimesheetSummaryLegacyTimerScope];
+
+
+export const DailyTechnicianTimesheetSummaryLegacyTimerScope = {
+  dealer: 'dealer',
+} as const;
+
 export interface DailyTechnicianTimesheetSummary {
   availableHours: number;
   bookedHours: number;
   approvedSoldHours: number;
   invoicedSoldHours: number;
   invoicedHoursKnown: boolean;
+  manualActualHours: number;
+  automaticActualHours: number;
+  capturedActualHours: number;
   loggedActualHours: number;
+  capturedTimerHours: number;
+  /** Dealer-wide cumulative timer total across retained job cards, including cancelled cards; not a daily or technician actual. */
   existingTimerHours: number;
+  /** Dealer-wide sum of max(0, job-card cumulative timer minus captured ledger elapsed for that same job card). Deleted-card ledger evidence remains captured-only and never creates a negative residual. */
+  unallocatedTimerHours: number;
+  legacyTimerScope: DailyTechnicianTimesheetSummaryLegacyTimerScope;
   remainingCapacityHours: number;
   /** @nullable */
   efficiencyPct: number | null;

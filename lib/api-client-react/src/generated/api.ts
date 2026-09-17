@@ -11003,7 +11003,7 @@ export const getGetDailyTechnicianTimesheetUrl = (params: GetDailyTechnicianTime
 }
 
 /**
- * Date is a dealer-local YYYY-MM-DD. Logged actual hours are manual daily entries only; cumulative job-card timers are returned separately and are never treated as daily actuals. Approved sold hours use the current estimate version's approvalAt dealer day. Invoiced sold hours use issuedAt dealer day and an immutable invoice labour snapshot; historical invoices without that snapshot are explicitly unknown.
+ * Date is a dealer-local YYYY-MM-DD. Logged actual hours are manual entries plus worked timer-ledger segments. Active segments are clipped at the request time and every segment is split at the dealer timezone captured with that timer transition (preserving historical day cuts). Cumulative job-card timers remain a separate legacy total: only ledger-captured elapsed time is subtracted from it, and the residual is explicitly unallocated rather than assigned to a day or technician. A manual job-card/day entry is rejected when automatic work already exists; automatic work arriving after a legacy manual entry is returned as a visible, excluded row rather than double counted. Approved sold hours use the current estimate version's approvalAt dealer day. Invoiced sold hours use issuedAt dealer day and an immutable invoice labour snapshot; historical invoices without that snapshot are explicitly unknown.
  * @summary Get the dealer-day technician timesheet and efficiency summary
  */
 export const getDailyTechnicianTimesheet = async (params: GetDailyTechnicianTimesheetParams, options?: RequestInit): Promise<DailyTechnicianTimesheet> => {

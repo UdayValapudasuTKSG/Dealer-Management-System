@@ -72,3 +72,4 @@ export * from "./smtpConnections";
 export * from "./feedbackForms";
 export * from "./vehicleOnboarding";
 export * from "./serviceTimesheets";
+export * from "./technicianWorkSegments";

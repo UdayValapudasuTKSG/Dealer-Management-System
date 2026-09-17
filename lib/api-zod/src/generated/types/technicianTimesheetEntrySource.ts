@@ -11,4 +11,5 @@ export type TechnicianTimesheetEntrySource = typeof TechnicianTimesheetEntrySour
 
 export const TechnicianTimesheetEntrySource = {
   manual: 'manual',
+  automatic: 'automatic',
 } as const;

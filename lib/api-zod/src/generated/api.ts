@@ -5861,7 +5861,7 @@ export const ListServiceTechniciansResponse = zod.array(ListServiceTechniciansRe
 
 
 /**
- * Date is a dealer-local YYYY-MM-DD. Logged actual hours are manual daily entries only; cumulative job-card timers are returned separately and are never treated as daily actuals. Approved sold hours use the current estimate version's approvalAt dealer day. Invoiced sold hours use issuedAt dealer day and an immutable invoice labour snapshot; historical invoices without that snapshot are explicitly unknown.
+ * Date is a dealer-local YYYY-MM-DD. Logged actual hours are manual entries plus worked timer-ledger segments. Active segments are clipped at the request time and every segment is split at the dealer timezone captured with that timer transition (preserving historical day cuts). Cumulative job-card timers remain a separate legacy total: only ledger-captured elapsed time is subtracted from it, and the residual is explicitly unallocated rather than assigned to a day or technician. A manual job-card/day entry is rejected when automatic work already exists; automatic work arriving after a legacy manual entry is returned as a visible, excluded row rather than double counted. Approved sold hours use the current estimate version's approvalAt dealer day. Invoiced sold hours use issuedAt dealer day and an immutable invoice labour snapshot; historical invoices without that snapshot are explicitly unknown.
  * @summary Get the dealer-day technician timesheet and efficiency summary
  */
 export const getDailyTechnicianTimesheetQueryDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
@@ -5873,7 +5873,7 @@ export const GetDailyTechnicianTimesheetQueryParams = zod.object({
 })
 
 export const getDailyTechnicianTimesheetResponseRowsItemEntriesItemWorkDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getDailyTechnicianTimesheetResponseRowsItemEntriesItemDurationMinutesMax = 1440;
+
 
 export const getDailyTechnicianTimesheetResponseRowsItemApprovedJobsItemHoursMin = 0;
 
@@ -5890,8 +5890,14 @@ export const GetDailyTechnicianTimesheetResponse = zod.object({
   "approvedSoldHours": zod.number(),
   "invoicedSoldHours": zod.number(),
   "invoicedHoursKnown": zod.boolean(),
+  "manualActualHours": zod.number(),
+  "automaticActualHours": zod.number(),
+  "capturedActualHours": zod.number(),
   "loggedActualHours": zod.number(),
-  "existingTimerHours": zod.number(),
+  "capturedTimerHours": zod.number(),
+  "existingTimerHours": zod.number().describe('Dealer-wide cumulative timer total across retained job cards, including cancelled cards; not a daily or technician actual.'),
+  "unallocatedTimerHours": zod.number().describe('Dealer-wide sum of max(0, job-card cumulative timer minus captured ledger elapsed for that same job card). Deleted-card ledger evidence remains captured-only and never creates a negative residual.'),
+  "legacyTimerScope": zod.enum(['dealer']),
   "remainingCapacityHours": zod.number(),
   "efficiencyPct": zod.number().nullable(),
   "productivityPct": zod.number().nullable()
@@ -5905,21 +5911,36 @@ export const GetDailyTechnicianTimesheetResponse = zod.object({
   "approvedSoldHours": zod.number(),
   "invoicedSoldHours": zod.number(),
   "invoicedHoursKnown": zod.boolean(),
-  "loggedActualHours": zod.number(),
-  "existingTimerHours": zod.number().describe('Cumulative timer total; not a daily actual'),
+  "manualActualHours": zod.number().describe('Manual actual hours counted for this dealer day'),
+  "automaticActualHours": zod.number().describe('Timer-ledger automatic actual hours counted for this dealer day'),
+  "capturedActualHours": zod.number().describe('Manual plus automatic actual hours counted for this dealer day'),
+  "loggedActualHours": zod.number().describe('Backward-compatible alias of capturedActualHours'),
+  "capturedTimerHours": zod.number().describe('All-time timer-ledger elapsed hours with a captured technician\/session identity'),
+  "existingTimerHours": zod.number().describe('Always 0 per technician: cumulative timers cannot be verified against a current technician after reassignment.'),
+  "unallocatedTimerHours": zod.number().describe('Always 0 per technician: residuals have no verified historical technician\/day and appear only in the dealer summary.'),
+  "legacyTimerScope": zod.enum(['dealer_summary_only']),
   "remainingCapacityHours": zod.number(),
-  "efficiencyPct": zod.number().nullable().describe('Approved sold hours \/ manual logged actual hours; null when actual is zero'),
-  "productivityPct": zod.number().nullable().describe('Invoiced sold hours \/ manual logged actual hours; null when actual is zero'),
+  "efficiencyPct": zod.number().nullable().describe('Approved sold hours \/ captured actual hours; null when actual is zero'),
+  "productivityPct": zod.number().nullable().describe('Invoiced sold hours \/ captured actual hours; null when actual is zero'),
   "entries": zod.array(zod.object({
-  "id": zod.number(),
+  "id": zod.number().describe('Positive manual-entry id; negative virtual id for a read-only automatic ledger slice.'),
   "technicianUserId": zod.number(),
   "workDate": zod.string().regex(getDailyTechnicianTimesheetResponseRowsItemEntriesItemWorkDateRegExp),
   "jobCardId": zod.number().nullish(),
   "jobCardTitle": zod.string().nullish(),
   "customerName": zod.string().nullish(),
-  "durationMinutes": zod.number().min(1).max(getDailyTechnicianTimesheetResponseRowsItemEntriesItemDurationMinutesMax),
+  "durationMinutes": zod.number().min(1).describe('Rounded display duration; automatic entries can exceed 1,440 minutes on a daylight-saving fall-back day.'),
+  "durationSeconds": zod.number().min(1).nullish().describe('Exact elapsed seconds for automatic work; null for manually rounded entries.'),
+  "startAt": zod.coerce.date().nullish().describe('Exact automatic segment start, or null for a manual entry.'),
+  "endAt": zod.coerce.date().nullish().describe('Exact automatic segment end after clipping active work at request time, or null for a manual entry.'),
   "note": zod.string().nullish(),
-  "source": zod.enum(['manual']),
+  "source": zod.enum(['manual', 'automatic']),
+  "sourceMetadata": zod.union([zod.null(),zod.object({
+  "timerSegmentId": zod.number().describe('Immutable timer-ledger segment id'),
+  "technicianNameSnapshot": zod.string().nullable().describe('Technician name captured when the segment began'),
+  "counted": zod.boolean().describe('Whether this automatic slice contributes to actuals'),
+  "exclusionReason": zod.union([zod.literal('manual_job_day_supersedes_automatic'),zod.literal(null)]).nullish().describe('Present when a pre-existing manual job\/day entry visibly supersedes automatic work.')
+})]).optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -5960,20 +5981,29 @@ export const CreateTechnicianTimesheetEntryBody = zod.object({
 })
 
 export const createTechnicianTimesheetEntryResponseWorkDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const createTechnicianTimesheetEntryResponseDurationMinutesMax = 1440;
+
 
 
 
 export const CreateTechnicianTimesheetEntryResponse = zod.object({
-  "id": zod.number(),
+  "id": zod.number().describe('Positive manual-entry id; negative virtual id for a read-only automatic ledger slice.'),
   "technicianUserId": zod.number(),
   "workDate": zod.string().regex(createTechnicianTimesheetEntryResponseWorkDateRegExp),
   "jobCardId": zod.number().nullish(),
   "jobCardTitle": zod.string().nullish(),
   "customerName": zod.string().nullish(),
-  "durationMinutes": zod.number().min(1).max(createTechnicianTimesheetEntryResponseDurationMinutesMax),
+  "durationMinutes": zod.number().min(1).describe('Rounded display duration; automatic entries can exceed 1,440 minutes on a daylight-saving fall-back day.'),
+  "durationSeconds": zod.number().min(1).nullish().describe('Exact elapsed seconds for automatic work; null for manually rounded entries.'),
+  "startAt": zod.coerce.date().nullish().describe('Exact automatic segment start, or null for a manual entry.'),
+  "endAt": zod.coerce.date().nullish().describe('Exact automatic segment end after clipping active work at request time, or null for a manual entry.'),
   "note": zod.string().nullish(),
-  "source": zod.enum(['manual']),
+  "source": zod.enum(['manual', 'automatic']),
+  "sourceMetadata": zod.union([zod.null(),zod.object({
+  "timerSegmentId": zod.number().describe('Immutable timer-ledger segment id'),
+  "technicianNameSnapshot": zod.string().nullable().describe('Technician name captured when the segment began'),
+  "counted": zod.boolean().describe('Whether this automatic slice contributes to actuals'),
+  "exclusionReason": zod.union([zod.literal('manual_job_day_supersedes_automatic'),zod.literal(null)]).nullish().describe('Present when a pre-existing manual job\/day entry visibly supersedes automatic work.')
+})]).optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -5998,20 +6028,29 @@ export const UpdateTechnicianTimesheetEntryBody = zod.object({
 })
 
 export const updateTechnicianTimesheetEntryResponseWorkDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const updateTechnicianTimesheetEntryResponseDurationMinutesMax = 1440;
+
 
 
 
 export const UpdateTechnicianTimesheetEntryResponse = zod.object({
-  "id": zod.number(),
+  "id": zod.number().describe('Positive manual-entry id; negative virtual id for a read-only automatic ledger slice.'),
   "technicianUserId": zod.number(),
   "workDate": zod.string().regex(updateTechnicianTimesheetEntryResponseWorkDateRegExp),
   "jobCardId": zod.number().nullish(),
   "jobCardTitle": zod.string().nullish(),
   "customerName": zod.string().nullish(),
-  "durationMinutes": zod.number().min(1).max(updateTechnicianTimesheetEntryResponseDurationMinutesMax),
+  "durationMinutes": zod.number().min(1).describe('Rounded display duration; automatic entries can exceed 1,440 minutes on a daylight-saving fall-back day.'),
+  "durationSeconds": zod.number().min(1).nullish().describe('Exact elapsed seconds for automatic work; null for manually rounded entries.'),
+  "startAt": zod.coerce.date().nullish().describe('Exact automatic segment start, or null for a manual entry.'),
+  "endAt": zod.coerce.date().nullish().describe('Exact automatic segment end after clipping active work at request time, or null for a manual entry.'),
   "note": zod.string().nullish(),
-  "source": zod.enum(['manual']),
+  "source": zod.enum(['manual', 'automatic']),
+  "sourceMetadata": zod.union([zod.null(),zod.object({
+  "timerSegmentId": zod.number().describe('Immutable timer-ledger segment id'),
+  "technicianNameSnapshot": zod.string().nullable().describe('Technician name captured when the segment began'),
+  "counted": zod.boolean().describe('Whether this automatic slice contributes to actuals'),
+  "exclusionReason": zod.union([zod.literal('manual_job_day_supersedes_automatic'),zod.literal(null)]).nullish().describe('Present when a pre-existing manual job\/day entry visibly supersedes automatic work.')
+})]).optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })

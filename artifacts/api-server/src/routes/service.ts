@@ -55,6 +55,7 @@ import {
   externalJobCardPartsTable,
   tasksTable,
   emailLogsTable,
+  technicianTimesheetEntriesTable,
   collisionClaimsTable,
   collisionSettlementsTable,
   collisionSupplementsTable,
@@ -2050,6 +2051,36 @@ router.delete("/service-orders/:id", async (req, res): Promise<void> => {
   }
 
   await db.transaction(async (tx) => {
+    const cards = await tx
+      .select({ id: jobCardsTable.id })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.dealerId, dealerId),
+          eq(jobCardsTable.serviceOrderId, order.id),
+        ),
+      );
+    // The FK below intentionally nulls the live card link. Backstop the
+    // immutable association in this same delete transaction so a manual
+    // correction continues to visibly supersede ledger evidence for a card
+    // deleted through this supported route. Never overwrite an existing
+    // historical value or infer one for an already-unlinked row.
+    if (cards.length > 0) {
+      await tx
+        .update(technicianTimesheetEntriesTable)
+        .set({
+          originalJobCardId: sql`coalesce(${technicianTimesheetEntriesTable.originalJobCardId}, ${technicianTimesheetEntriesTable.jobCardId})`,
+        })
+        .where(
+          and(
+            eq(technicianTimesheetEntriesTable.dealerId, dealerId),
+            inArray(
+              technicianTimesheetEntriesTable.jobCardId,
+              cards.map((card) => card.id),
+            ),
+          ),
+        );
+    }
     await tx
       .delete(jobCardsTable)
       .where(
@@ -2639,11 +2670,17 @@ router.post("/job-cards", async (req, res): Promise<void> => {
       })
       .returning();
   } catch (err) {
+    const pg = err as {
+      code?: string;
+      constraint?: string;
+      cause?: { code?: string; constraint?: string };
+    };
+    const pgCode = pg.code ?? pg.cause?.code;
+    const pgConstraint = pg.constraint ?? pg.cause?.constraint;
     // Partial unique index: one active job card per asset at a time.
     if (
-      err instanceof Error &&
-      "code" in err &&
-      (err as { code?: string }).code === "23505"
+      pgCode === "23505" &&
+      pgConstraint === "job_cards_active_asset_unique"
     ) {
       res.status(409).json({
         error:
@@ -3755,11 +3792,26 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
       ))
       .returning();
   } catch (err) {
+    const pg = err as {
+      code?: string;
+      constraint?: string;
+      cause?: { code?: string; constraint?: string };
+    };
+    const pgCode = pg.code ?? pg.cause?.code;
+    const pgConstraint = pg.constraint ?? pg.cause?.constraint;
+    if (
+      pgCode === "23505" &&
+      pgConstraint === "job_cards_one_running_timer_per_technician"
+    ) {
+      res.status(409).json({
+        error: "This technician already has a running job-card timer. Pause or stop that work before reopening this card.",
+      });
+      return;
+    }
     // Partial unique index: one active job card per asset at a time.
     if (
-      err instanceof Error &&
-      "code" in err &&
-      (err as { code?: string }).code === "23505"
+      pgCode === "23505" &&
+      pgConstraint === "job_cards_active_asset_unique"
     ) {
       res.status(409).json({
         error:

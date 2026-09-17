@@ -32,6 +32,10 @@ export const technicianTimesheetEntriesTable = pgTable(
     jobCardId: integer("job_card_id").references(() => jobCardsTable.id, {
       onDelete: "set null",
     }),
+    // The live relation may be nulled when a service order deletes its cards.
+    // Keep the immutable id separately so a manual correction continues to
+    // supersede captured ledger work for that same historical card.
+    originalJobCardId: integer("original_job_card_id"),
     durationMinutes: integer("duration_minutes").notNull(),
     note: text("note"),
     source: text("source").notNull().default("manual"),
@@ -55,6 +59,12 @@ export const technicianTimesheetEntriesTable = pgTable(
       t.workDate,
       t.technicianUserId,
     ),
+    index("technician_timesheet_original_job_day_idx").on(
+      t.dealerId,
+      t.technicianUserId,
+      t.workDate,
+      t.originalJobCardId,
+    ),
   ],
 );
 
@@ -68,6 +78,7 @@ export const insertTechnicianTimesheetEntrySchema = createInsertSchema(
 ).omit({
   id: true,
   dealerId: true,
+  originalJobCardId: true,
   createdAt: true,
   updatedAt: true,
 });

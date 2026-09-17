@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DailyTechnicianTimesheetRowAvailabilitySource } from './dailyTechnicianTimesheetRowAvailabilitySource';
+import type { DailyTechnicianTimesheetRowLegacyTimerScope } from './dailyTechnicianTimesheetRowLegacyTimerScope';
 import type { TechnicianTimesheetEntry } from './technicianTimesheetEntry';
 import type { TechnicianTimesheetJob } from './technicianTimesheetJob';
 
@@ -18,17 +19,29 @@ export interface DailyTechnicianTimesheetRow {
   approvedSoldHours: number;
   invoicedSoldHours: number;
   invoicedHoursKnown: boolean;
+  /** Manual actual hours counted for this dealer day */
+  manualActualHours: number;
+  /** Timer-ledger automatic actual hours counted for this dealer day */
+  automaticActualHours: number;
+  /** Manual plus automatic actual hours counted for this dealer day */
+  capturedActualHours: number;
+  /** Backward-compatible alias of capturedActualHours */
   loggedActualHours: number;
-  /** Cumulative timer total; not a daily actual */
+  /** All-time timer-ledger elapsed hours with a captured technician/session identity */
+  capturedTimerHours: number;
+  /** Always 0 per technician: cumulative timers cannot be verified against a current technician after reassignment. */
   existingTimerHours: number;
+  /** Always 0 per technician: residuals have no verified historical technician/day and appear only in the dealer summary. */
+  unallocatedTimerHours: number;
+  legacyTimerScope: DailyTechnicianTimesheetRowLegacyTimerScope;
   remainingCapacityHours: number;
   /**
-     * Approved sold hours / manual logged actual hours; null when actual is zero
+     * Approved sold hours / captured actual hours; null when actual is zero
      * @nullable
      */
   efficiencyPct: number | null;
   /**
-     * Invoiced sold hours / manual logged actual hours; null when actual is zero
+     * Invoiced sold hours / captured actual hours; null when actual is zero
      * @nullable
      */
   productivityPct: number | null;

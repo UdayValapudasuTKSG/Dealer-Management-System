@@ -14,7 +14,16 @@ import {
   type TechnicianTimesheetEntry,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Clock3, Edit3, Loader2, Plus, Trash2, Wrench } from "lucide-react";
+import {
+  CalendarDays,
+  Clock3,
+  Edit3,
+  Loader2,
+  LockKeyhole,
+  Plus,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -63,6 +72,32 @@ function errorMessage(error: unknown, fallback: string): string {
   );
 }
 
+type AutomaticTimerEntry = Omit<TechnicianTimesheetEntry, "source"> & {
+  source: "automatic";
+};
+
+function automaticEntries(row: DailyTechnicianTimesheetRow): AutomaticTimerEntry[] {
+  return row.entries.filter(
+    (entry): entry is AutomaticTimerEntry => entry.source === "automatic",
+  );
+}
+
+function manualEntries(row: DailyTechnicianTimesheetRow): TechnicianTimesheetEntry[] {
+  return row.entries.filter((entry) => entry.source === "manual");
+}
+
+function formatSegmentTime(value: string | null | undefined, timezone?: string): string | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : parsed.toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+        ...(timezone ? { timeZone: timezone } : {}),
+      });
+}
+
 export function TechnicianTimesheetsTab() {
   const { me } = useAuthz();
   const { toast } = useToast();
@@ -76,8 +111,16 @@ export function TechnicianTimesheetsTab() {
     entry?: TechnicianTimesheetEntry;
   } | null>(null);
   const [availabilityTech, setAvailabilityTech] = useState<number | null>(null);
-
-  const timesheet = useGetDailyTechnicianTimesheet({ date });
+  const timesheet = useGetDailyTechnicianTimesheet(
+    { date },
+    {
+      query: {
+        queryKey: getGetDailyTechnicianTimesheetQueryKey({ date }),
+        refetchInterval: 30_000,
+        refetchIntervalInBackground: false,
+      },
+    },
+  );
   const jobCards = useListJobCards({});
   const technicians = useListServiceTechnicians();
   const createEntry = useCreateTechnicianTimesheetEntry();
@@ -163,8 +206,8 @@ export function TechnicianTimesheetsTab() {
         <div>
           <h2 className="text-lg font-semibold">Daily technician timesheet</h2>
           <p className="text-xs text-muted-foreground">
-            Dealer day in {timesheet.data?.timezone ?? "the dealership timezone"} · manual
-            actuals only
+            Dealer day in {timesheet.data?.timezone ?? "the dealership timezone"} · automatic
+            timer work plus manual actuals
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -191,8 +234,17 @@ export function TechnicianTimesheetsTab() {
         <strong className="text-foreground">How this is measured:</strong> approved sold
         hours come from the current estimate version approved on this dealer day. Invoiced
         sold hours come from the immutable labour snapshot on invoices issued on this dealer
-        day. Efficiency = approved sold ÷ manual logged actual; productivity = invoiced sold
-        ÷ manual logged actual. A zero actual denominator shows “—”, never a misleading 0%.
+        day. Efficiency = approved sold ÷ total worked; productivity = invoiced sold ÷ total
+        worked. Automatic timer segments are split in the dealership timezone and are
+        read-only. Manual entries are for non-timer work or corrections only—do not re-enter
+        timer work, because it must not be counted twice. A zero worked denominator shows “—”,
+        never a misleading 0%.
+      </div>
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-muted-foreground">
+        <strong className="text-foreground">Historical timer totals:</strong> legacy job-card
+        timer data cannot be attributed to the current technician or a historical dealer day.
+        It is shown separately in the dealership summary, not assigned to individual
+        technicians or dates. Only captured timer segments and manual entries count as daily actuals.
       </div>
 
       {timesheet.isLoading ? (
@@ -206,23 +258,35 @@ export function TechnicianTimesheetsTab() {
       ) : (
         <>
           {summary && (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-              <Metric label="Available" value={hours(summary.availableHours)} />
-              <Metric label="Booked" value={hours(summary.bookedHours)} />
-              <Metric label="Approved sold" value={hours(summary.approvedSoldHours)} />
-              <Metric
-                label="Invoiced sold"
-                value={`${hours(summary.invoicedSoldHours)}${summary.invoicedHoursKnown ? "" : " *"}`}
-              />
-              <Metric label="Logged actual" value={hours(summary.loggedActualHours)} />
-              <Metric
-                label="Remaining capacity"
-                value={hours(summary.remainingCapacityHours)}
-                tone={summary.remainingCapacityHours < 0 ? "danger" : undefined}
-              />
-              <Metric label="Efficiency" value={percent(summary.efficiencyPct)} />
-              <Metric label="Productivity" value={percent(summary.productivityPct)} />
-            </div>
+             <>
+               <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+                 <Metric label="Available" value={hours(summary.availableHours)} />
+                 <Metric label="Booked" value={hours(summary.bookedHours)} />
+                 <Metric label="Approved sold" value={hours(summary.approvedSoldHours)} />
+                 <Metric
+                   label="Invoiced sold"
+                   value={`${hours(summary.invoicedSoldHours)}${summary.invoicedHoursKnown ? "" : " *"}`}
+                 />
+                 <Metric label="Manual actual" value={hours(summary.manualActualHours)} />
+                 <Metric label="Auto worked" value={hours(summary.automaticActualHours)} />
+                 <Metric label="Worked" value={hours(summary.capturedActualHours)} />
+                 <Metric
+                   label="Remaining capacity"
+                   value={hours(summary.remainingCapacityHours)}
+                   tone={summary.remainingCapacityHours < 0 ? "danger" : undefined}
+                 />
+                 <Metric label="Efficiency" value={percent(summary.efficiencyPct)} />
+                 <Metric label="Productivity" value={percent(summary.productivityPct)} />
+               </div>
+               {summary.legacyTimerScope === "dealer" && (
+                 <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
+                   <strong className="text-foreground">Dealer-wide legacy totals:</strong>{" "}
+                   {hours(summary.existingTimerHours)} cumulative timer hours;{" "}
+                   {hours(summary.unallocatedTimerHours)} remain historically unallocated.
+                   These values are not daily work and are not assigned to any current technician.
+                 </div>
+               )}
+             </>
           )}
           {!summary?.invoicedHoursKnown && (
             <p className="text-xs text-muted-foreground">
@@ -242,6 +306,7 @@ export function TechnicianTimesheetsTab() {
                 <TechnicianDayRow
                   key={row.technicianUserId}
                   row={row}
+                  timezone={timesheet.data?.timezone}
                   isManager={isManager}
                   onAdd={() => setEntryDialog({ technicianUserId: row.technicianUserId })}
                   onEdit={(entry) =>
@@ -303,8 +368,63 @@ function Metric({
   );
 }
 
+function AutomaticEntryRow({
+  entry,
+  timezone,
+}: {
+  entry: AutomaticTimerEntry;
+  timezone?: string;
+}) {
+  const start = formatSegmentTime(entry.startAt, timezone);
+  const end = formatSegmentTime(entry.endAt, timezone);
+  const exactHours =
+    entry.durationSeconds == null
+      ? entry.durationMinutes / 60
+      : entry.durationSeconds / 3600;
+  const counted = entry.sourceMetadata?.counted === true;
+  const technicianSnapshot =
+    entry.sourceMetadata?.technicianNameSnapshot ?? "Technician snapshot unavailable";
+  return (
+    <div
+      className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+      data-testid={`row-automatic-timesheet-${entry.id}`}
+    >
+      <div className="min-w-0">
+        {entry.jobCardId ? (
+          <Link
+            href={`/service/job-cards/${entry.jobCardId}`}
+            className="font-medium text-primary hover:underline"
+            data-testid={`link-automatic-job-card-${entry.id}`}
+          >
+            JC #{entry.jobCardId} · {entry.jobCardTitle ?? "Job card"}
+          </Link>
+        ) : (
+          <span className="font-medium">Timer work</span>
+        )}
+        <div className="truncate text-xs text-muted-foreground">
+          <Badge variant="outline" className="mr-1 text-[9px]">
+            <LockKeyhole className="mr-0.5 inline h-2.5 w-2.5" /> automatic
+          </Badge>
+          <span>Worked by {technicianSnapshot} · </span>
+          {counted ? (
+            start && end ? `${start}–${end}` : start ? `${start}–running` : "Dealer-day segment"
+          ) : (
+            <span title="A pre-existing manual job/day entry supersedes this automatic work">
+              Excluded by manual job/day entry
+            </span>
+          )}
+        </div>
+      </div>
+      <span className="shrink-0 font-semibold tabular-nums" data-testid={`text-automatic-hours-${entry.id}`}>
+        {hours(exactHours)}
+      </span>
+    </div>
+  );
+}
+
 function TechnicianDayRow({
   row,
+  timezone,
   isManager,
   onAdd,
   onEdit,
@@ -312,12 +432,15 @@ function TechnicianDayRow({
   onAvailability,
 }: {
   row: DailyTechnicianTimesheetRow;
+  timezone?: string;
   isManager: boolean;
   onAdd: () => void;
   onEdit: (entry: TechnicianTimesheetEntry) => void;
   onDelete: (entry: TechnicianTimesheetEntry) => void;
   onAvailability?: () => void;
 }) {
+  const manual = manualEntries(row);
+  const automatic = automaticEntries(row);
   return (
     <Card className="border-white/10 bg-white/[0.025]">
       <CardContent className="p-4">
@@ -330,15 +453,16 @@ function TechnicianDayRow({
                 <Badge variant="outline" className="text-[10px]">override</Badge>
               )}
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 text-xs text-muted-foreground sm:grid-cols-5">
+            <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 text-xs text-muted-foreground sm:grid-cols-6">
               <span>Available <strong className="text-foreground">{hours(row.availableHours)}</strong></span>
               <span>Booked <strong className="text-foreground">{hours(row.bookedHours)}</strong></span>
               <span>Approved <strong className="text-foreground">{hours(row.approvedSoldHours)}</strong></span>
               <span>Invoiced <strong className="text-foreground">{hours(row.invoicedSoldHours)}{!row.invoicedHoursKnown && " *"}</strong></span>
-              <span>Actual <strong className="text-foreground">{hours(row.loggedActualHours)}</strong></span>
+              <span>Auto worked <strong className="text-foreground">{hours(row.automaticActualHours)}</strong></span>
+              <span>Manual <strong className="text-foreground">{hours(row.manualActualHours)}</strong></span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              Remaining {hours(row.remainingCapacityHours)} · Efficiency {percent(row.efficiencyPct)} · Productivity {percent(row.productivityPct)}
+              Worked {hours(row.capturedActualHours)} · Remaining {hours(row.remainingCapacityHours)} · Efficiency {percent(row.efficiencyPct)} · Productivity {percent(row.productivityPct)}
             </div>
           </div>
           <div className="flex gap-2">
@@ -354,47 +478,65 @@ function TechnicianDayRow({
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Manual daily entries
-            </div>
-            {row.entries.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-white/10 p-4 text-xs text-muted-foreground">
-                No manual actuals logged for this day.
+          <div className="space-y-4 lg:col-span-2">
+            <div>
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Automatic timer work · read-only
               </div>
-            ) : (
-              <div className="divide-y divide-white/10 rounded-lg border border-white/10">
-                {row.entries.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
-                    <div className="min-w-0">
-                      {entry.jobCardId ? (
-                        <Link
-                          href={`/service/job-cards/${entry.jobCardId}`}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          JC #{entry.jobCardId} · {entry.jobCardTitle ?? "Job card"}
-                        </Link>
-                      ) : (
-                        <span className="font-medium">Non-job time</span>
-                      )}
-                      <div className="truncate text-xs text-muted-foreground">
-                        <Badge variant="secondary" className="mr-1 text-[9px]">manual</Badge>
-                        {entry.note || "No note"}
+              {automatic.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-white/10 p-4 text-xs text-muted-foreground">
+                  No automatic timer segments recorded for this day.
+                </div>
+              ) : (
+                <div className="divide-y divide-white/10 rounded-lg border border-white/10">
+                  {automatic.map((entry) => (
+                    <AutomaticEntryRow key={entry.id} entry={entry} timezone={timezone} />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Manual daily entries
+              </div>
+              {manual.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-white/10 p-4 text-xs text-muted-foreground">
+                  No manual actuals logged for this day.
+                </div>
+              ) : (
+                <div className="divide-y divide-white/10 rounded-lg border border-white/10">
+                  {manual.map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                      <div className="min-w-0">
+                        {entry.jobCardId ? (
+                          <Link
+                            href={`/service/job-cards/${entry.jobCardId}`}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            JC #{entry.jobCardId} · {entry.jobCardTitle ?? "Job card"}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">Non-job time</span>
+                        )}
+                        <div className="truncate text-xs text-muted-foreground">
+                          <Badge variant="secondary" className="mr-1 text-[9px]">manual</Badge>
+                          {entry.note || "No note"}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="font-semibold tabular-nums">{hours(entry.durationMinutes / 60)}</span>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(entry)} aria-label="Edit time entry">
+                          <Edit3 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => onDelete(entry)} aria-label="Delete time entry">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="font-semibold tabular-nums">{hours(entry.durationMinutes / 60)}</span>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(entry)} aria-label="Edit time entry">
-                        <Edit3 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => onDelete(entry)} aria-label="Delete time entry">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="space-y-3 text-xs">
             <div>
@@ -418,7 +560,9 @@ function TechnicianDayRow({
               </div>
             </div>
             <div className="rounded-md border border-dashed border-white/10 p-2 text-muted-foreground">
-              <strong className="text-foreground">Legacy timer total:</strong> {hours(row.existingTimerHours)} cumulative across job cards. Not counted as this day&apos;s logged actual.
+              <strong className="text-foreground">Legacy timer attribution:</strong> historical
+              cumulative hours are dealer-summary-only and are not assigned to this technician
+              or this dealer day.
             </div>
           </div>
         </div>
@@ -489,7 +633,8 @@ function TimesheetEntryDialog({
         <DialogHeader>
           <DialogTitle>{entry ? "Edit daily time" : "Log daily time"}</DialogTitle>
           <DialogDescription>
-            {date} · manual actual, maximum 24 hours total per technician/day.
+            {date} · manual work only, maximum 24 hours per technician/day. Automatic timer work
+            is recorded separately and cannot be edited here.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

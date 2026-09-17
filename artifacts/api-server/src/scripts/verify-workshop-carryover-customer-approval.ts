@@ -225,6 +225,26 @@ async function cleanup(): Promise<void> {
     await pool.query(`delete from collision_claims where dealer_id = $1`, [id]);
     await pool.query(`delete from service_invoices where dealer_id = $1`, [id]);
     await pool.query(`delete from job_cards where dealer_id = $1`, [id]);
+    // Job-card deletion may close a live timer, which appends a ledger row.
+    // Remove only this verifier's rows through the trigger's transaction-local
+    // maintenance mode after those closure entries have been written.
+    const ledgerClient = await pool.connect();
+    try {
+      await ledgerClient.query("begin");
+      await ledgerClient.query(
+        "select set_config('app.technician_work_segment_ledger_maintenance', 'on', true)",
+      );
+      await ledgerClient.query(
+        "delete from technician_work_segment_ledger where dealer_id = $1",
+        [id],
+      );
+      await ledgerClient.query("commit");
+    } catch (error) {
+      await ledgerClient.query("rollback");
+      throw error;
+    } finally {
+      ledgerClient.release();
+    }
     await pool.query(`delete from service_orders where dealer_id = $1`, [id]);
     await pool.query(`delete from parts where dealer_id = $1`, [id]);
     await pool.query(`delete from suppliers where dealer_id = $1`, [id]);
@@ -392,6 +412,7 @@ try {
     status?: string;
     waitingReason?: string | null;
     technician?: boolean;
+    timerRunning?: boolean;
     quoteTotal?: number;
     intake?: Record<string, unknown> | null;
   }): Promise<{ orderId: number; cardId: number }> {
@@ -414,7 +435,7 @@ try {
           now() - ($14::text || ' days')::interval,
          now() - ($7::text || ' days')::interval,
          now() - ($7::text || ' days')::interval, 90,
-         case when $4 = 'in_progress' then now() - interval '2 minutes' else null end)
+          case when $15 then now() - interval '2 minutes' else null end)
        returning id`,
       [
         dealerId,
@@ -439,6 +460,7 @@ try {
         }] : []),
         JSON.stringify(opts.intake ?? null),
          opts.receivedDaysAgo ?? age,
+         opts.timerRunning ?? false,
       ],
     );
     return { orderId: order.rows[0]!.id, cardId: card.rows[0]!.id };
@@ -908,6 +930,7 @@ try {
     label: "Wait-resume vehicle",
     scheduledDate: yesterday,
     status: "in_progress",
+    timerRunning: true,
     intake: { odometer: 54321, notes: "keep diagnostic evidence" },
   });
   const held = await api(`/job-cards/${waitTarget.cardId}/waiting`, technicianEmail, dealerId, {
@@ -937,7 +960,8 @@ try {
     "waiting history retains hold and resume evidence");
 
   await pool.query(
-    `update job_cards set status='on_hold', rollover_status='pending', rollover_to_date=$2
+    `update job_cards set status='on_hold', timer_started_at=null,
+       rollover_status='pending', rollover_to_date=$2
      where id=$1 and dealer_id=$3`,
     [waitTarget.cardId, tomorrow, dealerId],
   );
@@ -2353,8 +2377,9 @@ try {
     "external receipt did not invalidate prior estimate token",
   );
 
-  // Receiving an internal PO may automatically fill a previously quoted
-  // backorder and resume a paused card, but never completes it. Receipt is
+   // Receiving an internal PO may automatically fill a previously quoted
+   // backorder and release a paused card into in-progress, but must never
+   // start its timer or complete it. Receipt is
   // fulfillment (not a second charge), so it must not mutate the already
   // approved estimate version or duplicate stock movements.
   const backorderPart = await pool.query<{ id: number }>(
@@ -2461,22 +2486,167 @@ try {
     stock: string;
     estimate_version: number;
     estimate_approved_version: number | null;
+    timer_started_at: Date | null;
   }>(
     `select
        (select status from job_cards where id=$1 and dealer_id=$2) status,
        (select backordered from job_card_parts where dealer_id=$2 and job_card_id=$1 and part_id=$3 and kind='issue') backordered,
        (select stock::text from parts where dealer_id=$2 and id=$3) stock,
        (select estimate_version from job_cards where id=$1 and dealer_id=$2) estimate_version,
-       (select estimate_approved_version from job_cards where id=$1 and dealer_id=$2) estimate_approved_version`,
+        (select estimate_approved_version from job_cards where id=$1 and dealer_id=$2) estimate_approved_version,
+        (select timer_started_at from job_cards where id=$1 and dealer_id=$2) timer_started_at`,
     [backorder.cardId, dealerId, backorderPart.rows[0]!.id],
   );
   equal(backorderEffects.rows[0]!.status, "in_progress", "backorder receipt did not resume active work");
+  equal(backorderEffects.rows[0]!.timer_started_at, null,
+    "backorder receipt started a timer instead of requiring explicit technician resume");
   equal(backorderEffects.rows[0]!.backordered, false, "backorder line was not fulfilled");
   equal(Number(backorderEffects.rows[0]!.stock), 0, "backorder receipt/issue changed stock twice");
   equal(backorderEffects.rows[0]!.estimate_version, 1,
     "backorder fulfillment incorrectly changed an already quoted estimate");
   equal(backorderEffects.rows[0]!.estimate_approved_version, 1,
     "backorder fulfillment incorrectly removed current customer approval");
+
+  // One receipt may release several cards. This deliberately includes an
+  // unassigned card and two cards for a technician who is already busy: stock
+  // fulfillment must succeed and release their workflow state, but it must
+  // never try to auto-start any timer (which would roll back the receipt under
+  // the technician timer concurrency backstop).
+  const releaseSafetyPart = await pool.query<{ id: number }>(
+    `insert into parts (dealer_id, sku, name, stock, reorder_level, unit_price, unit_cost, status)
+     values ($1, $2, $3, 0, 0, 80, 40, 'active') returning id`,
+    [dealerId, `${marker}-RELEASE-SAFETY`, `${marker} receipt safety component`],
+  );
+  const unassignedRelease = await orderAndCard({
+    label: "Unassigned receipt release",
+    scheduledDate: yesterday,
+    status: "on_hold",
+    waitingReason: "ordered_parts",
+    technician: false,
+  });
+  const busyRelease = await orderAndCard({
+    label: "Busy technician receipt release",
+    scheduledDate: yesterday,
+    status: "on_hold",
+    waitingReason: "ordered_parts",
+  });
+  const sameTechnicianRelease = await orderAndCard({
+    label: "Second busy technician receipt release",
+    scheduledDate: yesterday,
+    status: "on_hold",
+    waitingReason: "ordered_parts",
+  });
+  for (const cardId of [
+    unassignedRelease.cardId,
+    busyRelease.cardId,
+    sameTechnicianRelease.cardId,
+  ]) {
+    await pool.query(
+      `insert into job_card_parts
+         (dealer_id, job_card_id, part_id, part_name, kind, quantity, unit_price, unit_cost, backordered)
+       values ($1, $2, $3, $4, 'issue', 1, 80, 40, true)`,
+      [dealerId, cardId, releaseSafetyPart.rows[0]!.id, `${marker} receipt safety component`],
+    );
+  }
+  // The first receipt release card is now safely in-progress but paused.
+  // Earlier fixture cases can legitimately have left one timer running. End
+  // that real timer through its normal endpoint before making this card the
+  // sole busy timer for the second receipt; do not bypass the timer guard with
+  // fixture SQL.
+  const priorRunningTimers = await pool.query<{ id: number }>(
+    `select id from job_cards
+      where dealer_id=$1 and technician_user_id=$2 and timer_started_at is not null
+      order by id`,
+    [dealerId, technicianUserId],
+  );
+  assert(priorRunningTimers.rows.length <= 1,
+    "fixture created more than one running timer for the technician");
+  if (priorRunningTimers.rows[0]) {
+    const pausePriorTimer = await api(
+      `/job-cards/${priorRunningTimers.rows[0].id}/timer`,
+      technicianEmail,
+      dealerId,
+      { method: "POST", body: JSON.stringify({ action: "pause" }) },
+    );
+    expectStatus(pausePriorTimer, 200, "pause prior fixture timer before busy receipt");
+  }
+  // Make it the only busy timer for this technician before the second receipt.
+  await pool.query(
+    `update job_cards set timer_started_at = now()
+      where dealer_id = $1 and id = $2`,
+    [dealerId, backorder.cardId],
+  );
+  const releaseSafetyPo = await pool.query<{ id: number }>(
+    `insert into purchase_orders (dealer_id, supplier_id, status, expected_date, reference)
+     values ($1, $2, 'ordered', $3, $4) returning id`,
+    [dealerId, supplier.rows[0]!.id, today, `${marker}-RELEASE-SAFETY-PO`],
+  );
+  const releaseSafetyLine = await pool.query<{ id: number }>(
+    `insert into purchase_order_lines
+       (dealer_id, purchase_order_id, source, part_id, part_name, quantity, qty_received, unit_cost, job_card_id)
+     values ($1, $2, 'INTERNAL', $3, $4, 3, 0, 40, $5) returning id`,
+    [
+      dealerId,
+      releaseSafetyPo.rows[0]!.id,
+      releaseSafetyPart.rows[0]!.id,
+      `${marker} receipt safety component`,
+      busyRelease.cardId,
+    ],
+  );
+  const releaseSafetyReceipt = await api(
+    `/purchase-orders/${releaseSafetyPo.rows[0]!.id}/receive`,
+    managerEmail,
+    dealerId,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        idempotencyKey: `${marker}-release-safety-receipt`,
+        receivedAt: new Date().toISOString(),
+        deliveryNoteNumber: `${marker}-DN-RELEASE-SAFETY`,
+        warehouseLocation: "Parts counter",
+        condition: "accepted",
+        documents: [{
+          objectPath: `/objects/uploads/dealer-${dealerId}/${marker}-release-safety.pdf`,
+          fileName: "release-safety.pdf",
+          mimeType: "application/pdf",
+        }],
+        lines: [{ lineId: releaseSafetyLine.rows[0]!.id, qty: 3 }],
+      }),
+    },
+  );
+  expectStatus(releaseSafetyReceipt, 200,
+    "receipt releases unassigned and busy/multiple-technician backorders");
+  const releaseSafetyEffects = await pool.query<{
+    id: number;
+    status: string;
+    timer_started_at: Date | null;
+    technician_user_id: number | null;
+    backordered: boolean;
+  }>(
+    `select c.id, c.status, c.timer_started_at, c.technician_user_id, p.backordered
+       from job_cards c
+       join job_card_parts p on p.job_card_id = c.id and p.dealer_id = c.dealer_id
+      where c.dealer_id = $1 and c.id = any($2::int[]) and p.part_id = $3
+      order by c.id`,
+    [
+      dealerId,
+      [unassignedRelease.cardId, busyRelease.cardId, sameTechnicianRelease.cardId],
+      releaseSafetyPart.rows[0]!.id,
+    ],
+  );
+  equal(releaseSafetyEffects.rows.length, 3,
+    "receipt did not retain all released backorder lines");
+  for (const effect of releaseSafetyEffects.rows) {
+    equal(effect.status, "in_progress", "receipt did not release a fully stocked backorder");
+    equal(effect.timer_started_at, null, "receipt auto-started a released job-card timer");
+    equal(effect.backordered, false, "receipt did not fulfill a released backorder line");
+  }
+  const busyTimerAfterReceipt = await pool.query<{ timer_started_at: Date | null }>(
+    `select timer_started_at from job_cards where dealer_id=$1 and id=$2`,
+    [dealerId, backorder.cardId],
+  );
+  assert(busyTimerAfterReceipt.rows[0]!.timer_started_at,
+    "receipt changed the technician's unrelated running timer");
 
   // Tenant checks remain opaque even for the same fixture customer id. The
   // manager only belongs to dealerId and must not read a foreign job card.

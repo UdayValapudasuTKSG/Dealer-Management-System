@@ -1,4 +1,7 @@
-import express, { type Express } from "express";
+import express, {
+  type ErrorRequestHandler,
+  type Express,
+} from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
@@ -87,5 +90,58 @@ app.use(
 );
 
 app.use("/api", router);
+
+type PgFailure = {
+  code?: unknown;
+  constraint?: unknown;
+  cause?: unknown;
+};
+
+/** Drizzle may retain the PostgreSQL error beneath one or more `cause`s. */
+function pgFailure(error: unknown): { code?: string; constraint?: string } {
+  let candidate: PgFailure | undefined =
+    error && typeof error === "object" ? error as PgFailure : undefined;
+  for (let depth = 0; candidate && depth < 4; depth += 1) {
+    if (typeof candidate.code === "string") {
+      return {
+        code: candidate.code,
+        constraint:
+          typeof candidate.constraint === "string" ? candidate.constraint : undefined,
+      };
+    }
+    candidate =
+      candidate.cause && typeof candidate.cause === "object"
+        ? candidate.cause as PgFailure
+        : undefined;
+  }
+  return {};
+}
+
+// Database triggers are the final concurrency authority for job-card timers.
+// Translate their intentionally-raised PostgreSQL errors here so a racing
+// client gets an actionable response instead of an Express 500.
+const jobCardTimerDatabaseErrors: ErrorRequestHandler = (error, _req, res, next) => {
+  const failure = pgFailure(error);
+  if (
+    failure.code === "23505" &&
+    failure.constraint === "job_cards_one_running_timer_per_technician"
+  ) {
+    res.status(409).json({
+      error: "This technician already has a running job-card timer. Pause or stop that work before starting another card.",
+    });
+    return;
+  }
+  if (
+    failure.code === "23514" &&
+    failure.constraint === "job_cards_running_timer_technician_required"
+  ) {
+    res.status(422).json({
+      error: "Assign a technician before starting the job-card timer.",
+    });
+    return;
+  }
+  next(error);
+};
+app.use(jobCardTimerDatabaseErrors);
 
 export default app;

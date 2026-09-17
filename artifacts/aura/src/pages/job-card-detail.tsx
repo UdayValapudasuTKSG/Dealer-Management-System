@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetJobCard,
   getGetJobCardQueryKey,
+  getGetDailyTechnicianTimesheetQueryKey,
   useUpdateJobCard,
   useToggleJobCardTimer,
   useReopenJobCard,
@@ -347,6 +348,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
       queryClient.invalidateQueries({ queryKey: getListServiceInvoicesQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getListWorkshopWipQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getGetJobCardEstimatePreviewQueryKey(card.id) }),
+      // Every job-card write can change the timer ledger or its attribution:
+      // status/timer transitions, waits, reassignment, repricing and parts.
+      queryClient.invalidateQueries({ queryKey: getGetDailyTechnicianTimesheetQueryKey() }),
     ]);
   };
 
@@ -1327,7 +1331,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                     id: card.id,
                     data: { action: card.timerStartedAt ? "pause" : "resume" },
                   });
-                  invalidate();
+                  await invalidate();
                   toast({
                     title: card.timerStartedAt ? "Timer paused" : "Timer running",
                   });
@@ -1359,7 +1363,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
               onClick={async () => {
                 try {
                   await reopen.mutateAsync({ id: card.id, data: {} });
-                  invalidate();
+                  await invalidate();
                   toast({
                     title: "Job card reopened",
                     description: "The job is back in progress and the timer is running.",

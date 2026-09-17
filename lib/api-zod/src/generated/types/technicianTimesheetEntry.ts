@@ -5,9 +5,11 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutomaticTimesheetSourceMetadata } from './automaticTimesheetSourceMetadata';
 import type { TechnicianTimesheetEntrySource } from './technicianTimesheetEntrySource';
 
 export interface TechnicianTimesheetEntry {
+  /** Positive manual-entry id; negative virtual id for a read-only automatic ledger slice. */
   id: number;
   technicianUserId: number;
   /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
@@ -19,13 +21,30 @@ export interface TechnicianTimesheetEntry {
   /** @nullable */
   customerName?: string | null;
   /**
+     * Rounded display duration; automatic entries can exceed 1,440 minutes on a daylight-saving fall-back day.
      * @minimum 1
-     * @maximum 1440
      */
   durationMinutes: number;
+  /**
+     * Exact elapsed seconds for automatic work; null for manually rounded entries.
+     * @minimum 1
+     * @nullable
+     */
+  durationSeconds?: number | null;
+  /**
+     * Exact automatic segment start, or null for a manual entry.
+     * @nullable
+     */
+  startAt?: Date | null;
+  /**
+     * Exact automatic segment end after clipping active work at request time, or null for a manual entry.
+     * @nullable
+     */
+  endAt?: Date | null;
   /** @nullable */
   note?: string | null;
   source: TechnicianTimesheetEntrySource;
+  sourceMetadata?: null | AutomaticTimesheetSourceMetadata;
   createdAt: Date;
   updatedAt: Date;
 }

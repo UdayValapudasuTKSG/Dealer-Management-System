@@ -96,8 +96,12 @@ export type BackorderRelease = {
 /**
  * Fill backordered job-card lines for a part oldest-first while stock lasts
  * (decrementing stock per fill) and flip touched on_hold job cards back to
- * in_progress once none of their lines wait. Returns the units left over
- * plus the filled lines (so callers can post ERPNext stock issues on commit).
+ * in_progress once none of their lines wait. A receipt never starts work:
+ * released cards remain timer-paused and require an explicit technician
+ * resume, so one stock transaction cannot conflict with an unassigned/busy
+ * technician or start several of their cards at once. Returns the units left
+ * over plus the filled lines (so callers can post ERPNext stock issues on
+ * commit).
  */
 export async function releaseBackorders(
   tx: Tx,
@@ -167,7 +171,10 @@ export async function releaseBackorders(
         await tx.update(jobCardsTable).set({
           status: "in_progress",
           waitingReason: null,
-          timerStartedAt: new Date(),
+          // Receipt fulfillment releases the workflow hold only. Timer
+          // control stays an explicit technician/manager action guarded by
+          // the job-card timer CAS and ledger trigger.
+          timerStartedAt: null,
         }).where(and(
           eq(jobCardsTable.id, card.id),
           eq(jobCardsTable.dealerId, dealerId),

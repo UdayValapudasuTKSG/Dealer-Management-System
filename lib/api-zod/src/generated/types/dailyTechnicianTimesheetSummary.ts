@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DailyTechnicianTimesheetSummaryLegacyTimerScope } from './dailyTechnicianTimesheetSummaryLegacyTimerScope';
 
 export interface DailyTechnicianTimesheetSummary {
   availableHours: number;
@@ -12,8 +13,16 @@ export interface DailyTechnicianTimesheetSummary {
   approvedSoldHours: number;
   invoicedSoldHours: number;
   invoicedHoursKnown: boolean;
+  manualActualHours: number;
+  automaticActualHours: number;
+  capturedActualHours: number;
   loggedActualHours: number;
+  capturedTimerHours: number;
+  /** Dealer-wide cumulative timer total across retained job cards, including cancelled cards; not a daily or technician actual. */
   existingTimerHours: number;
+  /** Dealer-wide sum of max(0, job-card cumulative timer minus captured ledger elapsed for that same job card). Deleted-card ledger evidence remains captured-only and never creates a negative residual. */
+  unallocatedTimerHours: number;
+  legacyTimerScope: DailyTechnicianTimesheetSummaryLegacyTimerScope;
   remainingCapacityHours: number;
   /** @nullable */
   efficiencyPct: number | null;
