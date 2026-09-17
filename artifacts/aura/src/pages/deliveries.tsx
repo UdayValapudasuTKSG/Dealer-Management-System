@@ -1046,13 +1046,6 @@ function DeliveryDetail({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl w-[95vw] max-h-[88vh] overflow-y-auto border-border bg-card p-0">
         <div className="p-7">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-foreground/[0.06] hover:bg-foreground/[0.12] flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
           <div className="text-[11px] font-bold uppercase tracking-widest text-primary mb-1">
             Delivery workflow · Deal #{delivery.dealId}
           </div>
