@@ -6,6 +6,8 @@ import {
   db,
   dealersTable,
   leadsTable,
+  customersTable,
+  serviceOrdersTable,
   timelineEventsTable,
   webhookEventsTable,
 } from "@workspace/db";
@@ -19,6 +21,19 @@ import {
   isAgentEnabled,
   recordAgentRun,
 } from "./agent-governance";
+import {
+  isServiceBookingSubject,
+  normalizeServicePhone,
+  parseServiceBookingForm,
+  runAtomicInboundDeliveryOnce,
+} from "./gmail-service-intake";
+import { dealerTimezone, zonedDayKey } from "./timezone";
+export {
+  isServiceBookingSubject,
+  normalizeServicePhone,
+  parseServiceBookingForm,
+  runAtomicInboundDeliveryOnce,
+} from "./gmail-service-intake";
 
 // ---------------------------------------------------------------------------
 // Gmail email-to-lead intake agent.
@@ -31,6 +46,8 @@ import {
 // "gmail_email"), classified by the AI (sales enquiry vs. not), and — when it
 // is an enquiry — turned into a lead through the shared inbound intake path
 // (auto-assignment, quote/welcome email, coordinator notifications, timeline).
+// The canonical website service-booking form is routed before this sales
+// classifier and creates an unconfirmed service order instead.
 // Repeat senders with an open lead get a timeline note instead of a duplicate.
 // Processed mail is marked \Seen and copied to the "AURA/Processed" label.
 //
@@ -165,11 +182,282 @@ async function alreadyProcessed(messageId: string): Promise<boolean> {
 async function recordProcessed(
   messageId: string,
   leadId: number | null,
+  opts?: { dealerId?: number; serviceOrderId?: number | null },
 ): Promise<void> {
   await db
     .insert(webhookEventsTable)
-    .values({ channel: CHANNEL, externalId: messageId, leadId })
+    .values({
+      channel: CHANNEL,
+      externalId: messageId,
+      leadId,
+      dealerId: opts?.dealerId ?? null,
+      serviceOrderId: opts?.serviceOrderId ?? null,
+    })
     .onConflictDoNothing();
+}
+
+type ServiceBookingResult = {
+  orderId: number;
+  requestedDate: string;
+  pastRequestedDate: boolean;
+  identityReview: string | null;
+};
+
+/**
+ * Turn a validated website form into an unconfirmed service order.  This
+ * deliberately bypasses the staff POST route: that route queues customer
+ * confirmation mail, while an inbound form is only a request until staff
+ * confirms it.  No VIN, registration, time, or other customer data is
+ * invented here.
+ */
+async function createServiceBookingFromEmail(opts: {
+  dealerId: number;
+  externalId: string;
+  subject: string;
+  text: string;
+  html: string | null;
+}): Promise<ServiceBookingResult | null> {
+  const form = parseServiceBookingForm({ text: opts.text, html: opts.html });
+  if (form.issues.length > 0) {
+    const claimed = await db.transaction(async (tx) =>
+      runAtomicInboundDeliveryOnce(
+        async () => {
+          const [row] = await tx
+            .insert(webhookEventsTable)
+            .values({
+              channel: CHANNEL,
+              externalId: opts.externalId,
+              dealerId: opts.dealerId,
+              leadId: null,
+            })
+            .onConflictDoNothing()
+            .returning({ id: webhookEventsTable.id });
+          return row?.id ?? null;
+        },
+        async () => true,
+      ),
+    );
+    if (!claimed) return null;
+    await recordAgentRun({
+      dealerId: opts.dealerId,
+      agentKey: "intake_dedup",
+      runType: "service_booking_email_intake",
+      inputSource: "gmail",
+      inputSummary: opts.subject || "(no subject)",
+      outputSummary: `Service booking held for review: ${form.issues.join("; ")}`,
+      confidence: null,
+      status: "needs_review",
+      reviewReason: form.issues.join("; "),
+      latencyMs: 0,
+      mutation: false,
+    });
+    const staff = await dealerStaffIdsByRole(opts.dealerId, [
+      "Service Manager",
+      "Service Advisor",
+      "General Manager",
+    ]);
+    if (staff.length > 0) {
+      await notifyUsers(staff, {
+        dealerId: opts.dealerId,
+        type: "task",
+        title: "Service booking email needs review",
+        body: `The booking form "${(opts.subject || "(no subject)").slice(0, 80)}" was not created: ${form.issues.join("; ")}`,
+        link: "/agents",
+      });
+    }
+    return null;
+  }
+
+  const requestedDate = form.preferredDate!;
+  const tz = await dealerTimezone(opts.dealerId);
+  const pastRequestedDate = requestedDate < zonedDayKey(new Date(), tz);
+  const services = form.services?.trim() || null;
+  const handoff = form.waitOrDropoff?.trim() || null;
+  const complaint = [
+    "Pending unconfirmed service booking from website form.",
+    services ? `Requested services: ${services}` : null,
+    handoff ? `Vehicle handoff: ${handoff}` : null,
+    pastRequestedDate
+      ? `Staff review required: requested date ${requestedDate} is in the past (${tz}).`
+      : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join("\n");
+  const jobs = services
+    ? services
+        .split(/[,;\n]+/)
+        .map((service) => service.trim())
+        .filter(Boolean)
+    : [];
+
+  const order = await db.transaction(async (tx) => {
+    return runAtomicInboundDeliveryOnce(
+      async () => {
+        const [row] = await tx
+          .insert(webhookEventsTable)
+          .values({
+            channel: CHANNEL,
+            externalId: opts.externalId,
+            dealerId: opts.dealerId,
+            leadId: null,
+          })
+          .onConflictDoNothing()
+          .returning({ id: webhookEventsTable.id });
+        return row?.id ?? null;
+      },
+      async (ledgerId) => {
+        const existingCustomers = await tx
+          .select({
+            id: customersTable.id,
+            email: customersTable.email,
+            phone: customersTable.phone,
+          })
+          .from(customersTable)
+          .where(
+            and(
+              eq(customersTable.dealerId, opts.dealerId),
+              isNull(customersTable.deletedAt),
+              isNull(customersTable.erasedAt),
+            ),
+          );
+        const emailMatches = existingCustomers.filter(
+          (customer) =>
+            customer.email?.trim().toLowerCase() === form.email!.toLowerCase(),
+        );
+        const phoneMatches = existingCustomers.filter(
+          (customer) => normalizeServicePhone(customer.phone) === form.phone,
+        );
+        const emailId = emailMatches.length === 1 ? emailMatches[0]!.id : null;
+        const phoneId = phoneMatches.length === 1 ? phoneMatches[0]!.id : null;
+        const emailCustomer = emailId == null
+          ? null
+          : emailMatches.find((customer) => customer.id === emailId) ?? null;
+        const storedEmailPhone = normalizeServicePhone(emailCustomer?.phone);
+        const identityReview =
+          emailCustomer && storedEmailPhone && storedEmailPhone !== form.phone
+            ? `Form phone ${form.phone} differs from existing contact phone ${storedEmailPhone} for ${form.email}; staff must verify before any confirmation.`
+            : emailId != null &&
+                phoneId != null &&
+                emailId !== phoneId
+              ? `Form email and phone match different existing contacts; staff must verify identity before any confirmation.`
+              : emailMatches.length > 1 || phoneMatches.length > 1
+                ? `Form identity matches multiple existing contacts; staff must verify before any confirmation.`
+                : null;
+        // A disagreement between email and phone, or multiple matches for either,
+        // is intentionally not merged. Creating a new account is safer than
+        // overwriting an existing contact with an ambiguous identity.
+        const customerId =
+          !identityReview &&
+          (emailId == null || phoneId == null || emailId === phoneId) &&
+          emailMatches.length <= 1 &&
+          phoneMatches.length <= 1
+            ? emailId ?? phoneId
+            : null;
+        let linkedCustomerId = customerId;
+        if (linkedCustomerId == null) {
+          const [created] = await tx
+            .insert(customersTable)
+            .values({
+              dealerId: opts.dealerId,
+              name: form.name!,
+              email: form.email!,
+              phone: form.phone!,
+            })
+            .returning({ id: customersTable.id });
+          linkedCustomerId = created?.id ?? null;
+        }
+
+        const effectiveComplaint = [
+          complaint,
+          identityReview ? `Staff review required: ${identityReview}` : null,
+          `Customer form email: ${form.email}`,
+        ]
+          .filter((part): part is string => Boolean(part))
+          .join("\n");
+        const [createdOrder] = await tx
+          .insert(serviceOrdersTable)
+          .values({
+            dealerId: opts.dealerId,
+            customerId: linkedCustomerId,
+            customerName: form.name!,
+            customerPhoneSnapshot: form.phone!,
+            vehicleInfo: form.model!,
+            // VIN and registration are intentionally left null until staff
+            // identifies the vehicle; the form only supplied a model.
+            vin: null,
+            registrationNumber: null,
+            type: "repair",
+            payType: "customer",
+            status: "open",
+            scheduledDate: requestedDate,
+            complaint: effectiveComplaint,
+            technician: null,
+            technicianUserId: null,
+            estimatedCost: 0,
+            jobs,
+            createdByUserId: null,
+            createdByName: "AURA Gmail Service Intake",
+            createdOrigin: "system",
+          })
+          .returning({ id: serviceOrdersTable.id });
+        if (!createdOrder) return null;
+        await tx
+          .update(webhookEventsTable)
+          .set({ serviceOrderId: createdOrder.id })
+          .where(eq(webhookEventsTable.id, ledgerId));
+        return { order: createdOrder, identityReview };
+      },
+    );
+  });
+  if (!order) return null;
+  const { order: createdOrder, identityReview } = order;
+  const reviewReason = [
+    pastRequestedDate ? `Requested date ${requestedDate} is in the past` : null,
+    identityReview,
+  ]
+    .filter((reason): reason is string => Boolean(reason))
+    .join("; ") || null;
+  await recordAgentRun({
+    dealerId: opts.dealerId,
+    agentKey: "intake_dedup",
+    runType: "service_booking_email_intake",
+    inputSource: "gmail",
+    inputSummary: opts.subject || "(no subject)",
+    outputSummary: `Service request → booking #${createdOrder.id} for ${requestedDate}${
+      reviewReason ? ` (staff review required: ${reviewReason})` : ""
+    }. Review: /service?order=${createdOrder.id}`,
+    confidence: 1,
+    status: reviewReason ? "needs_review" : "completed",
+    reviewReason,
+    refType: "service_order",
+    refId: createdOrder.id,
+    latencyMs: 0,
+    mutation: true,
+    autonomy: "system",
+    changeSummary: `Created pending unconfirmed service booking #${createdOrder.id} from Gmail form`,
+  });
+  const staff = await dealerStaffIdsByRole(opts.dealerId, [
+    "Service Manager",
+    "Service Advisor",
+    "General Manager",
+  ]);
+  if (staff.length > 0) {
+    await notifyUsers(staff, {
+      dealerId: opts.dealerId,
+      type: "task",
+      title: `Service booking request #${createdOrder.id}`,
+      body: `${form.name} <${form.email}> — ${form.model}, requested ${requestedDate}${
+        reviewReason ? ` (${reviewReason})` : ""
+      }`,
+      link: `/service?order=${createdOrder.id}`,
+    });
+  }
+  return {
+    orderId: createdOrder.id,
+    requestedDate,
+    pastRequestedDate,
+    identityReview,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -447,12 +735,16 @@ async function pollMailbox(cfg: MailboxConfig): Promise<void> {
           const externalId = `${cfg.ledgerPrefix}${messageId}`;
           const subject = parsed.subject?.trim() ?? "";
           const body = (parsed.text ?? "").trim();
+          const html =
+            typeof parsed.html === "string" ? parsed.html.trim() : null;
 
           // Subject-filtered mailboxes (e.g. GT sales): mail that doesn't
           // match is NOT ours to touch — leave it unread and unlabelled for
           // the humans working that inbox. Ledger it so we skip it cheaply.
           const subjectMatches =
-            !cfg.subjectFilter || cfg.subjectFilter.test(subject);
+            isServiceBookingSubject(subject) ||
+            !cfg.subjectFilter ||
+            cfg.subjectFilter.test(subject);
 
           if (await alreadyProcessed(externalId)) {
             if (subjectMatches) await markHandled(client, uid, hasProcessedBox);
@@ -472,12 +764,30 @@ async function pollMailbox(cfg: MailboxConfig): Promise<void> {
             SYSTEM_MAIL_HEADER.toLowerCase(),
           );
           const isBounceSender =
-            /^(mailer-daemon|postmaster|no-?reply)@/i.test(fromAddr);
+            /^(mailer-daemon|postmaster)@/i.test(fromAddr);
           if (!fromAddr || isSystemMail || isBounceSender) {
-            await recordProcessed(externalId, null);
+             await recordProcessed(externalId, null, { dealerId });
             await markHandled(client, uid, hasProcessedBox);
             continue;
           }
+
+           // Service form notifications are routed before the sales
+           // classifier.  The SMTP sender is a relay and is never used as
+           // the customer identity; only labelled form fields are accepted.
+           if (isServiceBookingSubject(subject)) {
+             await createServiceBookingFromEmail({
+               dealerId,
+               externalId,
+               subject,
+               text: body,
+               html,
+             });
+             // Invalid/missing fields and duplicate deliveries are claimed in
+             // the same ledger path by the service intake helper; no sales
+             // lead fallback is allowed.
+             await markHandled(client, uid, hasProcessedBox);
+             continue;
+           }
 
           let leadId: number | null = null;
           const startedAt = Date.now();

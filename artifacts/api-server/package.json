@@ -39,7 +39,8 @@
     "test:service-appointment-confirmation-worker": "NODE_ENV=development tsx src/scripts/test-service-appointment-confirmation-worker.ts",
     "test:service-appointment-confirmation-retry": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/test-service-appointment-confirmation-retry.ts",
     "test:technician-timesheet-aggregates": "tsx src/scripts/test-technician-timesheet-aggregates.ts",
-    "test:technician-work-segment-ledger": "tsx src/scripts/test-technician-work-segment-ledger.ts"
+    "test:technician-work-segment-ledger": "tsx src/scripts/test-technician-work-segment-ledger.ts",
+    "test:gmail-service-intake": "tsx src/scripts/test-gmail-service-intake.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.95",
