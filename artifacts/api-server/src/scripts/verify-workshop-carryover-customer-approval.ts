@@ -12,7 +12,8 @@
  *
  * The assertions cover WIP dealer-day boundaries and export parity, waiting /
  * rollover timer safety, booking provenance, parts-credit concurrency and
- * post-issue adjustments, plus estimate version decision security.
+ * post-issue adjustments, operational work without customer authorization,
+ * plus estimate-version evidence and invoice security.
  */
 import { createHash, randomBytes } from "node:crypto";
 
@@ -170,9 +171,9 @@ function responseRows(result: ApiResult, message: string): any[] {
   return result.body;
 }
 
-// Keep the pure shared gate's truth table alongside HTTP coverage so a future
-// route cannot accidentally reinterpret a nullable acknowledgement field.
-const authorizationMatrix: Array<{
+// Keep the invoice-evidence helper's truth table alongside HTTP coverage so
+// invoice issuance cannot reinterpret a nullable acknowledgement field.
+const invoiceEvidenceMatrix: Array<{
   name: string;
   card: Parameters<typeof hasCurrentChargeableWorkAuthorization>[0];
   expected: boolean;
@@ -185,11 +186,11 @@ const authorizationMatrix: Array<{
   { name: "zeroCost", card: { payType: "customer", quoteTotal: 0, estimateVersion: 1, estimateApprovedVersion: null, estimateStaffAcknowledgedVersion: null, estimateStaffAcknowledgedDecisionId: null }, expected: true },
   { name: "warranty", card: { payType: "warranty", quoteTotal: 114, estimateVersion: 1, estimateApprovedVersion: null, estimateStaffAcknowledgedVersion: null, estimateStaffAcknowledgedDecisionId: null }, expected: true },
 ];
-for (const scenario of authorizationMatrix) {
+for (const scenario of invoiceEvidenceMatrix) {
   equal(
     hasCurrentChargeableWorkAuthorization(scenario.card),
     scenario.expected,
-    `chargeable-work authorization matrix ${scenario.name}`,
+    `invoice evidence matrix ${scenario.name}`,
   );
 }
 
@@ -221,6 +222,7 @@ async function cleanup(): Promise<void> {
     await pool.query(`delete from leads where dealer_id = $1`, [id]);
     await pool.query(`delete from service_estimate_decisions where dealer_id = $1`, [id]);
     await pool.query(`delete from part_credit_notes where dealer_id = $1`, [id]);
+    await pool.query(`delete from technician_timesheet_entries where dealer_id = $1`, [id]);
     await pool.query(`delete from job_card_parts where dealer_id = $1`, [id]);
     await pool.query(`delete from collision_claims where dealer_id = $1`, [id]);
     await pool.query(`delete from service_invoices where dealer_id = $1`, [id]);
@@ -381,14 +383,14 @@ try {
   );
   equal(autoCreatedCard.rows[0]?.labor_hours, 1,
     "automatic job-card creation lost planned labour hours");
-  equal(autoCreatedCard.rows[0]?.labor_rate, 120,
+  equal(autoCreatedCard.rows[0]?.labor_rate, 25080,
     "automatic job-card creation did not persist its canonical labour rate");
-  equal(autoCreatedCard.rows[0]?.quote_total, 136.8,
+  equal(autoCreatedCard.rows[0]?.quote_total, 28591.2,
     "automatic job-card creation did not persist labour plus configured VAT");
-  equal(autoCreatedCard.rows[0]?.status, "on_hold",
-    "automatic positive customer job card did not wait for estimate decision");
-  equal(autoCreatedCard.rows[0]?.waiting_reason, "customer_decision",
-    "automatic positive customer job card did not record quote waiting reason");
+  equal(autoCreatedCard.rows[0]?.status, "open",
+    "automatic positive customer job card was held for optional estimate evidence");
+  equal(autoCreatedCard.rows[0]?.waiting_reason, null,
+    "automatic positive customer job card invented a customer-decision hold");
 
   // A deliberately old "legacy" booking retains the honest migration label.
   const legacyOrder = await pool.query<{ id: number }>(
@@ -595,8 +597,8 @@ try {
     "real UI labour-only quote entities are missing");
   equal(realUiLabourCardRow?.quoteTotal, 114,
     "real UI labour-only creation did not persist canonical quote total");
-  equal(realUiLabourCardRow?.status, "on_hold",
-    "positive customer labour creation did not wait for an estimate decision");
+  equal(realUiLabourCardRow?.status, "open",
+    "positive customer labour creation was held for optional estimate evidence");
   const realUiLabourQueued = await api(
     `/job-cards/${realUiLabourCardId}/estimate/resend`,
     managerEmail,
@@ -971,9 +973,9 @@ try {
   });
   expectStatus(rolloverBypass, 409, "pending rollover resume bypass");
 
-  // Issuing an in-stock part while work remains on hold must not leave a
-  // running timer behind. The hold stays explicit until its own resume gate
-  // is satisfied; elapsed timer state is folded before the part mutation.
+  // Issuing an in-stock part while work remains on an explicit hold must not
+  // silently resume it. Keep this fixture internally valid with a paused timer;
+  // charge repricing itself no longer owns timer transitions.
   const heldStockIssue = await orderAndCard({
     label: "Held stocked-part timer vehicle",
     scheduledDate: today,
@@ -982,7 +984,7 @@ try {
     quoteTotal: 0,
   });
   await pool.query(
-    `update job_cards set timer_seconds=90, timer_started_at=now() - interval '2 minutes'
+    `update job_cards set timer_seconds=90, timer_started_at=null
        where id=$1 and dealer_id=$2`,
     [heldStockIssue.cardId, dealerId],
   );
@@ -997,9 +999,9 @@ try {
   );
   equal(heldStockTimer.rows[0]!.status, "on_hold", "stocked issue silently resumed held work");
   assert(heldStockTimer.rows[0]!.timer_started_at == null,
-    "stocked issue left a running timer on held work");
-  assert(heldStockTimer.rows[0]!.timer_seconds >= 90,
-    "stocked issue did not preserve/fold elapsed held-work timer");
+    "stocked issue started a timer on held work");
+  equal(heldStockTimer.rows[0]!.timer_seconds, 90,
+    "stocked issue changed the explicitly paused timer");
 
   // Issued-part credits: simultaneous requests cannot over-credit. Each
   // successful note creates exactly one operational return, returns stock
@@ -1713,8 +1715,12 @@ try {
     method: "PATCH",
     body: JSON.stringify({ status: "in_progress" }),
   });
-  equal(customerOnlyResume.response.status, 422,
-    "customer approval alone resumed chargeable work without staff acknowledgement");
+  expectStatus(customerOnlyResume, 200,
+    "customer-approved work resumed without optional staff receipt");
+  equal(customerOnlyResume.body.status, "in_progress",
+    "customer-approved operational resume did not enter in-progress");
+  assert(customerOnlyResume.body.timerStartedAt,
+    "customer-approved operational resume did not start its timer");
   const foreignAck = await api(`/job-cards/${approval.cardId}/estimate/acknowledge`, managerEmail, otherDealerId, {
     method: "POST",
   });
@@ -1773,6 +1779,83 @@ try {
   });
   expectStatus(replay, 409, "estimate approval replay");
 
+  // Repricing invalidates both optional evidence records, but it is not an
+  // operational hold: an in-progress card and its running timer stay live.
+  const staleQueuedEstimateEmail = await pool.query<{ id: number }>(
+    `insert into email_logs
+       (dealer_id, customer_id, service_estimate_decision_id, recipient, subject, template,
+        channel, status, delivery_status, payload, dedupe_key)
+     values ($1, $2, $3, $4, $5, 'service.estimate.ready',
+       'email', 'queued', 'queued', '{}'::jsonb, $6)
+     returning id`,
+    [
+      dealerId,
+      customerId,
+      firstAcknowledgement.body.estimateStaffAcknowledgedDecisionId,
+      `${marker}-customer@example.invalid`,
+      `${marker} stale queued quote`,
+      `${marker}:stale-estimate-email`,
+    ],
+  );
+  const timerBeforeReprice = await pool.query<{ timer_started_at: Date | null }>(
+    `select timer_started_at from job_cards where id=$1 and dealer_id=$2`,
+    [approval.cardId, dealerId],
+  );
+  assert(timerBeforeReprice.rows[0]!.timer_started_at,
+    "repricing fixture did not begin with a running timer");
+  const runningReprice = await api(`/job-cards/${approval.cardId}`, managerEmail, dealerId, {
+    method: "PATCH",
+    body: JSON.stringify({ quotedLaborHours: 4 }),
+  });
+  expectStatus(runningReprice, 200, "running job-card repricing");
+  const repricedRunningCard = await pool.query<{
+    estimate_version: number;
+    estimate_approved_version: number | null;
+    estimate_staff_acknowledged_version: number | null;
+    estimate_staff_acknowledged_decision_id: number | null;
+    status: string;
+    waiting_reason: string | null;
+    timer_started_at: Date | null;
+    invalidated_at: Date | null;
+  }>(
+    `select card.estimate_version, card.estimate_approved_version,
+       card.estimate_staff_acknowledged_version, card.estimate_staff_acknowledged_decision_id,
+       card.status, card.waiting_reason, card.timer_started_at,
+       decision.invalidated_at
+       from job_cards card
+       join service_estimate_decisions decision
+         on decision.id=$3 and decision.dealer_id=card.dealer_id
+      where card.id=$1 and card.dealer_id=$2`,
+    [approval.cardId, dealerId, firstAcknowledgement.body.estimateStaffAcknowledgedDecisionId],
+  );
+  const repricedRunning = repricedRunningCard.rows[0]!;
+  equal(repricedRunning.estimate_version, 2,
+    "running repricing did not advance the estimate version");
+  equal(repricedRunning.estimate_approved_version, null,
+    "running repricing retained stale customer evidence");
+  equal(repricedRunning.estimate_staff_acknowledged_version, null,
+    "running repricing retained stale staff receipt version");
+  equal(repricedRunning.estimate_staff_acknowledged_decision_id, null,
+    "running repricing retained stale staff receipt decision");
+  equal(repricedRunning.status, "in_progress",
+    "running repricing automatically held operational work");
+  equal(repricedRunning.waiting_reason, null,
+    "running repricing invented a customer-decision hold");
+  equal(
+    repricedRunning.timer_started_at?.getTime(),
+    timerBeforeReprice.rows[0]!.timer_started_at?.getTime(),
+    "running repricing stopped or restarted the timer",
+  );
+  assert(repricedRunning.invalidated_at,
+    "running repricing did not invalidate old customer evidence");
+  const pauseRepricedTimer = await api(
+    `/job-cards/${approval.cardId}/timer`,
+    technicianEmail,
+    dealerId,
+    { method: "POST", body: JSON.stringify({ action: "pause" }) },
+  );
+  expectStatus(pauseRepricedTimer, 200, "pause repriced operational timer");
+
   const stale = await orderAndCard({
     label: "Stale estimate vehicle",
     scheduledDate: today,
@@ -1817,50 +1900,221 @@ try {
   });
   expectStatus(expiredApproval, 410, "expired estimate approval");
 
-  // Direct status, timer, and reopen endpoints must share the exact-version
-  // gate; otherwise a staff member could bypass customer approval without
-  // touching the normal parts/estimate screen.
+  // Customer authorization is optional evidence for operational work. Exercise
+  // the actual staff endpoints with no customer decision or receipt: start,
+  // pause/resume, completion and reopen must all work, and the timer segments
+  // must reach the technician timesheet.
   const approvalGate = await orderAndCard({
-    label: "Approval-gated lifecycle vehicle",
+    label: "Authorization-optional lifecycle vehicle",
     scheduledDate: today,
-    status: "in_progress",
+    status: "open",
     quoteTotal: 114,
   });
   await pool.query(
-    `update job_cards set estimate_version=1, estimate_approved_version=0, timer_started_at=now(),
-       labor_hours=1, labor_rate=100
+    `update job_cards set estimate_version=1, estimate_approved_version=null,
+       estimate_staff_acknowledged_version=null,
+       estimate_staff_acknowledged_decision_id=null,
+       timer_started_at=null, labor_hours=1, labor_rate=100
        where id=$1 and dealer_id=$2`,
     [approvalGate.cardId, dealerId],
   );
-  const completionBypass = await api(`/job-cards/${approvalGate.cardId}`, managerEmail, dealerId, {
+  const operationalStart = await api(`/job-cards/${approvalGate.cardId}`, technicianEmail, dealerId, {
     method: "PATCH",
-    body: JSON.stringify({ status: "completed" }),
+    body: JSON.stringify({ status: "in_progress" }),
   });
-  equal(completionBypass.response.status, 422, "completion bypassed current customer estimate approval");
+  expectStatus(operationalStart, 200, "start customer-pay work without estimate authorization");
+  assert(operationalStart.body.timerStartedAt,
+    "starting unauthorized operational work did not start its timer");
+  // Let the real timer cross a whole-second boundary so the pause endpoint
+  // records a deterministic non-zero segment.
+  await sleep(1_100);
   const timerPause = await api(`/job-cards/${approvalGate.cardId}/timer`, technicianEmail, dealerId, {
     method: "POST",
     body: JSON.stringify({ action: "pause" }),
   });
-  equal(timerPause.response.status, 200, "timer pause before approval-gate check");
+  expectStatus(timerPause, 200, "pause timer without estimate authorization");
   const timerResume = await api(`/job-cards/${approvalGate.cardId}/timer`, technicianEmail, dealerId, {
     method: "POST",
     body: JSON.stringify({ action: "resume" }),
   });
-  equal(timerResume.response.status, 422, "timer resume bypassed current customer estimate approval");
-  await pool.query(
-    `update job_cards set status='completed', timer_started_at=null
-       where id=$1 and dealer_id=$2`,
-    [approvalGate.cardId, dealerId],
-  );
-  const reopenBypass = await api(`/job-cards/${approvalGate.cardId}/reopen`, managerEmail, dealerId, {
-    method: "POST",
-    body: JSON.stringify({ reason: "Approval-gate regression" }),
+  expectStatus(timerResume, 200, "resume timer without estimate authorization");
+  const operationalCompletion = await api(`/job-cards/${approvalGate.cardId}`, technicianEmail, dealerId, {
+    method: "PATCH",
+    body: JSON.stringify({
+      status: "completed",
+      serviceAnalysis: "Verified authorization-optional operational diagnosis",
+      workPerformed: "Completed legitimate workshop work",
+    }),
   });
-  equal(reopenBypass.response.status, 422, "reopen bypassed current customer estimate approval");
+  expectStatus(operationalCompletion, 200,
+    "complete customer-pay work without estimate authorization");
+  equal(operationalCompletion.body.status, "completed",
+    "authorization-optional completion did not persist");
+  assert(!operationalCompletion.body.timerStartedAt,
+    "authorization-optional completion left its timer running");
+  const operationalReopen = await api(`/job-cards/${approvalGate.cardId}/reopen`, managerEmail, dealerId, {
+    method: "POST",
+    body: JSON.stringify({ reason: "Legitimate follow-up work" }),
+  });
+  expectStatus(operationalReopen, 200,
+    "reopen customer-pay work without estimate authorization");
+  equal(operationalReopen.body.status, "in_progress",
+    "authorization-optional reopen did not resume work");
+  assert(operationalReopen.body.timerStartedAt,
+    "authorization-optional reopen did not start its timer");
+  const reopenedPause = await api(`/job-cards/${approvalGate.cardId}/timer`, technicianEmail, dealerId, {
+    method: "POST",
+    body: JSON.stringify({ action: "pause" }),
+  });
+  expectStatus(reopenedPause, 200, "pause authorization-optional reopened timer");
+  const timerTimesheet = await api(
+    `/service-timesheets?date=${today}&technicianUserId=${technicianUserId}`,
+    technicianEmail,
+    dealerId,
+  );
+  expectStatus(timerTimesheet, 200, "authorization-optional timer timesheet");
+  assert(Array.isArray(timerTimesheet.body?.rows),
+    "authorization-optional timer timesheet: expected response rows");
+  const timerTimesheetRow = (timerTimesheet.body?.rows ?? [])
+    .find((row) => row.technicianUserId === technicianUserId);
+  const capturedTimerEntry = timerTimesheetRow?.entries?.find(
+    (entry: any) => entry.source === "automatic" && entry.jobCardId === approvalGate.cardId,
+  );
+  assert(capturedTimerEntry,
+    "timer work without estimate authorization did not reach the timesheet");
+  assert(Number(capturedTimerEntry?.durationMinutes ?? 0) > 0,
+    "timer work without estimate authorization recorded no hours");
+
+  // Manual non-timer work remains legitimate under the existing duplicate
+  // policy. Use a fresh card and a day with no automatic segment.
+  const manualHoursCard = await orderAndCard({
+    label: "Authorization-optional manual hours vehicle",
+    scheduledDate: yesterday,
+    status: "open",
+    quoteTotal: 114,
+  });
+  const manualHours = await api("/service-timesheets", technicianEmail, dealerId, {
+    method: "POST",
+    body: JSON.stringify({
+      technicianUserId,
+      workDate: yesterday,
+      jobCardId: manualHoursCard.cardId,
+      durationMinutes: 30,
+      note: "Legitimate non-timer workshop work",
+    }),
+  });
+  expectStatus(manualHours, 201,
+    "manual hours without estimate authorization");
+  equal(manualHours.body.source, "manual",
+    "manual unauthorized-work entry lost its source");
+  equal(manualHours.body.jobCardId, manualHoursCard.cardId,
+    "manual unauthorized-work entry lost its fresh job card");
+
+  // A historical explicit customer_decision hold remains a real staff hold,
+  // but no estimate evidence is required to resume it.
+  const explicitDecisionHold = await orderAndCard({
+    label: "Explicit customer-decision hold vehicle",
+    scheduledDate: today,
+    status: "on_hold",
+    waitingReason: "customer_decision",
+    quoteTotal: 114,
+  });
+  const resumeExplicitDecisionHold = await api(
+    `/job-cards/${explicitDecisionHold.cardId}/waiting`,
+    technicianEmail,
+    dealerId,
+    { method: "PATCH", body: JSON.stringify({ action: "resume" }) },
+  );
+  expectStatus(resumeExplicitDecisionHold, 200,
+    "resume explicit customer-decision hold without estimate authorization");
+  equal(resumeExplicitDecisionHold.body.status, "in_progress",
+    "explicit customer-decision hold did not resume");
+  equal(resumeExplicitDecisionHold.body.waitingReason, null,
+    "explicit customer-decision hold reason was not cleared");
+  assert(resumeExplicitDecisionHold.body.timerStartedAt,
+    "explicit customer-decision hold resume did not start its timer");
+  const pauseExplicitDecisionHold = await api(
+    `/job-cards/${explicitDecisionHold.cardId}/timer`,
+    technicianEmail,
+    dealerId,
+    { method: "POST", body: JSON.stringify({ action: "pause" }) },
+  );
+  expectStatus(pauseExplicitDecisionHold, 200,
+    "pause explicitly resumed customer-decision hold");
+
+  // Invoice issuance retains the hard commercial boundary: completed work can
+  // be invoiced only after exact-version customer approval AND staff receipt.
+  const invoiceEvidenceCard = await orderAndCard({
+    label: "Invoice evidence guard vehicle",
+    scheduledDate: today,
+    status: "completed",
+    quoteTotal: 114,
+  });
+  await pool.query(
+    `update job_cards set estimate_version=1, estimate_approved_version=null,
+       estimate_staff_acknowledged_version=null,
+       estimate_staff_acknowledged_decision_id=null,
+       labor_hours=1, labor_rate=100,
+       service_analysis='Invoice evidence guard diagnosis',
+       work_performed='Invoice evidence guard work'
+       where id=$1 and dealer_id=$2`,
+    [invoiceEvidenceCard.cardId, dealerId],
+  );
+  const invoiceEvidenceToken = token();
+  await pool.query(
+    `insert into service_estimate_decisions
+       (dealer_id, service_order_id, job_card_id, token_hash, estimate_total,
+        lines_snapshot, estimate_version, expires_at)
+     values ($1, $2, $3, $4, 114, $5::jsonb, 1, now() + interval '1 hour')`,
+    [
+      dealerId,
+      invoiceEvidenceCard.orderId,
+      invoiceEvidenceCard.cardId,
+      tokenHash(invoiceEvidenceToken),
+      JSON.stringify([
+        { kind: "labour", description: "Labour", quantity: 1, amount: 100 },
+        { kind: "tax", description: "Tax", quantity: 1, amount: 14 },
+      ]),
+    ],
+  );
+  const invoiceCustomerApproval = await api(
+    `/service-estimates/${invoiceEvidenceToken}`,
+    null,
+    dealerId,
+    { method: "POST", body: JSON.stringify({ decision: "approved" }) },
+  );
+  expectStatus(invoiceCustomerApproval, 200,
+    "invoice guard exact-version customer approval");
+  const invoiceWithoutReceipt = await api(
+    `/job-cards/${invoiceEvidenceCard.cardId}/invoice`,
+    managerEmail,
+    dealerId,
+    { method: "POST" },
+  );
+  expectStatus(invoiceWithoutReceipt, 422,
+    "invoice guard without staff receipt");
+  const invoiceStaffReceipt = await api(
+    `/job-cards/${invoiceEvidenceCard.cardId}/estimate/acknowledge`,
+    managerEmail,
+    dealerId,
+    { method: "POST" },
+  );
+  expectStatus(invoiceStaffReceipt, 200,
+    "invoice guard current staff receipt");
+  equal(invoiceStaffReceipt.body.estimateStaffAcknowledgedVersion, 1,
+    "invoice staff receipt was not exact-version bound");
+  const invoiceWithBothEvidence = await api(
+    `/job-cards/${invoiceEvidenceCard.cardId}/invoice`,
+    managerEmail,
+    dealerId,
+    { method: "POST" },
+  );
+  expectStatus(invoiceWithBothEvidence, 201,
+    "invoice guard with exact customer approval and staff receipt");
 
   // Changing a positive in-progress warranty/goodwill case to customer pay
-  // creates a new customer liability. It must version/reset the old approval
-  // and fold the timer while holding for the newly required decision.
+  // creates a new estimate version and resets evidence, without interrupting
+  // operational work or its timer.
   const payTypeTransition = await orderAndCard({
     label: "Warranty to customer-pay approval vehicle",
     scheduledDate: today,
@@ -1898,14 +2152,21 @@ try {
     "customer pay transition did not create a new estimate version");
   equal(transitionedCard.rows[0]!.estimate_approved_version, null,
     "customer pay transition retained the noncustomer approval");
-  equal(transitionedCard.rows[0]!.status, "on_hold",
-    "customer pay transition did not hold chargeable in-progress work");
-  equal(transitionedCard.rows[0]!.waiting_reason, "customer_decision",
-    "customer pay transition did not identify the approval hold");
-  assert(transitionedCard.rows[0]!.timer_started_at == null,
-    "customer pay transition left a running timer while on approval hold");
-  assert(transitionedCard.rows[0]!.timer_seconds >= 90,
-    "customer pay transition did not fold the running timer");
+  equal(transitionedCard.rows[0]!.status, "in_progress",
+    "customer pay transition automatically held operational work");
+  equal(transitionedCard.rows[0]!.waiting_reason, null,
+    "customer pay transition invented a customer-decision hold");
+  assert(transitionedCard.rows[0]!.timer_started_at,
+    "customer pay transition stopped the running timer");
+  equal(transitionedCard.rows[0]!.timer_seconds, 90,
+    "customer pay transition folded time from a still-running timer");
+  const pausePayTypeTransition = await api(
+    `/job-cards/${payTypeTransition.cardId}/timer`,
+    technicianEmail,
+    dealerId,
+    { method: "POST", body: JSON.stringify({ action: "pause" }) },
+  );
+  expectStatus(pausePayTypeTransition, 200, "pause customer-pay transition timer");
 
   const declined = await orderAndCard({
     label: "Declined estimate vehicle",
@@ -1959,8 +2220,8 @@ try {
       declinedRevision.rows[0]!.estimate_approved_version !== declinedRevision.rows[0]!.estimate_version,
       "charge after decline retained an obsolete estimate approval",
     );
-    equal(declinedRevision.rows[0]!.status, "on_hold",
-      "charge after decline did not wait for revised customer approval");
+    equal(declinedRevision.rows[0]!.status, "in_progress",
+      "charge after decline automatically held operational work");
   } else {
     assert(declinedCharge.response.status === 409 || declinedCharge.response.status === 422,
       "declined estimate charge was rejected with an unexpected response");
@@ -1970,22 +2231,6 @@ try {
     `update job_cards set quote_approved_at=now(), estimate_version=2,
        estimate_approved_version=1 where id=$1 and dealer_id=$2`,
     [approval.cardId, dealerId],
-  );
-  const staleQueuedEstimateEmail = await pool.query<{ id: number }>(
-    `insert into email_logs
-       (dealer_id, customer_id, service_estimate_decision_id, recipient, subject, template,
-        channel, status, delivery_status, payload, dedupe_key)
-     values ($1, $2, $3, $4, $5, 'service.estimate.ready',
-       'email', 'queued', 'queued', '{}'::jsonb, $6)
-     returning id`,
-    [
-      dealerId,
-      customerId,
-      firstAcknowledgement.body.estimateStaffAcknowledgedDecisionId,
-      `${marker}-customer@example.invalid`,
-      `${marker} stale queued quote`,
-      `${marker}:stale-estimate-email`,
-    ],
   );
   const genericFlagBypass = await api(`/job-cards/${approval.cardId}/parts`, managerEmail, dealerId, {
     method: "POST",
@@ -2036,12 +2281,13 @@ try {
   // customer-approved quote. It is just as commercially material as an
   // internal-stock issue: receiving it must create a revised quote, invalidate
   // both attestations and stop its prior quote delivery before a replacement
-  // quote can be queued.
+  // quote can be queued, without automatically holding operational work.
   const externalAuthorization = await orderAndCard({
     label: "External-only authorized quote vehicle",
     scheduledDate: today,
     status: "in_progress",
     quoteTotal: 114,
+    timerRunning: true,
   });
   await pool.query(
     `update job_cards set labor_hours=1, labor_rate=100
@@ -2188,13 +2434,15 @@ try {
     estimate_staff_acknowledged_decision_id: number | null;
     status: string;
     waiting_reason: string | null;
+    timer_started_at: Date | null;
     decision_invalidated_at: Date | null;
     outbox_status: string;
     outbox_delivery_status: string | null;
   }>(
     `select card.estimate_version, card.quote_total, card.estimate_approved_version,
        card.estimate_staff_acknowledged_version, card.estimate_staff_acknowledged_decision_id,
-       card.status, card.waiting_reason, decision.invalidated_at decision_invalidated_at,
+       card.status, card.waiting_reason, card.timer_started_at,
+       decision.invalidated_at decision_invalidated_at,
        outbox.status outbox_status, outbox.delivery_status outbox_delivery_status
        from job_cards card
        join service_estimate_decisions decision on decision.id=$3 and decision.dealer_id=card.dealer_id
@@ -2218,16 +2466,26 @@ try {
     "external-only fulfillment retained staff acknowledgement for an old quote");
   equal(externalAuthorizedEffect?.estimate_staff_acknowledged_decision_id, null,
     "external-only fulfillment retained staff decision evidence for an old quote");
-  equal(externalAuthorizedEffect?.status, "on_hold",
-    "external-only fulfillment did not hold chargeable work for the revised quote");
-  equal(externalAuthorizedEffect?.waiting_reason, "customer_decision",
-    "external-only fulfillment did not identify the revised-quote decision hold");
+  equal(externalAuthorizedEffect?.status, "in_progress",
+    "external-only fulfillment automatically held operational work");
+  equal(externalAuthorizedEffect?.waiting_reason, null,
+    "external-only fulfillment invented a revised-quote decision hold");
+  assert(externalAuthorizedEffect?.timer_started_at,
+    "external-only fulfillment stopped the running operational timer");
   assert(externalAuthorizedEffect?.decision_invalidated_at,
     "external-only fulfillment did not stale the old customer token");
   equal(externalAuthorizedEffect?.outbox_status, "cancelled",
     "external-only fulfillment left the old queued quote deliverable");
   equal(externalAuthorizedEffect?.outbox_delivery_status, "cancelled",
     "external-only fulfillment did not cancel old quote delivery");
+  const pauseExternalAuthorizedTimer = await api(
+    `/job-cards/${externalAuthorization.cardId}/timer`,
+    technicianEmail,
+    dealerId,
+    { method: "POST", body: JSON.stringify({ action: "pause" }) },
+  );
+  expectStatus(pauseExternalAuthorizedTimer, 200,
+    "pause external-fulfillment operational timer");
   const staleExternalToken = await api(
     `/service-estimates/${externalInitialToken}`,
     null,
@@ -2412,40 +2670,8 @@ try {
      values ($1, $2, $3, $4, 'issue', 1, 80, 40, true)`,
     [dealerId, backorder.cardId, backorderPart.rows[0]!.id, `${marker} Backorder component`],
   );
-  // Auto-resume is still real chargeable work. Seed a genuine current
-  // customer decision and its separate staff receipt, rather than treating
-  // the legacy `estimate_approved_version` flag as sufficient authorization.
-  const backorderApprovalToken = token();
-  await pool.query(
-    `insert into service_estimate_decisions
-       (dealer_id, service_order_id, job_card_id, token_hash, estimate_total, lines_snapshot,
-        estimate_version, expires_at)
-     values ($1, $2, $3, $4, 91.2, $5::jsonb, 1, now() + interval '1 hour')`,
-    [
-      dealerId,
-      backorder.orderId,
-      backorder.cardId,
-      tokenHash(backorderApprovalToken),
-      JSON.stringify([
-        { kind: "part", description: `${marker} Backorder component`, quantity: 1, amount: 80 },
-        { kind: "tax", description: "Tax", quantity: 1, amount: 11.2 },
-      ]),
-    ],
-  );
-  const backorderCustomerApproval = await api(
-    `/service-estimates/${backorderApprovalToken}`,
-    null,
-    dealerId,
-    { method: "POST", body: JSON.stringify({ decision: "approved" }) },
-  );
-  expectStatus(backorderCustomerApproval, 200, "backorder current customer approval");
-  const backorderStaffAcknowledgement = await api(
-    `/job-cards/${backorder.cardId}/estimate/acknowledge`,
-    managerEmail,
-    dealerId,
-    { method: "POST" },
-  );
-  expectStatus(backorderStaffAcknowledgement, 200, "backorder current staff acknowledgement");
+  // Stock fulfillment is operational and releases its own ordered-parts hold
+  // even though this customer-pay card has no approval or staff receipt.
   const internalPo = await pool.query<{ id: number }>(
     `insert into purchase_orders (dealer_id, supplier_id, status, expected_date, reference)
      values ($1, $2, 'ordered', $3, $4) returning id`,
@@ -2504,8 +2730,8 @@ try {
   equal(Number(backorderEffects.rows[0]!.stock), 0, "backorder receipt/issue changed stock twice");
   equal(backorderEffects.rows[0]!.estimate_version, 1,
     "backorder fulfillment incorrectly changed an already quoted estimate");
-  equal(backorderEffects.rows[0]!.estimate_approved_version, 1,
-    "backorder fulfillment incorrectly removed current customer approval");
+  equal(backorderEffects.rows[0]!.estimate_approved_version, null,
+    "backorder fulfillment fabricated customer approval");
 
   // One receipt may release several cards. This deliberately includes an
   // unassigned card and two cards for a technician who is already busy: stock

@@ -2,17 +2,17 @@
 name: Workshop cost confirmation
 description: Customer approval boundaries, diagnostic preparation, and operational versus financial returns
 ---
-Customer-cost confirmation must not prevent intake or diagnostic work needed to prepare an estimate. Once a positive customer-pay estimate exists, continuing chargeable work requires confirmation of that exact version, not a staff-entered approval flag.
+Customer authorization is optional for workshop operations, including technician timers, hour capture, work progression, and resuming authorization-held jobs. Repricing invalidates prior consent evidence but must not itself stop work. Exact-version customer authorization and staff receipt remain required for invoice issuance.
 
-**Why:** Requiring an estimate before any work creates a circular workflow; permitting work after a quoted-price change exposes customers to charges they did not accept.
+**Why:** The user explicitly changed the earlier mandatory-work-authorization policy because service bookings were stuck on hold and technicians could not log hours. This relaxes operational work, not financial issuance or truthfulness of approval records.
 
-**How to apply:** Review alternate work paths (timers, rollover, receipt-driven resume, completion) whenever approval rules change, rather than guarding only the main Start Work button.
+**How to apply:** Review alternate work paths (timers, rollover, parts-receipt-driven resume, completion) whenever approval rules change, rather than guarding only Start Work. Do not auto-start existing held timers, backfill hours, or fabricate customer approval to unlock work.
 
 Quote preparation, customer authorization, and staff confirmation of receipt are three separate steps. Preparing or changing a quote must not automatically email draft prices; staff explicitly sends the reviewed itemized quote. Customer authorization cannot be fabricated by the staff receipt action.
 
-**Why:** The requested workshop workflow requires both the customer's consent and the dealership's acknowledgment that it has received that consent. An internal approval flag or an automatically queued total-only email does not satisfy that process.
+**Why:** Optional work authorization does not make staff receipt equivalent to customer consent. An internal approval flag or automatically queued total-only email does not prove customer approval.
 
-**How to apply:** Keep the two actors' evidence separate and version-bound; require both before chargeable work resumes, and distinguish queued delivery from sent email or customer receipt.
+**How to apply:** Keep the two actors' evidence separate and version-bound; require both for invoice issuance, not for technician work. Distinguish queued delivery from sent email or customer receipt.
 
 Quote supersession must serialize with the sender's final validity check through provider hand-off, not merely cancel queued mail.
 

@@ -501,7 +501,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
       toast({
         title: "Current labour rate applied",
         description:
-          "The card was repriced in GYD and its estimate authorization was reset. Send the revised quote when ready.",
+          "The card was repriced in GYD and its estimate authorization was reset. Workshop work may continue; send the revised quote before invoicing.",
       });
     } catch (error: unknown) {
       toast({
@@ -535,7 +535,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
       await invalidate();
       toast({
         title: "Authorization receipt recorded",
-        description: "Chargeable work can proceed once the remaining job requirements are met.",
+        description: "Receipt evidence is recorded for invoice issuance. Workshop work did not depend on this step.",
       });
     } catch (error: unknown) {
       const message = apiErrorMessage(error, "Could not record authorization receipt.");
@@ -957,6 +957,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                 {estimateDeliveryLabel(preview.delivery.state)}
               </Badge>
             </div>
+            <p className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-xs text-muted-foreground">
+              Customer authorization is optional for workshop work and technician time. For a positive customer-pay job, the current quote must still be authorized by the customer and its receipt confirmed by staff before an invoice can be issued.
+            </p>
 
              <section className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3">
                <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1130,19 +1133,19 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                 </div>
               ) : customerApprovedCurrent ? (
                 <p className="mt-2 text-xs text-amber-300">
-                  Customer authorization is recorded for this exact quote version. Chargeable work remains blocked until staff confirms receipt.
+                  Customer authorization is recorded for this exact quote version. Staff must confirm receipt before invoice issuance; workshop work may continue.
                 </p>
               ) : preview.decision.state === "declined" ? (
                 <p className="mt-2 text-xs text-amber-300">
-                  The customer declined this quote. Chargeable work remains blocked until a revised quote is sent, authorized, and acknowledged by staff.
+                  The customer declined this quote. This does not block technician work, but an invoice cannot be issued until the current quote is authorized and staff confirms receipt.
                 </p>
               ) : preview.decision.state === "expired" || preview.decision.state === "stale" ? (
                 <p className="mt-2 text-xs text-amber-300">
-                  This quote is no longer current. Chargeable work remains blocked until the current quote is sent, authorized, and acknowledged by staff.
+                  This quote is no longer current. Technician work may continue; invoice issuance requires authorization of the current quote and staff confirmation of receipt.
                 </p>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Waiting for customer authorization of the current quote. Chargeable work remains blocked until the customer authorizes and staff confirms receipt.
+                  Customer authorization is pending or has not been requested. Technician work may continue; invoice issuance requires authorization of the current quote and staff confirmation of receipt.
                 </p>
               )}
               {preview.decision.decidedAt && (
@@ -1469,6 +1472,11 @@ function WaitingSection({ card, onChanged }: { card: JobCard; onChanged: () => v
             {card.nextAction ? ` · Next action: ${card.nextAction}` : ""}
             {card.followUpDate ? ` · Follow up ${formatGuyanaDate(card.followUpDate)}` : ""}
           </p>
+          {isWaiting && card.waitingReason === "customer_decision" && (
+            <p className="mt-1 text-xs text-primary">
+              Customer authorization is optional for technician work. Resume work when operationally appropriate; invoice authorization safeguards remain.
+            </p>
+          )}
         </div>
         {isWaiting ? (
           <Button size="sm" variant="outline" className="rounded-full" disabled={waiting.isPending} onClick={() => void resume()}>

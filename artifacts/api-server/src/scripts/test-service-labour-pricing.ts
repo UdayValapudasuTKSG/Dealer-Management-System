@@ -28,7 +28,7 @@ assert.equal(resolveNewCardLabourRate(27500, 209), 27500);
 assert.throws(() => resolveNewCardLabourRate(Number.NaN, 209));
 
 // Repricing is a new estimate version, so the old customer approval and staff
-// receipt cannot authorize chargeable work on the replacement price.
+// receipt cannot authorize invoice issuance for the replacement price.
 const approvedCard = {
   payType: "customer",
   quoteTotal: 75240,

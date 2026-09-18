@@ -2236,7 +2236,6 @@ async function autoCreateJobCard(
     laborRate,
     ...surcharge,
   });
-  const customerQuotePending = order.payType === "customer" && quoteTotal > 0;
   const customerPhoneSnapshot = (order as any).customerPhoneSnapshot ?? await resolveCustomerPhoneSnapshot(
     order.customerId,
     order.dealerId,
@@ -2249,7 +2248,7 @@ async function autoCreateJobCard(
       title:
         order.complaint?.trim() ||
         `${order.type.replace(/_/g, " ")} — ${order.vehicleInfo}`,
-      status: customerQuotePending ? "on_hold" : "open",
+      status: "open",
       payType: order.payType,
       technicianUserId: order.technicianUserId,
       technicianName: order.technician,
@@ -2259,10 +2258,6 @@ async function autoCreateJobCard(
       quotedLaborHours,
       laborRate,
       quoteTotal,
-      ...(customerQuotePending ? {
-        waitingReason: "customer_decision",
-        nextAction: "Send the Service & Parts Quote and wait for customer confirmation",
-      } : {}),
       customerPhoneSnapshot,
       ...surcharge,
     });
@@ -2653,8 +2648,6 @@ router.post("/job-cards", async (req, res): Promise<void> => {
     laborRate,
     ...surcharge,
   });
-  const customerQuotePending = payType === "customer" && quoteTotal > 0;
-
   let card: typeof jobCardsTable.$inferSelect | undefined;
   try {
     // Asset + pay type flow down from the case unless explicitly overridden.
@@ -2669,11 +2662,7 @@ router.post("/job-cards", async (req, res): Promise<void> => {
         quotedLaborHours,
         laborRate,
         quoteTotal,
-        status: customerQuotePending ? "on_hold" : "open",
-        ...(customerQuotePending ? {
-          waitingReason: "customer_decision",
-          nextAction: "Send the Service & Parts Quote and wait for customer confirmation",
-        } : {}),
+        status: "open",
         scheduledAt: parsed.data.scheduledAt
           ? new Date(parsed.data.scheduledAt)
           : null,
@@ -2817,13 +2806,6 @@ router.patch("/job-cards/:id/waiting", async (req, res): Promise<void> => {
     res.status(409).json({ error: "This carry-over is awaiting required rollover sign-off and cannot be resumed yet" });
     return;
   }
-  if (parsed.data.action === "resume" && !hasCurrentChargeableWorkAuthorization(current)) {
-    res.status(422).json({
-      error: "The customer must approve and service staff must acknowledge the current estimate version before chargeable work can resume.",
-      unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
-    });
-    return;
-  }
   if (parsed.data.action === "hold" && !parsed.data.reason) {
     res.status(422).json({ error: "Choose a waiting reason before placing work on hold" });
     return;
@@ -2860,12 +2842,6 @@ router.patch("/job-cards/:id/waiting", async (req, res): Promise<void> => {
     eq(jobCardsTable.status, current.status),
     eq(jobCardsTable.estimateVersion, current.estimateVersion),
     eq(jobCardsTable.rolloverStatus, current.rolloverStatus),
-    current.estimateStaffAcknowledgedVersion == null
-      ? isNull(jobCardsTable.estimateStaffAcknowledgedVersion)
-      : eq(jobCardsTable.estimateStaffAcknowledgedVersion, current.estimateStaffAcknowledgedVersion),
-    current.estimateStaffAcknowledgedDecisionId == null
-      ? isNull(jobCardsTable.estimateStaffAcknowledgedDecisionId)
-      : eq(jobCardsTable.estimateStaffAcknowledgedDecisionId, current.estimateStaffAcknowledgedDecisionId),
   )).returning();
   if (!card) {
     res.status(409).json({ error: "Job card changed — reload and retry" });
@@ -3199,21 +3175,6 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     parsed.data.quotedLaborHours !== undefined ||
     parsed.data.laborRate !== undefined ||
     parsed.data.payType !== undefined;
-  const nextPayType = parsed.data.payType ?? existing.payType;
-  const chargeChangeRequiresCustomerHold =
-    chargesChanging &&
-    nextPayType === "customer" &&
-    (parsed.data.quoteTotal ?? existing.quoteTotal) > 0;
-  if (
-    parsed.data.status === "in_progress" &&
-    !hasCurrentChargeableWorkAuthorization(existing)
-  ) {
-    res.status(422).json({
-      error: "Customer approval and staff acknowledgement are required for this exact estimate version before chargeable work can proceed.",
-      unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
-    });
-    return;
-  }
   if (parsed.data.status === "in_progress" && existing.rolloverStatus === "pending") {
     res.status(409).json({ error: "Complete the pending rollover approvals before resuming this job card." });
     return;
@@ -3231,7 +3192,6 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   }
   if (
     parsed.data.status === "in_progress" &&
-    !chargeChangeRequiresCustomerHold &&
     existing.status === "open" &&
     !existing.startedAt
   ) {
@@ -3242,8 +3202,7 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   // segment into the accumulated total.
   if (
     parsed.data.status &&
-    parsed.data.status !== existing.status &&
-    !chargeChangeRequiresCustomerHold
+    parsed.data.status !== existing.status
   ) {
     if (parsed.data.status === "in_progress") {
       // Start a segment unless one is already running (SQL keeps this
@@ -3257,13 +3216,6 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     }
   }
   if (parsed.data.status === "completed" && existing.status !== "completed") {
-    if (!hasCurrentChargeableWorkAuthorization(existing)) {
-      res.status(422).json({
-        error: "The customer must approve and service staff must acknowledge the current estimate version before chargeable work can be completed.",
-        unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
-      });
-      return;
-    }
     if (existing.rolloverStatus === "pending") {
       res.status(409).json({ error: "Complete the pending rollover approvals before completing this job card." });
       return;
@@ -3301,10 +3253,9 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     }
     if (
       ["in_progress", "completed"].includes(parsed.data.status ?? "") &&
-       (!hasCurrentChargeableWorkAuthorization(lockedCard) ||
-        lockedCard.rolloverStatus === "pending")
+      lockedCard.rolloverStatus === "pending"
     ) {
-      throw Object.assign(new Error("locked_execution_gate"), { status: 422 });
+      throw Object.assign(new Error("locked_rollover_gate"), { status: 422 });
     }
     if (chargesChanging) {
       const [issuedInvoice] = await tx.select({ id: serviceInvoicesTable.id })
@@ -3326,13 +3277,6 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
       };
       const breakdown = await buildServiceEstimateBreakdown(tx, prospectiveCard);
       patch.quoteTotal = breakdown.total;
-      if ((parsed.data.payType ?? lockedCard.payType) === "customer" && breakdown.total > 0) {
-        patch.status = "on_hold";
-        patch.waitingReason = "customer_decision";
-        patch.nextAction = "Send the revised estimate and wait for customer confirmation";
-        patch.timerSeconds = foldedTimerSeconds;
-        patch.timerStartedAt = null;
-      }
     }
     const [updatedCard] = await tx
       .update(jobCardsTable)
@@ -3405,8 +3349,8 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     const failure = error as Error & { status?: number };
     if (failure.status === 422) {
       res.status(422).json({
-        error: (failure.message === "locked_execution_gate")
-          ? "The current estimate authorization, staff acknowledgement, or rollover state changed — reload before resuming or completing work."
+        error: (failure.message === "locked_rollover_gate")
+          ? "The rollover state changed — reload before resuming or completing work."
           : "An issued invoice is immutable; record a linked financial adjustment instead.",
       });
       return undefined;
@@ -3548,8 +3492,6 @@ router.post("/job-cards/:id/apply-current-labour-rate", async (req, res): Promis
       }
       const prospectiveCard = { ...lockedCard, laborRate: labourRate };
       const breakdown = await buildServiceEstimateBreakdown(tx, prospectiveCard);
-      const customerQuotePending =
-        lockedCard.payType === "customer" && breakdown.total > 0;
       const [updatedCard] = await tx
         .update(jobCardsTable)
         .set({
@@ -3561,15 +3503,6 @@ router.post("/job-cards/:id/apply-current-labour-rate", async (req, res): Promis
           estimateApprovalEvidence: null,
           quoteApprovedAt: null,
           ...clearEstimateStaffAcknowledgement,
-          ...(customerQuotePending
-            ? {
-                status: "on_hold",
-                waitingReason: "customer_decision",
-                nextAction: "Send the revised estimate and wait for customer confirmation",
-                timerSeconds: foldedTimerSeconds,
-                timerStartedAt: null,
-              }
-            : {}),
         })
         .where(and(
           eq(jobCardsTable.id, lockedCard.id),
@@ -3640,13 +3573,6 @@ router.post("/job-cards/:id/timer", async (req, res): Promise<void> => {
   // AND the timer is in the expected state, so concurrent pause/resume/status
   // requests cannot double-fold or drop a running segment.
   const pausing = body.data.action === "pause";
-  if (!pausing && !hasCurrentChargeableWorkAuthorization(existing)) {
-    res.status(422).json({
-      error: "The customer must approve and service staff must acknowledge the current estimate version before this timer can resume.",
-      unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
-    });
-    return;
-  }
   if (!pausing && existing.rolloverStatus === "pending") {
     res.status(409).json({ error: "Complete the pending rollover approvals before resuming this timer." });
     return;
@@ -3668,16 +3594,6 @@ router.post("/job-cards/:id/timer", async (req, res): Promise<void> => {
           : undefined,
         !pausing
           ? eq(jobCardsTable.rolloverStatus, existing.rolloverStatus)
-          : undefined,
-        !pausing
-          ? existing.estimateStaffAcknowledgedVersion == null
-            ? isNull(jobCardsTable.estimateStaffAcknowledgedVersion)
-            : eq(jobCardsTable.estimateStaffAcknowledgedVersion, existing.estimateStaffAcknowledgedVersion)
-          : undefined,
-        !pausing
-          ? existing.estimateStaffAcknowledgedDecisionId == null
-            ? isNull(jobCardsTable.estimateStaffAcknowledgedDecisionId)
-            : eq(jobCardsTable.estimateStaffAcknowledgedDecisionId, existing.estimateStaffAcknowledgedDecisionId)
           : undefined,
         pausing
           ? sql`${jobCardsTable.timerStartedAt} is not null`
@@ -3753,13 +3669,6 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
     });
     return;
   }
-  if (!hasCurrentChargeableWorkAuthorization(existing)) {
-    res.status(422).json({
-      error: "The customer must approve and service staff must acknowledge the current estimate version before this job can be reopened.",
-      unmet: ["customer_estimate_approval_required", "staff_estimate_acknowledgement_required"],
-    });
-    return;
-  }
   if (existing.rolloverStatus === "pending") {
     res.status(409).json({ error: "Complete the pending rollover approvals before reopening this job card." });
     return;
@@ -3786,15 +3695,6 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
         eq(jobCardsTable.status, existing.status),
         eq(jobCardsTable.estimateVersion, existing.estimateVersion),
         eq(jobCardsTable.rolloverStatus, existing.rolloverStatus),
-        existing.estimateApprovedVersion == null
-          ? isNull(jobCardsTable.estimateApprovedVersion)
-          : eq(jobCardsTable.estimateApprovedVersion, existing.estimateApprovedVersion),
-        existing.estimateStaffAcknowledgedVersion == null
-          ? isNull(jobCardsTable.estimateStaffAcknowledgedVersion)
-          : eq(jobCardsTable.estimateStaffAcknowledgedVersion, existing.estimateStaffAcknowledgedVersion),
-        existing.estimateStaffAcknowledgedDecisionId == null
-          ? isNull(jobCardsTable.estimateStaffAcknowledgedDecisionId)
-          : eq(jobCardsTable.estimateStaffAcknowledgedDecisionId, existing.estimateStaffAcknowledgedDecisionId),
         sql`not exists (
           select 1 from ${serviceInvoicesTable}
           where ${serviceInvoicesTable.jobCardId} = ${jobCardsTable.id}
@@ -4194,13 +4094,6 @@ router.post("/job-cards/:id/surcharge", async (req, res): Promise<void> => {
       estimateApprovalEvidence: null,
       quoteApprovedAt: null,
       ...clearEstimateStaffAcknowledgement,
-      ...(current.payType === "customer" && breakdown.total > 0 ? {
-        status: "on_hold",
-        waitingReason: "customer_decision",
-        nextAction: "Send the revised estimate and wait for customer confirmation",
-        timerSeconds: foldedTimerSeconds,
-        timerStartedAt: null,
-      } : {}),
     }).where(and(
       eq(jobCardsTable.id, current.id), eq(jobCardsTable.dealerId, dealerId),
       eq(jobCardsTable.estimateVersion, current.estimateVersion),
@@ -4383,10 +4276,8 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
         .update(jobCardsTable)
         .set({
           status: "on_hold",
-          waitingReason: card.payType === "customer" ? "customer_decision" : "ordered_parts",
-          nextAction: card.payType === "customer"
-            ? "Send the revised estimate and wait for customer confirmation"
-            : "Await ordered parts",
+          waitingReason: "ordered_parts",
+          nextAction: "Await ordered parts",
           timerSeconds: foldedTimerSeconds,
           timerStartedAt: null,
         })
@@ -4443,15 +4334,6 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
       estimateApprovalEvidence: null,
       quoteApprovedAt: null,
       ...clearEstimateStaffAcknowledgement,
-      ...(card.payType === "customer" && breakdown.total > 0
-        ? {
-            status: "on_hold",
-            waitingReason: "customer_decision",
-            nextAction: "Send the revised estimate and wait for customer confirmation",
-            timerSeconds: foldedTimerSeconds,
-            timerStartedAt: null,
-          }
-        : {}),
     }).where(and(eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, card.dealerId)))
       .returning();
     await invalidateServiceEstimate(tx, card.dealerId, card.id);
@@ -4757,13 +4639,6 @@ router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.creat
       estimateApprovalEvidence: null,
       quoteApprovedAt: null,
       ...clearEstimateStaffAcknowledgement,
-      ...(!invoice && lockedCard.payType === "customer" && revisedBreakdown.total > 0 ? {
-          status: "on_hold",
-          waitingReason: "customer_decision",
-          nextAction: "Send the revised estimate and wait for customer confirmation",
-          timerSeconds: foldedTimerSeconds,
-          timerStartedAt: null,
-      } : {}),
     }).where(and(eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId)));
     await invalidateServiceEstimate(tx, dealerId, card.id);
     return inserted;

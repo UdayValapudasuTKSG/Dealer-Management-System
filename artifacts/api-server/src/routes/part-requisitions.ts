@@ -1055,13 +1055,6 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
           estimateApprovalEvidence: null,
           quoteApprovedAt: null,
           ...clearEstimateStaffAcknowledgement,
-          ...(jobCard.payType === "customer" ? {
-            status: "on_hold",
-            waitingReason: "customer_decision",
-            nextAction: "Send the revised estimate and wait for customer confirmation",
-            timerSeconds: sql`${jobCardsTable.timerSeconds} + coalesce(greatest(0, extract(epoch from (now() - ${jobCardsTable.timerStartedAt})))::int, 0)`,
-            timerStartedAt: null,
-          } : {}),
         }).where(and(
           eq(jobCardsTable.id, jobCard.id),
           eq(jobCardsTable.dealerId, dealerId),

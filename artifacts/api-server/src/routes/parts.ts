@@ -66,7 +66,6 @@ import { coordinateCollisionClaim } from "../lib/collision-coordinator";
 import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
 import {
   clearEstimateStaffAcknowledgement,
-  hasCurrentChargeableWorkAuthorization,
 } from "../lib/service-estimate-gate";
 import { invalidateServiceEstimate } from "../lib/service-estimate-invalidation";
 import {
@@ -164,10 +163,10 @@ export async function releaseBackorders(
         eq(jobCardsTable.status, "on_hold"),
       )).for("update");
       for (const card of cardsToConsider) {
-        // A stock receipt may only lift the hold it caused. Customer-decision,
-        // diagnostics and rollover holds must retain their own gates.
+        // A stock receipt may only lift the hold it caused. Explicit staff
+        // holds and rollover holds retain their own gates.
         if (card.waitingReason !== "ordered_parts") continue;
-        if (card.rolloverStatus === "pending" || !hasCurrentChargeableWorkAuthorization(card)) continue;
+        if (card.rolloverStatus === "pending") continue;
         await tx.update(jobCardsTable).set({
           status: "in_progress",
           waitingReason: null,
@@ -1918,13 +1917,6 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
           estimateApprovalEvidence: null,
           quoteApprovedAt: null,
           ...clearEstimateStaffAcknowledgement,
-          ...(jobCard.payType === "customer" ? {
-            status: "on_hold",
-            waitingReason: "customer_decision",
-            nextAction: "Send the revised estimate and wait for customer confirmation",
-            timerSeconds: sql`${jobCardsTable.timerSeconds} + coalesce(greatest(0, extract(epoch from (now() - ${jobCardsTable.timerStartedAt})))::int, 0)`,
-            timerStartedAt: null,
-          } : {}),
         }).where(and(eq(jobCardsTable.id, jobCard.id), eq(jobCardsTable.dealerId, dealerId)));
         await invalidateServiceEstimate(tx, dealerId, jobCard.id);
         await tx

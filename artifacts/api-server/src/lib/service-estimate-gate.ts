@@ -1,8 +1,9 @@
 /**
- * Chargeable customer work has two distinct attestations: the customer must
- * approve the currently-priced estimate, and authenticated service staff must
- * acknowledge receipt of that exact customer decision.  Zero-cost diagnostics
- * deliberately remain runnable without either attestation.
+ * Invoice issuance for customer-pay work has two distinct attestations: the
+ * customer must approve the currently-priced estimate, and authenticated
+ * service staff must acknowledge receipt of that exact customer decision.
+ * These attestations are commercial evidence, not authorization to perform
+ * workshop work or record technician time.
  */
 export type EstimateGateCard = {
   payType: string;

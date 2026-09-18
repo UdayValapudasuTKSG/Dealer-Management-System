@@ -94,14 +94,14 @@ export default function ServiceEstimate() {
                     {data.state === "approved" || result === "approved"
                       ? "Thank you — your authorization of this exact quote version has been recorded."
                       : data.state === "declined" || result === "declined"
-                        ? "This quote was declined. Chargeable work is blocked until your advisor sends a revised quote."
+                        ? "This quote was declined. Your decision is recorded; workshop work may continue, but the dealership cannot issue an invoice until the current quote is authorized and receipt is confirmed by staff."
                         : data.state === "expired"
-                          ? "This quote has expired. Chargeable work is blocked until your advisor sends the current quote."
-                          : "This quote is stale because a newer version is available. Chargeable work is blocked until the current quote is authorized."}
+                          ? "This quote has expired. Workshop work may continue, but the current quote must be authorized before the dealership can issue an invoice."
+                          : "This quote is stale because a newer version is available. Workshop work may continue, but the current quote must be authorized before the dealership can issue an invoice."}
                   </p>
                   {(data.state === "approved" || result === "approved") && (
                     <p className="mt-2 text-sm opacity-80">
-                      Your dealership will review this authorization before chargeable work begins.
+                      Your dealership will confirm receipt of this authorization before issuing an invoice.
                     </p>
                   )}
                   {data.decidedAt && <p className="mt-1 text-sm opacity-80">Recorded {new Date(data.decidedAt).toLocaleString("en-GY", { dateStyle: "medium", timeStyle: "short" })}.</p>}
@@ -110,6 +110,9 @@ export default function ServiceEstimate() {
                 <div className="mt-8">
                   <p className="mb-4 text-sm text-neutral-600">
                     Review the itemized cost above. Your choice applies to this complete quote, including any parts, servicing or labour, taxes, and surcharge shown.
+                  </p>
+                  <p className="mb-4 rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-700">
+                    Authorization is optional for workshop work to continue. It is still required, with staff confirmation of receipt, before the dealership can issue an invoice for this customer-pay quote.
                   </p>
                   {preselectedDecision && (
                     <p className="mb-4 rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-700">
