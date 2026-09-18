@@ -64,6 +64,8 @@ export const serviceOrdersTable = pgTable("service_orders", {
   customerName: text("customer_name"),
   customerPhoneSnapshot: text("customer_phone_snapshot"),
   vehicleInfo: text("vehicle_info").notNull(),
+  /** Canonical selected vehicle make used to resolve dealer labour pricing. */
+  brand: text("brand"),
   vin: text("vin"),
   registrationNumber: text("registration_number"),
   vehicleId: integer("vehicle_id"),

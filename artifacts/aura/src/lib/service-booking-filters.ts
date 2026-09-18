@@ -48,6 +48,7 @@ export function filterServiceBookings(
       order.customerEmail,
       order.customerPhoneSnapshot,
       order.vehicleInfo,
+      order.brand,
       order.vin,
       order.registrationNumber,
       order.complaint,

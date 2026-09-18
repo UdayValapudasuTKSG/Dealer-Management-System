@@ -755,10 +755,12 @@ router.patch("/admin/service-settings", async (req, res): Promise<void> => {
   try {
     settings = await updateServiceSettings(activeDealerId(res), body.data);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "Labour USD to GYD rate must be a positive finite number"
-    ) {
+    if (error instanceof Error && (
+      error.message === "Labour USD to GYD rate must be a positive finite number" ||
+      error.message.startsWith("Brand ") ||
+      error.message.startsWith("Duplicate brand ") ||
+      error.message.startsWith("At most ")
+    )) {
       res.status(422).json({ error: error.message });
       return;
     }

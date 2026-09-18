@@ -73,6 +73,8 @@ import {
   useListCustomers,
   useListServiceCustomerVehicles,
   getListServiceCustomerVehiclesQueryKey,
+  useGetServiceBookingLabourRates,
+  type ServiceBookingLabourRates,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -183,6 +185,11 @@ import {
   type ServiceBookingFilters,
 } from "@/lib/service-booking-filters";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_LABOUR_USD_PER_HOUR,
+  effectiveBrandLabourUsdRate,
+  sortedUniqueBrands,
+} from "@/lib/brand-labour-rates";
 import {
   isCurrentServiceVehicleLookup,
   selectServiceCustomerVehicle,
@@ -656,14 +663,105 @@ function MyJobsStatCard({
 /* Bookings                                                            */
 /* ------------------------------------------------------------------ */
 
+function BookingBrandRateField({
+  value,
+  onChange,
+  rates,
+  isLoading,
+  error,
+  lockedBrand,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  rates: ServiceBookingLabourRates | undefined;
+  isLoading: boolean;
+  error: unknown;
+  lockedBrand?: string;
+}) {
+  const brandOptions = sortedUniqueBrands([
+    ...(rates?.brands ?? []),
+    ...(rates?.brandLabourRates.map((rate) => rate.brand) ?? []),
+    value,
+  ]);
+  const usdRate = effectiveBrandLabourUsdRate(
+    value,
+    rates?.brandLabourRates ?? [],
+  );
+  const gydRate = Math.round(
+    usdRate * (rates?.labourUsdToGydRate ?? 0),
+  );
+
+  return (
+    <div className="space-y-1.5">
+      <Select
+        value={value || "not-specified"}
+        onValueChange={(nextValue) =>
+          onChange(nextValue === "not-specified" ? "" : nextValue)
+        }
+        disabled={isLoading || !!error || !!lockedBrand}
+      >
+        <SelectTrigger
+          className="h-9 bg-white/[0.04]"
+          data-testid="select-service-booking-brand"
+          aria-label="Vehicle brand"
+        >
+          <SelectValue placeholder="Select a brand" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="not-specified">Not specified</SelectItem>
+          {brandOptions.map((brand) => (
+            <SelectItem key={brand.toLocaleLowerCase()} value={brand}>
+              {brand}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {isLoading ? (
+        <p className="text-[11px] text-muted-foreground">Loading current labour rates…</p>
+      ) : error ? (
+        <p className="text-[11px] text-destructive" role="alert">
+          Brand options and current labour rates could not be loaded.
+        </p>
+      ) : (
+        <p
+          className="text-[11px] text-muted-foreground"
+          data-testid="text-service-booking-effective-labour-rate"
+        >
+          {value ? `${value}: ` : "Default: "}
+          US${usdRate.toLocaleString("en-US")}/hour
+          {" · "}
+          {rates
+            ? `GYD ${gydRate.toLocaleString("en-GY")}/hour`
+            : "GYD rate unavailable"}
+          {!value && ` · no brand selected`}
+          {value &&
+            !rates?.brandLabourRates.some(
+              (rate) =>
+                rate.brand.trim().toLocaleLowerCase() ===
+                value.trim().toLocaleLowerCase(),
+            ) &&
+            ` · default US$${DEFAULT_LABOUR_USD_PER_HOUR} applies`}
+        </p>
+      )}
+      {lockedBrand && (
+        <p className="text-[11px] text-muted-foreground">
+          Brand comes from the selected saved vehicle and will be stored as {lockedBrand}.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CreateBookingDialog() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createOrder = useCreateServiceOrder();
   const { data: technicians } = useListServiceTechnicians();
   const { data: customers } = useListCustomers();
+  const bookingRates = useGetServiceBookingLabourRates();
   const [open, setOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [authoritativeBrand, setAuthoritativeBrand] = useState("");
   const vehicleRequestRef = useRef(0);
   const vehicleCustomerRef = useRef<number | null>(null);
   const autofillFieldRef = useRef<(name: string, value: string) => void>(() => undefined);
@@ -685,6 +783,8 @@ function CreateBookingDialog() {
     setAutofillField("vehicleInfo", fields.vehicleInfo);
     setAutofillField("vin", fields.vin);
     setAutofillField("registrationNumber", fields.registrationNumber);
+    setAutofillField("brand", vehicle.make);
+    setAuthoritativeBrand(vehicle.make);
   };
 
   useEffect(() => {
@@ -724,6 +824,7 @@ function CreateBookingDialog() {
         if (!nextOpen) {
           vehicleRequestRef.current += 1;
           setSelectedCustomerId(null);
+          setAuthoritativeBrand("");
           vehicleCustomerRef.current = null;
           autofillFieldRef.current = () => undefined;
         }
@@ -756,6 +857,8 @@ function CreateBookingDialog() {
             setAutofillField("vehicleInfo", "");
             setAutofillField("vin", "");
             setAutofillField("registrationNumber", "");
+            setAutofillField("brand", "");
+            setAuthoritativeBrand("");
             const customer = customers?.find(c => String(c.id) === val);
             if (customer) {
               setAutofillField("customerName", customer.name || "");
@@ -804,6 +907,22 @@ function CreateBookingDialog() {
           },
         },
         { name: "vehicleInfo", label: "Vehicle", type: "text", required: true, span: "half", placeholder: "2022 BMW X5" },
+        {
+          name: "brand",
+          label: "Vehicle brand",
+          type: "custom",
+          span: "half",
+          render: (value, set) => (
+            <BookingBrandRateField
+              value={value}
+              onChange={set}
+              rates={bookingRates.data}
+              isLoading={bookingRates.isLoading}
+              error={bookingRates.error}
+              lockedBrand={authoritativeBrand}
+            />
+          ),
+        },
         { name: "vin", label: "VIN", type: "text", required: true, span: "half", placeholder: "WBA..." },
         { name: "registrationNumber", label: "Registration", type: "text", required: true, span: "half", placeholder: "PAB 1234" },
         { name: "complaint", label: "Customer complaint", type: "textarea", span: "full", placeholder: "Grinding noise when braking..." },
@@ -850,6 +969,7 @@ function CreateBookingDialog() {
           delete v.customerId;
         }
         if (!v.customerEmail) delete v.customerEmail;
+        if (!v.brand) delete v.brand;
         if (v.odometer != null && v.odometer !== "") v.odometer = Number(v.odometer);
         if (v.estimatedHours != null && v.estimatedHours !== "") {
           v.estimatedHours = Number(v.estimatedHours);
@@ -897,6 +1017,7 @@ function EditBookingDialog({
   const update = useUpdateServiceOrder();
   const { data: technicians } = useListServiceTechnicians();
   const { data: customers } = useListCustomers();
+  const bookingRates = useGetServiceBookingLabourRates();
   const [open, setOpen] = useState(false);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const vehicleRequestRef = useRef(0);
@@ -909,6 +1030,7 @@ function EditBookingDialog({
   const [customerPhoneSnapshot, setCustomerPhoneSnapshot] = useState<string>("");
   const [customerEmail, setCustomerEmail] = useState<string>("");
   const [vehicleInfo, setVehicleInfo] = useState<string>("");
+  const [brand, setBrand] = useState<string>("");
   const [vin, setVin] = useState<string>("");
   const [registrationNumber, setRegistrationNumber] = useState<string>("");
   const [type, setType] = useState<string>("");
@@ -944,6 +1066,7 @@ function EditBookingDialog({
           "",
       );
       setVehicleInfo(order.vehicleInfo ?? "");
+      setBrand(order.brand ?? "");
       setVin(order.vin ?? "");
       setRegistrationNumber(order.registrationNumber ?? "");
       setSelectedVehicleId("");
@@ -989,6 +1112,7 @@ function EditBookingDialog({
     fillVehicleField("vehicleInfo", setVehicleInfo, fields.vehicleInfo);
     fillVehicleField("vin", setVin, fields.vin);
     fillVehicleField("registrationNumber", setRegistrationNumber, fields.registrationNumber);
+    setBrand(vehicle.make);
   };
 
   const clearAutoDerivedVehicle = () => {
@@ -1086,6 +1210,7 @@ function EditBookingDialog({
         type: type as ServiceOrderUpdateType,
         scheduledDate,
         vehicleInfo: vehicleInfo.trim(),
+        brand: brand.trim() || null,
         customerId: customerId !== "none" ? Number(customerId) : null,
         customerName: customerName.trim() || null,
         customerEmail: customerEmail.trim() || null,
@@ -1286,6 +1411,28 @@ function EditBookingDialog({
                 onChange={(e) => editField("vehicleInfo", setVehicleInfo, e.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Vehicle brand</Label>
+              <BookingBrandRateField
+                value={brand}
+                onChange={(value) => editField("brand", setBrand, value)}
+                rates={bookingRates.data}
+                isLoading={bookingRates.isLoading}
+                error={bookingRates.error}
+                lockedBrand={
+                  selectedVehicleId
+                    ? customerVehicles?.find(
+                        (vehicle) => String(vehicle.vehicleId) === selectedVehicleId,
+                      )?.make
+                    : undefined
+                }
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Changing the tracked brand does not reprice an existing job card. Use
+                “Apply current labour rate” on the card when a revision is intended.
+              </p>
             </div>
 
             <div className="col-span-2 sm:col-span-1 space-y-1.5">
@@ -1860,6 +2007,12 @@ function BookingDetailsDialog({
                 {order.technician || <span className="text-muted-foreground italic">Unassigned</span>}
               </div>
               <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mt-3 mb-1">
+                Vehicle brand
+              </div>
+              <div className="font-medium text-sm" data-testid={`text-booking-brand-${order.id}`}>
+                {order.brand || "Not specified"}
+              </div>
+              <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mt-3 mb-1">
                 Odometer
               </div>
               <div className="font-medium text-sm">
@@ -2145,7 +2298,17 @@ function BookingsTab() {
                   <td className={`px-4 tabular-nums text-primary font-semibold ${density === "compact" ? "py-2.5" : "py-3.5"}`}>
                     #{order.id.toString().padStart(5, "0")}
                   </td>
-                  <td className="px-4 py-2 font-medium">{order.vehicleInfo}</td>
+                  <td className="px-4 py-2 font-medium">
+                    {order.vehicleInfo}
+                    {order.brand && (
+                      <div
+                        className="text-xs font-normal text-muted-foreground"
+                        data-testid={`text-booking-brand-list-${order.id}`}
+                      >
+                        {order.brand}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
                     {order.customerName || "Unknown"}
                   </td>
@@ -2236,6 +2399,14 @@ function BookingsTab() {
                       <h3 className="mt-0.5 truncate text-base font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors">
                         {order.vehicleInfo}
                       </h3>
+                      {order.brand && (
+                        <p
+                          className="text-xs text-muted-foreground"
+                          data-testid={`text-booking-brand-card-${order.id}`}
+                        >
+                          {order.brand}
+                        </p>
+                      )}
                     </div>
                     <Badge
                       variant="secondary"
@@ -2669,7 +2840,7 @@ function CreateJobCardDialog() {
             technicians?.map((t) => ({ value: String(t.id), label: t.name })) ?? [],
         },
         { name: "laborHours", label: "Labour hours", type: "number", span: "half", placeholder: "2.5" },
-        { name: "laborRate", label: "Custom labour rate (GYD/hr, optional)", type: "number", span: "half", placeholder: "Uses current dealer rate" },
+        { name: "laborRate", label: "Custom labour rate (GYD/hr, optional)", type: "number", span: "half", placeholder: "Uses the booking brand’s current rate" },
         { name: "checklistText", label: "Checklist (one item per line)", type: "textarea", span: "full", placeholder: "Inspect pads\nReplace rotors\nRoad test" },
         { name: "notes", label: "Notes", type: "textarea", span: "full" },
         {

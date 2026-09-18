@@ -26,6 +26,12 @@ export interface ServiceOrderInput {
      */
   vehicleInfo: string;
   /**
+     * Selected vehicle brand; normalized by the server
+     * @minLength 1
+     * @maxLength 80
+     */
+  brand?: string;
+  /**
      * @minLength 1
      * @maxLength 50
      */

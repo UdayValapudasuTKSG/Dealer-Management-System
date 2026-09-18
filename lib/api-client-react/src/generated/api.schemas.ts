@@ -5322,6 +5322,12 @@ export interface ServiceOrder {
   /** @nullable */
   customerEmail?: string | null;
   vehicleInfo: string;
+  /**
+     * Canonical normalized selected vehicle brand
+     * @maxLength 80
+     * @nullable
+     */
+  brand?: string | null;
   /** @nullable */
   vin: string | null;
   /** @nullable */
@@ -5406,6 +5412,12 @@ export interface ServiceOrderInput {
      * @maxLength 200
      */
   vehicleInfo: string;
+  /**
+     * Selected vehicle brand; normalized by the server
+     * @minLength 1
+     * @maxLength 80
+     */
+  brand?: string;
   /**
      * @minLength 1
      * @maxLength 50
@@ -5497,6 +5509,13 @@ export interface ServiceOrderUpdate {
      * @maxLength 200
      */
   vehicleInfo?: string;
+  /**
+     * Selected vehicle brand; changing it does not reprice an existing card
+     * @minLength 1
+     * @maxLength 80
+     * @nullable
+     */
+  brand?: string | null;
   /**
      * @minLength 1
      * @maxLength 50
@@ -7801,6 +7820,20 @@ export const ServiceSettingsSummaryCadence = {
   off: 'off',
 } as const;
 
+export interface BrandLabourRate {
+  /**
+     * NFKC, trimmed, whitespace-collapsed, lowercase canonical brand
+     * @minLength 1
+     * @maxLength 80
+     */
+  brand: string;
+  /**
+     * @maximum 100000
+     * @exclusiveMinimum 0
+     */
+  labourUsdPerHour: number;
+}
+
 export interface ServiceSettings {
   serviceIntervalKm: number;
   lateSurchargeFee: number;
@@ -7819,6 +7852,8 @@ export interface ServiceSettings {
   labourUsdPerHour: 120;
   /** Fixed USD 120/hour converted to GYD using labourUsdToGydRate (read-only) */
   labourGydPerHour: number;
+  /** @maxItems 100 */
+  brandLabourRates: BrandLabourRate[];
 }
 
 export type ServiceSettingsUpdateSummaryCadence = typeof ServiceSettingsUpdateSummaryCadence[keyof typeof ServiceSettingsUpdateSummaryCadence];
@@ -7854,6 +7889,23 @@ export interface ServiceSettingsUpdate {
      * @exclusiveMinimum 0
      */
   labourUsdToGydRate?: number;
+  /** @maxItems 100 */
+  brandLabourRates?: BrandLabourRate[];
+}
+
+export interface ServiceBookingBrandLabourRate {
+  brand: string;
+  labourUsdPerHour: number;
+  labourGydPerHour: number;
+}
+
+export interface ServiceBookingLabourRates {
+  labourUsdToGydRate: number;
+  defaultLabourUsdPerHour: 120;
+  defaultLabourGydPerHour: number;
+  /** Canonical union of active dealer inventory makes and configured overrides; absence of an override means the USD 120 fallback */
+  brands: string[];
+  brandLabourRates: ServiceBookingBrandLabourRate[];
 }
 
 export type CoveragePlanType = typeof CoveragePlanType[keyof typeof CoveragePlanType];

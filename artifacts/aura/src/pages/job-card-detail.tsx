@@ -36,6 +36,7 @@ import {
   useAcknowledgeJobCardEstimate,
   useGetJobCardEstimatePreview,
   useApplyCurrentJobCardLabourRate,
+  useGetServiceBookingLabourRates,
   type JobCard,
   type ServiceOrder,
   type ServiceInvoice,
@@ -92,6 +93,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { effectiveBrandLabourUsdRate } from "@/lib/brand-labour-rates";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
@@ -247,6 +249,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   const { toast } = useToast();
   const update = useUpdateJobCard();
   const applyCurrentLabourRateMutation = useApplyCurrentJobCardLabourRate();
+  const bookingLabourRates = useGetServiceBookingLabourRates();
   const timer = useToggleJobCardTimer();
   const reopen = useReopenJobCard();
   const { can, me } = useAuthz();
@@ -296,6 +299,15 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   const noteSaving = createTechnicianNote.isPending;
   const isApprover = useIsServiceApprover();
   const customerPhoneSnapshot = serviceOrder?.customerPhoneSnapshot;
+  const currentBrandLabourUsdRate = effectiveBrandLabourUsdRate(
+    serviceOrder?.brand,
+    bookingLabourRates.data?.brandLabourRates ?? [],
+  );
+  const currentBrandLabourGydRate = bookingLabourRates.data
+    ? Math.round(
+        currentBrandLabourUsdRate * bookingLabourRates.data.labourUsdToGydRate,
+      )
+    : null;
   const canActOnCurrentEstimate =
     isApprover || (card.technicianUserId != null && card.technicianUserId === me?.id);
   const canAddTechnicianNote =
@@ -633,6 +645,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
               <div className="grid gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-2 lg:grid-cols-4">
                 <DetailDatum label="Customer" value={serviceOrder.customerName ?? "Not recorded"} />
                 <DetailDatum label="Model" value={serviceOrder.vehicleInfo || "Not recorded"} />
+                <DetailDatum label="Brand" value={serviceOrder.brand || "Not specified"} />
                 <DetailDatum label="Registration" value={serviceOrder.registrationNumber || "Not recorded"} />
                 <DetailDatum label="VIN" value={serviceOrder.vin || "Not recorded"} />
                 <DetailDatum label="Scheduled" value={formatDealerDateShort(serviceOrder.scheduledDate)} />
@@ -971,6 +984,17 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                    <p className="mt-1 text-[11px] text-muted-foreground">
                      Only quoted hours affect the customer estimate; changing them creates a new version and does not send it.
                    </p>
+                    <p
+                      className="mt-1 text-[11px] text-muted-foreground"
+                      data-testid={`text-current-brand-labour-rate-${card.id}`}
+                    >
+                      {bookingLabourRates.isLoading
+                        ? "Loading the current brand rate…"
+                        : bookingLabourRates.isError || currentBrandLabourGydRate == null
+                          ? "The current brand rate is unavailable. Applying remains server-authoritative."
+                          : `Current for ${serviceOrder?.brand || "unbranded bookings"}: US$${currentBrandLabourUsdRate.toLocaleString("en-US")}/hour · GYD ${currentBrandLabourGydRate.toLocaleString("en-GY")}/hour.`}
+                      {" "}The card keeps its existing snapshotted GYD rate until you explicitly apply this current rate.
+                    </p>
                     {canEditQuoteHours && (
                       <Button
                         type="button"

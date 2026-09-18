@@ -525,6 +525,10 @@ export const DEFAULT_TECH_WORK_HOURS_PER_DAY = 8;
 export const FIXED_LABOUR_USD_PER_HOUR = 120;
 /** Default labour-only GYD per USD rate. This does not affect other money. */
 export const DEFAULT_LABOUR_USD_TO_GYD_RATE = 209;
+export type BrandLabourRate = {
+  brand: string;
+  labourUsdPerHour: number;
+};
 
 /** FR-COM-03: management scheduled-services summary cadence options. */
 export const SERVICE_SUMMARY_CADENCES = ["daily", "weekly", "off"] as const;
@@ -556,6 +560,11 @@ export const dealerServiceSettingsTable = pgTable(
     labourUsdToGydRate: doublePrecision("labour_usd_to_gyd_rate")
       .notNull()
       .default(DEFAULT_LABOUR_USD_TO_GYD_RATE),
+    /** Optional per-brand USD inputs; converted once to GYD on a new/revised card. */
+    brandLabourRates: jsonb("brand_labour_rates")
+      .$type<BrandLabourRate[]>()
+      .notNull()
+      .default([]),
     /** Task 269: daily lead-source report emailed to GMs. Default off. */
     leadSourceReportEnabled: boolean("lead_source_report_enabled")
       .notNull()

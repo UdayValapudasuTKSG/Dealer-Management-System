@@ -5306,6 +5306,10 @@ export const ListServiceOrdersQueryParams = zod.object({
   "to": zod.coerce.string().regex(listServiceOrdersQueryToRegExp).optional().describe('Last scheduled date to include')
 })
 
+export const listServiceOrdersResponseBrandMax = 80;
+
+
+
 export const ListServiceOrdersResponseItem = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
@@ -5313,6 +5317,7 @@ export const ListServiceOrdersResponseItem = zod.object({
   "customerPhoneSnapshot": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
+  "brand": zod.string().max(listServiceOrdersResponseBrandMax).nullish().describe('Canonical normalized selected vehicle brand'),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
   "vehicleId": zod.number().nullish(),
@@ -5352,6 +5357,8 @@ export const createServiceOrderBodyCustomerEmailMin = 3;
 
 export const createServiceOrderBodyVehicleInfoMax = 200;
 
+export const createServiceOrderBodyBrandMax = 80;
+
 export const createServiceOrderBodyVinMax = 50;
 
 export const createServiceOrderBodyRegistrationNumberMax = 50;
@@ -5367,6 +5374,7 @@ export const CreateServiceOrderBody = zod.object({
   "customerPhoneSnapshot": zod.string().max(createServiceOrderBodyCustomerPhoneSnapshotMax).optional(),
   "customerEmail": zod.string().min(createServiceOrderBodyCustomerEmailMin).optional(),
   "vehicleInfo": zod.string().min(1).max(createServiceOrderBodyVehicleInfoMax),
+  "brand": zod.string().min(1).max(createServiceOrderBodyBrandMax).optional().describe('Selected vehicle brand; normalized by the server'),
   "vin": zod.string().min(1).max(createServiceOrderBodyVinMax),
   "registrationNumber": zod.string().min(1).max(createServiceOrderBodyRegistrationNumberMax),
   "vehicleId": zod.number().optional(),
@@ -5385,6 +5393,10 @@ export const CreateServiceOrderBody = zod.object({
   "jobs": zod.array(zod.string()).optional()
 })
 
+export const createServiceOrderResponseBrandMax = 80;
+
+
+
 export const CreateServiceOrderResponse = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
@@ -5392,6 +5404,7 @@ export const CreateServiceOrderResponse = zod.object({
   "customerPhoneSnapshot": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
+  "brand": zod.string().max(createServiceOrderResponseBrandMax).nullish().describe('Canonical normalized selected vehicle brand'),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
   "vehicleId": zod.number().nullish(),
@@ -5419,6 +5432,23 @@ export const CreateServiceOrderResponse = zod.object({
   "createdOrigin": zod.enum(['staff', 'system', 'import', 'legacy_unknown']).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * Booking-safe read endpoint. USD amounts are configuration inputs only; cards snapshot the corresponding whole-GYD rate when created or when explicitly revised.
+ * @summary Read dealer-specific brand labour options for booking
+ */
+export const GetServiceBookingLabourRatesResponse = zod.object({
+  "labourUsdToGydRate": zod.number(),
+  "defaultLabourUsdPerHour": zod.number(),
+  "defaultLabourGydPerHour": zod.number(),
+  "brands": zod.array(zod.string()).describe('Canonical union of active dealer inventory makes and configured overrides; absence of an override means the USD 120 fallback'),
+  "brandLabourRates": zod.array(zod.object({
+  "brand": zod.string(),
+  "labourUsdPerHour": zod.number(),
+  "labourGydPerHour": zod.number()
+}))
 })
 
 
@@ -5469,6 +5499,8 @@ export const updateServiceOrderBodyCustomerPhoneSnapshotMax = 40;
 
 export const updateServiceOrderBodyVehicleInfoMax = 200;
 
+export const updateServiceOrderBodyBrandMax = 80;
+
 export const updateServiceOrderBodyVinMax = 50;
 
 export const updateServiceOrderBodyRegistrationNumberMax = 50;
@@ -5484,6 +5516,7 @@ export const UpdateServiceOrderBody = zod.object({
   "customerEmail": zod.string().min(updateServiceOrderBodyCustomerEmailMin).nullish(),
   "customerPhoneSnapshot": zod.string().max(updateServiceOrderBodyCustomerPhoneSnapshotMax).nullish(),
   "vehicleInfo": zod.string().min(1).max(updateServiceOrderBodyVehicleInfoMax).optional(),
+  "brand": zod.string().min(1).max(updateServiceOrderBodyBrandMax).nullish().describe('Selected vehicle brand; changing it does not reprice an existing card'),
   "vin": zod.string().min(1).max(updateServiceOrderBodyVinMax).nullish(),
   "registrationNumber": zod.string().min(1).max(updateServiceOrderBodyRegistrationNumberMax).nullish(),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection', 'comeback', 'unscheduled']).optional(),
@@ -5499,6 +5532,10 @@ export const UpdateServiceOrderBody = zod.object({
   "jobs": zod.array(zod.string()).optional()
 })
 
+export const updateServiceOrderResponseBrandMax = 80;
+
+
+
 export const UpdateServiceOrderResponse = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
@@ -5506,6 +5543,7 @@ export const UpdateServiceOrderResponse = zod.object({
   "customerPhoneSnapshot": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
+  "brand": zod.string().max(updateServiceOrderResponseBrandMax).nullish().describe('Canonical normalized selected vehicle brand'),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
   "vehicleId": zod.number().nullish(),
@@ -5553,6 +5591,10 @@ export const AdvanceServiceOrderBody = zod.object({
   "justification": zod.string().min(advanceServiceOrderBodyJustificationMin).max(advanceServiceOrderBodyJustificationMax)
 })
 
+export const advanceServiceOrderResponseBrandMax = 80;
+
+
+
 export const AdvanceServiceOrderResponse = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
@@ -5560,6 +5602,7 @@ export const AdvanceServiceOrderResponse = zod.object({
   "customerPhoneSnapshot": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
+  "brand": zod.string().max(advanceServiceOrderResponseBrandMax).nullish().describe('Canonical normalized selected vehicle brand'),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
   "vehicleId": zod.number().nullish(),
@@ -5712,6 +5755,8 @@ export const ClaimServiceOrderBody = zod.object({
   "technicianUserId": zod.number().optional()
 })
 
+export const claimServiceOrderResponseServiceOrderBrandMax = 80;
+
 export const claimServiceOrderResponseJobCardLaborRateMin = 0;
 
 export const claimServiceOrderResponseJobCardEstimateVersionMin = 0;
@@ -5731,6 +5776,7 @@ export const ClaimServiceOrderResponse = zod.object({
   "customerPhoneSnapshot": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
+  "brand": zod.string().max(claimServiceOrderResponseServiceOrderBrandMax).nullish().describe('Canonical normalized selected vehicle brand'),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
   "vehicleId": zod.number().nullish(),
@@ -6369,8 +6415,8 @@ export const ResendJobCardEstimateResponse = zod.object({
 
 
 /**
- * Reprices only this card using the fixed USD 120/hour labour base and the server-side dealer labourUsdToGydRate. This is an explicit action; existing custom GYD rates are never replaced automatically. Repricing creates a new estimate version and invalidates prior approvals.
- * @summary Apply the active dealer labour-only FX rate to this card
+ * Reprices only this card using its service order brand, the matching dealer override (or fixed USD 120/hour fallback), and the server-side dealer labourUsdToGydRate. This is an explicit action; existing custom GYD rates are never replaced automatically. Repricing creates a new estimate version and invalidates prior approvals.
+ * @summary Apply the active dealer brand labour rate and labour-only FX to this card
  */
 export const ApplyCurrentJobCardLabourRateParams = zod.object({
   "id": zod.coerce.number()
@@ -6867,6 +6913,8 @@ export const getJobCardResponseJobCardEstimateApprovedVersionMin = 0;
 
 export const getJobCardResponseJobCardEstimateStaffAcknowledgedVersionMin = 0;
 
+export const getJobCardResponseServiceOrderBrandMax = 80;
+
 
 
 export const GetJobCardResponse = zod.object({
@@ -6964,6 +7012,7 @@ export const GetJobCardResponse = zod.object({
   "customerPhoneSnapshot": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
+  "brand": zod.string().max(getJobCardResponseServiceOrderBrandMax).nullish().describe('Canonical normalized selected vehicle brand'),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
   "vehicleId": zod.number().nullish(),
@@ -11657,6 +11706,8 @@ export const getCustomerOverviewResponseDealsItemItemsItemPositionMin = 0;
 
 export const getCustomerOverviewResponseDealsItemItemsItemHeldUnitsItemUnitMin = 0;
 
+export const getCustomerOverviewResponseServiceOrdersItemBrandMax = 80;
+
 
 
 export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemOneModelYearMin = 1900;
@@ -12056,6 +12107,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "customerPhoneSnapshot": zod.string().nullish(),
   "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
+  "brand": zod.string().max(getCustomerOverviewResponseServiceOrdersItemBrandMax).nullish().describe('Canonical normalized selected vehicle brand'),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
   "vehicleId": zod.number().nullish(),
@@ -14438,6 +14490,13 @@ export const UpdateDealerLocalizationResponse = zod.object({
 export const getServiceSettingsResponseLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
 export const getServiceSettingsResponseLabourUsdToGydRateExclusiveMin = 0;
 
+export const getServiceSettingsResponseBrandLabourRatesItemBrandMax = 80;
+
+export const getServiceSettingsResponseBrandLabourRatesItemLabourUsdPerHourExclusiveMin = 0;
+export const getServiceSettingsResponseBrandLabourRatesItemLabourUsdPerHourMax = 100000;
+
+export const getServiceSettingsResponseBrandLabourRatesMax = 100;
+
 
 
 export const GetServiceSettingsResponse = zod.object({
@@ -14450,7 +14509,11 @@ export const GetServiceSettingsResponse = zod.object({
   "leadSourceReportSendTime": zod.string().regex(getServiceSettingsResponseLeadSourceReportSendTimeRegExp),
   "labourUsdToGydRate": zod.number().gt(getServiceSettingsResponseLabourUsdToGydRateExclusiveMin).describe('Labour-only GYD per 1 USD; does not redenominate any other money'),
   "labourUsdPerHour": zod.number().describe('Fixed technician labour input in USD\/hour (read-only)'),
-  "labourGydPerHour": zod.number().describe('Fixed USD 120\/hour converted to GYD using labourUsdToGydRate (read-only)')
+  "labourGydPerHour": zod.number().describe('Fixed USD 120\/hour converted to GYD using labourUsdToGydRate (read-only)'),
+  "brandLabourRates": zod.array(zod.object({
+  "brand": zod.string().min(1).max(getServiceSettingsResponseBrandLabourRatesItemBrandMax).describe('NFKC, trimmed, whitespace-collapsed, lowercase canonical brand'),
+  "labourUsdPerHour": zod.number().gt(getServiceSettingsResponseBrandLabourRatesItemLabourUsdPerHourExclusiveMin).max(getServiceSettingsResponseBrandLabourRatesItemLabourUsdPerHourMax)
+})).max(getServiceSettingsResponseBrandLabourRatesMax)
 })
 
 
@@ -14466,6 +14529,13 @@ export const updateServiceSettingsBodyTechWorkHoursPerDayMax = 24;
 export const updateServiceSettingsBodyLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
 export const updateServiceSettingsBodyLabourUsdToGydRateExclusiveMin = 0;
 
+export const updateServiceSettingsBodyBrandLabourRatesItemBrandMax = 80;
+
+export const updateServiceSettingsBodyBrandLabourRatesItemLabourUsdPerHourExclusiveMin = 0;
+export const updateServiceSettingsBodyBrandLabourRatesItemLabourUsdPerHourMax = 100000;
+
+export const updateServiceSettingsBodyBrandLabourRatesMax = 100;
+
 
 
 export const UpdateServiceSettingsBody = zod.object({
@@ -14476,11 +14546,22 @@ export const UpdateServiceSettingsBody = zod.object({
   "techWorkHoursPerDay": zod.number().min(1).max(updateServiceSettingsBodyTechWorkHoursPerDayMax).optional(),
   "leadSourceReportEnabled": zod.boolean().optional(),
   "leadSourceReportSendTime": zod.string().regex(updateServiceSettingsBodyLeadSourceReportSendTimeRegExp).optional(),
-  "labourUsdToGydRate": zod.number().gt(updateServiceSettingsBodyLabourUsdToGydRateExclusiveMin).optional().describe('Labour-only GYD per 1 USD')
+  "labourUsdToGydRate": zod.number().gt(updateServiceSettingsBodyLabourUsdToGydRateExclusiveMin).optional().describe('Labour-only GYD per 1 USD'),
+  "brandLabourRates": zod.array(zod.object({
+  "brand": zod.string().min(1).max(updateServiceSettingsBodyBrandLabourRatesItemBrandMax).describe('NFKC, trimmed, whitespace-collapsed, lowercase canonical brand'),
+  "labourUsdPerHour": zod.number().gt(updateServiceSettingsBodyBrandLabourRatesItemLabourUsdPerHourExclusiveMin).max(updateServiceSettingsBodyBrandLabourRatesItemLabourUsdPerHourMax)
+})).max(updateServiceSettingsBodyBrandLabourRatesMax).optional()
 })
 
 export const updateServiceSettingsResponseLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
 export const updateServiceSettingsResponseLabourUsdToGydRateExclusiveMin = 0;
+
+export const updateServiceSettingsResponseBrandLabourRatesItemBrandMax = 80;
+
+export const updateServiceSettingsResponseBrandLabourRatesItemLabourUsdPerHourExclusiveMin = 0;
+export const updateServiceSettingsResponseBrandLabourRatesItemLabourUsdPerHourMax = 100000;
+
+export const updateServiceSettingsResponseBrandLabourRatesMax = 100;
 
 
 
@@ -14494,7 +14575,11 @@ export const UpdateServiceSettingsResponse = zod.object({
   "leadSourceReportSendTime": zod.string().regex(updateServiceSettingsResponseLeadSourceReportSendTimeRegExp),
   "labourUsdToGydRate": zod.number().gt(updateServiceSettingsResponseLabourUsdToGydRateExclusiveMin).describe('Labour-only GYD per 1 USD; does not redenominate any other money'),
   "labourUsdPerHour": zod.number().describe('Fixed technician labour input in USD\/hour (read-only)'),
-  "labourGydPerHour": zod.number().describe('Fixed USD 120\/hour converted to GYD using labourUsdToGydRate (read-only)')
+  "labourGydPerHour": zod.number().describe('Fixed USD 120\/hour converted to GYD using labourUsdToGydRate (read-only)'),
+  "brandLabourRates": zod.array(zod.object({
+  "brand": zod.string().min(1).max(updateServiceSettingsResponseBrandLabourRatesItemBrandMax).describe('NFKC, trimmed, whitespace-collapsed, lowercase canonical brand'),
+  "labourUsdPerHour": zod.number().gt(updateServiceSettingsResponseBrandLabourRatesItemLabourUsdPerHourExclusiveMin).max(updateServiceSettingsResponseBrandLabourRatesItemLabourUsdPerHourMax)
+})).max(updateServiceSettingsResponseBrandLabourRatesMax)
 })
 
 

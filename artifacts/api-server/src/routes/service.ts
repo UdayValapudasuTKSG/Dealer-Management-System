@@ -22,6 +22,8 @@ import {
 } from "../lib/initial-job-card";
 import {
   calculateLabourRateGyd,
+  canonicalServiceBrand,
+  labourUsdPerHourForBrand,
   resolveNewCardLabourRate,
 } from "../lib/service-labour-pricing";
 import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
@@ -171,6 +173,7 @@ import {
   GetJobCardEstimatePreviewResponse,
   ApplyCurrentJobCardLabourRateParams,
   ApplyCurrentJobCardLabourRateResponse,
+  GetServiceBookingLabourRatesResponse,
 } from "@workspace/api-zod";
 import { checkLowStockCrossing } from "./parts";
 import {
@@ -558,6 +561,37 @@ router.get("/service-orders", async (req, res): Promise<void> => {
   );
 });
 
+router.get("/service-booking/labour-rates", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
+  const [settings, inventoryMakes] = await Promise.all([
+    getServiceSettings(dealerId),
+    db
+      .selectDistinct({ make: vehiclesTable.make })
+      .from(vehiclesTable)
+      .where(and(
+        eq(vehiclesTable.dealerId, dealerId),
+        isNull(vehiclesTable.deletedAt),
+      )),
+  ]);
+  const brands = [...new Set([
+    ...inventoryMakes.map(({ make }) => canonicalServiceBrand(make)),
+    ...settings.brandLabourRates.map(({ brand }) => brand),
+  ].filter(Boolean))].sort();
+  res.json(GetServiceBookingLabourRatesResponse.parse({
+    labourUsdToGydRate: settings.labourUsdToGydRate,
+    defaultLabourUsdPerHour: settings.labourUsdPerHour,
+    defaultLabourGydPerHour: settings.labourGydPerHour,
+    brands,
+    brandLabourRates: settings.brandLabourRates.map((rate) => ({
+      ...rate,
+      labourGydPerHour: calculateLabourRateGyd(
+        settings.labourUsdToGydRate,
+        rate.labourUsdPerHour,
+      ),
+    })),
+  }));
+});
+
 /**
  * Canonical customer vehicle associations used by service booking forms.
  *
@@ -711,6 +745,9 @@ router.post("/service-orders", async (req, res): Promise<void> => {
           ...(typeof req.body.customerEmail === "string"
             ? { customerEmail: req.body.customerEmail.trim() }
             : {}),
+          ...(typeof req.body.brand === "string"
+            ? { brand: canonicalServiceBrand(req.body.brand) }
+            : {}),
         }
       : req.body;
   const parsed = CreateServiceOrderBody.safeParse(normalizedBody);
@@ -792,6 +829,22 @@ router.post("/service-orders", async (req, res): Promise<void> => {
   const settings = await getServiceSettings(createDealerId);
   const estimatedHours = parsed.data.estimatedHours ?? settings.defaultJobHours;
   const scheduledDateStr = toDateString(parsed.data.scheduledDate)!;
+  if (orderInput.vehicleId != null) {
+    const [linkedVehicle] = await db
+      .select({ make: vehiclesTable.make })
+      .from(vehiclesTable)
+      .where(and(
+        eq(vehiclesTable.id, orderInput.vehicleId),
+        eq(vehiclesTable.dealerId, createDealerId),
+        isNull(vehiclesTable.deletedAt),
+      ))
+      .limit(1);
+    if (!linkedVehicle) {
+      res.status(404).json({ error: "Vehicle not found" });
+      return;
+    }
+    orderInput.brand = canonicalServiceBrand(linkedVehicle.make);
+  }
 
   // Stamp the technician's user ID so briefing scoping matches by ID, not name.
   let technicianUserId =
@@ -947,6 +1000,9 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     normalizedBody.customerPhoneSnapshot =
       normalizedBody.customerPhoneSnapshot.trim() || null;
   }
+  if (typeof normalizedBody.brand === "string") {
+    normalizedBody.brand = canonicalServiceBrand(normalizedBody.brand) || null;
+  }
   const parsed = UpdateServiceOrderBody.safeParse(normalizedBody);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -984,6 +1040,22 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   const updateValues: Partial<typeof serviceOrdersTable.$inferInsert> = {
     ...rest,
   };
+  if (before.vehicleId != null && rest.brand !== undefined) {
+    const [linkedVehicle] = await db
+      .select({ make: vehiclesTable.make })
+      .from(vehiclesTable)
+      .where(and(
+        eq(vehiclesTable.id, before.vehicleId),
+        eq(vehiclesTable.dealerId, dealerId),
+        isNull(vehiclesTable.deletedAt),
+      ))
+      .limit(1);
+    if (!linkedVehicle) {
+      res.status(404).json({ error: "Linked vehicle not found" });
+      return;
+    }
+    updateValues.brand = canonicalServiceBrand(linkedVehicle.make);
+  }
   if (requestedEstimatedCost !== undefined) {
     updateValues.estimatedCost = requestedEstimatedCost ?? 0;
   }
@@ -2508,6 +2580,7 @@ router.post("/job-cards", async (req, res): Promise<void> => {
   const laborRate = resolveNewCardLabourRate(
     parsed.data.laborRate,
     settings.labourUsdToGydRate,
+    labourUsdPerHourForBrand(order.brand, settings.brandLabourRates),
   );
   const quoteTotal = await initialJobCardQuoteTotal({
     dealerId: order.dealerId,
@@ -3332,7 +3405,20 @@ router.post("/job-cards/:id/apply-current-labour-rate", async (req, res): Promis
     return;
   }
   const settings = await getServiceSettings(dealerId);
-  const labourRate = calculateLabourRateGyd(settings.labourUsdToGydRate);
+  const [order] = existing.serviceOrderId == null
+    ? []
+    : await db
+        .select({ brand: serviceOrdersTable.brand })
+        .from(serviceOrdersTable)
+        .where(and(
+          eq(serviceOrdersTable.id, existing.serviceOrderId),
+          eq(serviceOrdersTable.dealerId, dealerId),
+        ))
+        .limit(1);
+  const labourRate = calculateLabourRateGyd(
+    settings.labourUsdToGydRate,
+    labourUsdPerHourForBrand(order?.brand, settings.brandLabourRates),
+  );
 
   try {
     const card = await db.transaction(async (tx) => {

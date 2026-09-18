@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import {
   calculateLabourRateGyd,
+  canonicalServiceBrand,
+  labourUsdPerHourForBrand,
+  normalizeBrandLabourRates,
   resolveNewCardLabourRate,
 } from "../lib/service-labour-pricing";
 import { calculateQuotedLaborTotal } from "../lib/service-labor-hours";
@@ -10,6 +13,21 @@ import {
 } from "../lib/service-estimate-gate";
 
 assert.equal(calculateLabourRateGyd(209), 25080);
+const rates = normalizeBrandLabourRates([
+  { brand: "  TOYOTA  ", labourUsdPerHour: 150 },
+]);
+assert.deepEqual(rates, [{ brand: "toyota", labourUsdPerHour: 150 }]);
+assert.equal(labourUsdPerHourForBrand(" Toyota ", rates), 150);
+assert.equal(calculateLabourRateGyd(209, 150), 31350);
+assert.equal(labourUsdPerHourForBrand("unknown", rates), 120);
+assert.equal(canonicalServiceBrand("  Land   Rover "), "land rover");
+assert.throws(() => normalizeBrandLabourRates([
+  { brand: "Toyota", labourUsdPerHour: 150 },
+  { brand: " toyota ", labourUsdPerHour: 160 },
+]));
+assert.throws(() => normalizeBrandLabourRates([
+  { brand: "invalid", labourUsdPerHour: Number.POSITIVE_INFINITY },
+]));
 assert.equal(calculateQuotedLaborTotal(3, 0, calculateLabourRateGyd(209)), 75240);
 
 for (const invalid of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {

@@ -815,6 +815,7 @@ const PATH_MODULES: Record<string, RouteRule> = {
       return METHOD_CATEGORY[req.method] ?? "view";
     },
   },
+  "service-booking": { module: "service", category: () => "view" },
   "service-technicians": { module: "service" },
   "service-timesheets": {
     module: "service",

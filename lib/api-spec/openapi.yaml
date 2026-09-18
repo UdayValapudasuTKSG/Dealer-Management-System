@@ -3392,6 +3392,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceOrder"
+  /service-booking/labour-rates:
+    get:
+      operationId: getServiceBookingLabourRates
+      tags: [service]
+      summary: Read dealer-specific brand labour options for booking
+      description: >
+        Booking-safe read endpoint. USD amounts are configuration inputs only;
+        cards snapshot the corresponding whole-GYD rate when created or when
+        explicitly revised.
+      responses:
+        "200":
+          description: Active dealer labour options and current GYD conversions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceBookingLabourRates"
   /service-orders/customer-vehicles/{customerId}:
     get:
       operationId: listServiceCustomerVehicles
@@ -3923,10 +3939,11 @@ paths:
     post:
       operationId: applyCurrentJobCardLabourRate
       tags: [service]
-      summary: Apply the active dealer labour-only FX rate to this card
+      summary: Apply the active dealer brand labour rate and labour-only FX to this card
       description: >
-        Reprices only this card using the fixed USD 120/hour labour base and
-        the server-side dealer labourUsdToGydRate. This is an explicit action;
+        Reprices only this card using its service order brand, the matching
+        dealer override (or fixed USD 120/hour fallback), and the server-side
+        dealer labourUsdToGydRate. This is an explicit action;
         existing custom GYD rates are never replaced automatically. Repricing
         creates a new estimate version and invalidates prior approvals.
       parameters:
@@ -13415,6 +13432,7 @@ components:
         customerPhoneSnapshot: { type: ["string", "null"] }
         customerEmail: { type: ["string", "null"] }
         vehicleInfo: { type: string }
+        brand: { type: ["string", "null"], maxLength: 80, description: "Canonical normalized selected vehicle brand" }
         vin: { type: ["string", "null"] }
         registrationNumber: { type: ["string", "null"] }
         vehicleId: { type: ["integer", "null"] }
@@ -13459,6 +13477,7 @@ components:
         customerPhoneSnapshot: { type: string, maxLength: 40 }
         customerEmail: { type: string, minLength: 3 }
         vehicleInfo: { type: string, minLength: 1, maxLength: 200 }
+        brand: { type: string, minLength: 1, maxLength: 80, description: "Selected vehicle brand; normalized by the server" }
         vin: { type: string, minLength: 1, maxLength: 50 }
         registrationNumber: { type: string, minLength: 1, maxLength: 50 }
         vehicleId: { type: integer }
@@ -13485,6 +13504,7 @@ components:
         customerEmail: { type: ["string", "null"], minLength: 3 }
         customerPhoneSnapshot: { type: ["string", "null"], maxLength: 40 }
         vehicleInfo: { type: string, minLength: 1, maxLength: 200 }
+        brand: { type: ["string", "null"], minLength: 1, maxLength: 80, description: "Selected vehicle brand; changing it does not reprice an existing card" }
         vin: { type: ["string", "null"], minLength: 1, maxLength: 50 }
         registrationNumber: { type: ["string", "null"], minLength: 1, maxLength: 50 }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
@@ -14714,7 +14734,7 @@ components:
 
     ServiceSettings:
       type: object
-      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence, defaultJobHours, techWorkHoursPerDay, leadSourceReportEnabled, leadSourceReportSendTime, labourUsdToGydRate, labourUsdPerHour, labourGydPerHour]
+      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence, defaultJobHours, techWorkHoursPerDay, leadSourceReportEnabled, leadSourceReportSendTime, labourUsdToGydRate, labourUsdPerHour, labourGydPerHour, brandLabourRates]
       properties:
         serviceIntervalKm: { type: integer }
         lateSurchargeFee: { type: number }
@@ -14726,6 +14746,10 @@ components:
         labourUsdToGydRate: { type: number, exclusiveMinimum: 0, description: "Labour-only GYD per 1 USD; does not redenominate any other money" }
         labourUsdPerHour: { type: number, const: 120, description: "Fixed technician labour input in USD/hour (read-only)" }
         labourGydPerHour: { type: number, description: "Fixed USD 120/hour converted to GYD using labourUsdToGydRate (read-only)" }
+        brandLabourRates:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/BrandLabourRate" }
     ServiceSettingsUpdate:
       type: object
       properties:
@@ -14737,6 +14761,43 @@ components:
         leadSourceReportEnabled: { type: boolean }
         leadSourceReportSendTime: { type: string, pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$' }
         labourUsdToGydRate: { type: number, exclusiveMinimum: 0, description: "Labour-only GYD per 1 USD" }
+        brandLabourRates:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/BrandLabourRate" }
+
+    BrandLabourRate:
+      type: object
+      additionalProperties: false
+      required: [brand, labourUsdPerHour]
+      properties:
+        brand: { type: string, minLength: 1, maxLength: 80, description: "NFKC, trimmed, whitespace-collapsed, lowercase canonical brand" }
+        labourUsdPerHour: { type: number, exclusiveMinimum: 0, maximum: 100000 }
+
+    ServiceBookingBrandLabourRate:
+      type: object
+      additionalProperties: false
+      required: [brand, labourUsdPerHour, labourGydPerHour]
+      properties:
+        brand: { type: string }
+        labourUsdPerHour: { type: number }
+        labourGydPerHour: { type: number }
+
+    ServiceBookingLabourRates:
+      type: object
+      additionalProperties: false
+      required: [labourUsdToGydRate, defaultLabourUsdPerHour, defaultLabourGydPerHour, brands, brandLabourRates]
+      properties:
+        labourUsdToGydRate: { type: number }
+        defaultLabourUsdPerHour: { type: number, const: 120 }
+        defaultLabourGydPerHour: { type: number }
+        brands:
+          type: array
+          description: Canonical union of active dealer inventory makes and configured overrides; absence of an override means the USD 120 fallback
+          items: { type: string }
+        brandLabourRates:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceBookingBrandLabourRate" }
 
     CoveragePlan:
       type: object

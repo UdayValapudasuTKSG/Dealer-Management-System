@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { BrandLabourRate } from './brandLabourRate';
 import type { ServiceSettingsSummaryCadence } from './serviceSettingsSummaryCadence';
 
 export interface ServiceSettings {
@@ -25,4 +26,6 @@ export interface ServiceSettings {
   labourUsdPerHour: 120;
   /** Fixed USD 120/hour converted to GYD using labourUsdToGydRate (read-only) */
   labourGydPerHour: number;
+  /** @maxItems 100 */
+  brandLabourRates: BrandLabourRate[];
 }

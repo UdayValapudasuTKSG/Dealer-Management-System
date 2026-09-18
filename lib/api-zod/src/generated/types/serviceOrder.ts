@@ -22,6 +22,12 @@ export interface ServiceOrder {
   /** @nullable */
   customerEmail?: string | null;
   vehicleInfo: string;
+  /**
+     * Canonical normalized selected vehicle brand
+     * @maxLength 80
+     * @nullable
+     */
+  brand?: string | null;
   /** @nullable */
   vin: string | null;
   /** @nullable */

@@ -6,7 +6,10 @@ import {
   serviceOrdersTable,
 } from "@workspace/db";
 import { getServiceSettings } from "./service-settings";
-import { calculateLabourRateGyd } from "./service-labour-pricing";
+import {
+  calculateLabourRateGyd,
+  labourUsdPerHourForBrand,
+} from "./service-labour-pricing";
 import { computeServiceTax, ensureDealerTaxes } from "./taxes";
 
 type ServiceOrder = typeof serviceOrdersTable.$inferSelect;
@@ -102,7 +105,10 @@ export async function ensureInitialJobCard(
   const settings = await getServiceSettings(order.dealerId);
   const laborHours = order.estimatedHours;
   const quotedLaborHours = laborHours;
-  const laborRate = calculateLabourRateGyd(settings.labourUsdToGydRate);
+  const laborRate = calculateLabourRateGyd(
+    settings.labourUsdToGydRate,
+    labourUsdPerHourForBrand(order.brand, settings.brandLabourRates),
+  );
   const quoteTotal = await initialJobCardQuoteTotal({
     dealerId: order.dealerId,
     quotedLaborHours,

@@ -362,6 +362,7 @@ import type {
   ServiceAppointmentConfirmationAck,
   ServiceAppointmentConfirmationDelivery,
   ServiceAppointmentConfirmationInput,
+  ServiceBookingLabourRates,
   ServiceCustomerVehicle,
   ServiceDiscountDecision,
   ServiceDiscountRequest,
@@ -10102,6 +10103,84 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateServiceOrderMutationOptions(options));
     }
 
+export const getGetServiceBookingLabourRatesUrl = () => {
+
+
+
+
+  return `/api/service-booking/labour-rates`
+}
+
+/**
+ * Booking-safe read endpoint. USD amounts are configuration inputs only; cards snapshot the corresponding whole-GYD rate when created or when explicitly revised.
+ * @summary Read dealer-specific brand labour options for booking
+ */
+export const getServiceBookingLabourRates = async ( options?: RequestInit): Promise<ServiceBookingLabourRates> => {
+
+  return customFetch<ServiceBookingLabourRates>(getGetServiceBookingLabourRatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetServiceBookingLabourRatesQueryKey = () => {
+    return [
+    `/api/service-booking/labour-rates`
+    ] as const;
+    }
+
+
+export const getGetServiceBookingLabourRatesQueryOptions = <TData = Awaited<ReturnType<typeof getServiceBookingLabourRates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceBookingLabourRates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetServiceBookingLabourRatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getServiceBookingLabourRates>>> = ({ signal }) => getServiceBookingLabourRates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getServiceBookingLabourRates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetServiceBookingLabourRatesQueryResult = NonNullable<Awaited<ReturnType<typeof getServiceBookingLabourRates>>>
+export type GetServiceBookingLabourRatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Read dealer-specific brand labour options for booking
+ */
+
+export function useGetServiceBookingLabourRates<TData = Awaited<ReturnType<typeof getServiceBookingLabourRates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceBookingLabourRates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetServiceBookingLabourRatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListServiceCustomerVehiclesUrl = (customerId: number,) => {
 
 
@@ -11594,8 +11673,8 @@ export const getApplyCurrentJobCardLabourRateUrl = (id: number,) => {
 }
 
 /**
- * Reprices only this card using the fixed USD 120/hour labour base and the server-side dealer labourUsdToGydRate. This is an explicit action; existing custom GYD rates are never replaced automatically. Repricing creates a new estimate version and invalidates prior approvals.
- * @summary Apply the active dealer labour-only FX rate to this card
+ * Reprices only this card using its service order brand, the matching dealer override (or fixed USD 120/hour fallback), and the server-side dealer labourUsdToGydRate. This is an explicit action; existing custom GYD rates are never replaced automatically. Repricing creates a new estimate version and invalidates prior approvals.
+ * @summary Apply the active dealer brand labour rate and labour-only FX to this card
  */
 export const applyCurrentJobCardLabourRate = async (id: number, options?: RequestInit): Promise<JobCard> => {
 
@@ -11644,7 +11723,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ApplyCurrentJobCardLabourRateMutationError = ErrorType<Error>
 
     /**
- * @summary Apply the active dealer labour-only FX rate to this card
+ * @summary Apply the active dealer brand labour rate and labour-only FX to this card
  */
 export const useApplyCurrentJobCardLabourRate = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyCurrentJobCardLabourRate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}

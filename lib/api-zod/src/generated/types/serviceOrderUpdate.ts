@@ -34,6 +34,13 @@ export interface ServiceOrderUpdate {
      */
   vehicleInfo?: string;
   /**
+     * Selected vehicle brand; changing it does not reprice an existing card
+     * @minLength 1
+     * @maxLength 80
+     * @nullable
+     */
+  brand?: string | null;
+  /**
      * @minLength 1
      * @maxLength 50
      * @nullable

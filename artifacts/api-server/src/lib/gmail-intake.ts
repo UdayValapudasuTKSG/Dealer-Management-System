@@ -41,6 +41,8 @@ import { dealerTimezone, zonedDayKey } from "./timezone";
 import { decryptSmtpPassword } from "./smtp-crypto";
 import { getDealerGmailCredentialRow } from "./smtp-connection";
 import { ensureInitialJobCard } from "./initial-job-card";
+import { getServiceSettings } from "./service-settings";
+import { canonicalServiceBrand } from "./service-labour-pricing";
 import {
   resolveServiceInboxes,
   serviceInboxSearch,
@@ -338,6 +340,15 @@ export async function createServiceBookingFromEmail(opts: {
     }
     return null;
   }
+  // Email intake has no authoritative make field. Only select a dealer-known
+  // configured brand when it appears as a complete normalized phrase;
+  // ambiguous/unknown model text intentionally keeps the default-rate path.
+  const settings = await getServiceSettings(opts.dealerId);
+  const normalizedModel = ` ${canonicalServiceBrand(form.model ?? "")} `;
+  const matchedBrands = settings.brandLabourRates.filter((rate) =>
+    normalizedModel.includes(` ${rate.brand} `),
+  );
+  const bookingBrand = matchedBrands.length === 1 ? matchedBrands[0]!.brand : null;
 
   const requestedDate = form.preferredDate!;
   const tz = await dealerTimezone(opts.dealerId);
@@ -453,6 +464,7 @@ export async function createServiceBookingFromEmail(opts: {
             customerName: form.name!,
             customerPhoneSnapshot: form.phone!,
             vehicleInfo: form.model!,
+            brand: bookingBrand,
             // VIN and registration are intentionally left null until staff
             // identifies the vehicle; the form only supplied a model.
             vin: null,

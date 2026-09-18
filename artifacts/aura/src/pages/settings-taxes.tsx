@@ -11,6 +11,7 @@ import {
   useGetServiceSettings,
   useUpdateServiceSettings,
   getGetServiceSettingsQueryKey,
+  getGetServiceBookingLabourRatesQueryKey,
   type DealerTaxRule,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +36,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, Percent, Plus, Trash2, Wrench } from "lucide-react";
+import {
+  DEFAULT_LABOUR_USD_PER_HOUR,
+  normalizeLabourBrand,
+  type BrandLabourRate,
+} from "@/lib/brand-labour-rates";
 
 type TaxForm = {
   name: string;
@@ -341,7 +347,12 @@ export default function SettingsTaxes() {
 function ServiceSettingsCard() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { data: settings, isLoading } = useGetServiceSettings();
+  const {
+    data: settings,
+    isLoading,
+    isError: settingsError,
+    error: settingsLoadError,
+  } = useGetServiceSettings();
   const { can, me } = useAuthz();
   const canManageLabourRate =
     can("settings", "admin") || !!me?.isSuperAdmin;
@@ -350,16 +361,25 @@ function ServiceSettingsCard() {
   const [jobHours, setJobHours] = useState<string | null>(null);
   const [dayHours, setDayHours] = useState<string | null>(null);
   const [labourRate, setLabourRate] = useState<string | null>(null);
+  const [brandLabourRates, setBrandLabourRates] = useState<
+    { brand: string; labourUsdPerHour: string }[] | null
+  >(null);
+
+  const configuredBrandRates: BrandLabourRate[] = settings?.brandLabourRates ?? [];
 
   const update = useUpdateServiceSettings({
     mutation: {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getGetServiceSettingsQueryKey() });
+        qc.invalidateQueries({
+          queryKey: getGetServiceBookingLabourRatesQueryKey(),
+        });
         setIntervalKm(null);
         setFee(null);
         setJobHours(null);
         setDayHours(null);
         setLabourRate(null);
+        setBrandLabourRates(null);
         toast({ title: "Service settings saved" });
       },
       onError: (err: unknown) =>
@@ -377,12 +397,37 @@ function ServiceSettingsCard() {
   const shownDayHours = dayHours ?? (settings ? String(settings.techWorkHoursPerDay) : "");
   const shownLabourRate =
     labourRate ?? (settings ? String(settings.labourUsdToGydRate) : "");
+  const shownBrandLabourRates =
+    brandLabourRates ??
+    configuredBrandRates.map((rate) => ({
+      brand: rate.brand,
+      labourUsdPerHour: String(rate.labourUsdPerHour),
+    }));
+  const normalizedBrands = shownBrandLabourRates.map((rate) =>
+    normalizeLabourBrand(rate.brand),
+  );
+  const duplicateBrands = new Set(
+    normalizedBrands.filter(
+      (brand, index) => brand && normalizedBrands.indexOf(brand) !== index,
+    ),
+  );
+  const brandRatesValid = shownBrandLabourRates.every(
+    (rate) =>
+      normalizeLabourBrand(rate.brand) !== "" &&
+      rate.brand.normalize("NFKC").trim().replace(/\s+/g, " ").length <= 80 &&
+      !duplicateBrands.has(normalizeLabourBrand(rate.brand)) &&
+      rate.labourUsdPerHour.trim() !== "" &&
+      Number.isFinite(Number(rate.labourUsdPerHour)) &&
+      Number(rate.labourUsdPerHour) > 0 &&
+      Number(rate.labourUsdPerHour) <= 100000,
+  );
   const dirty =
     intervalKm != null ||
     fee != null ||
     jobHours != null ||
     dayHours != null ||
-    labourRate != null;
+    labourRate != null ||
+    brandLabourRates != null;
   const valid =
     shownInterval.trim() !== "" &&
     Number(shownInterval) > 0 &&
@@ -395,7 +440,8 @@ function ServiceSettingsCard() {
     Number(shownDayHours) >= 1 &&
     Number(shownDayHours) <= 24 &&
     Number.isFinite(Number(shownLabourRate)) &&
-    Number(shownLabourRate) > 0;
+    Number(shownLabourRate) > 0 &&
+    brandRatesValid;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
@@ -407,6 +453,20 @@ function ServiceSettingsCard() {
         Vehicles arriving more than the interval past their last recorded service get flagged
         with a late-service surcharge suggestion on the job card. Staff can apply or waive it.
       </p>
+      {settingsError && (
+        <div
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm"
+          data-testid="alert-service-settings-error"
+        >
+          <p className="font-medium">Service settings could not be loaded.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {settingsLoadError instanceof Error
+              ? settingsLoadError.message
+              : "Check your permission and try again."}
+          </p>
+        </div>
+      )}
       <div className="rounded-xl border border-primary/20 bg-primary/[0.05] p-4 space-y-3">
         <div>
           <h3 className="font-medium">Customer labour pricing</h3>
@@ -431,22 +491,168 @@ function ServiceSettingsCard() {
             </p>
           </div>
           <div className="space-y-2">
-            <Label>Fixed labour base</Label>
-            <Input value={`USD ${settings?.labourUsdPerHour ?? 120}/hour`} readOnly />
-            <p className="text-xs text-muted-foreground">Read-only customer labour input.</p>
+            <Label>Default labour base</Label>
+            <Input value={`US$${DEFAULT_LABOUR_USD_PER_HOUR}/hour`} readOnly />
+            <p className="text-xs text-muted-foreground">
+              Used when a booking has no brand or no configured override.
+            </p>
           </div>
           <div className="space-y-2">
             <Label>Converted customer rate</Label>
             <Input
               value={
                 settings
-                  ? `GYD ${Math.round(120 * Number(shownLabourRate || settings.labourUsdToGydRate)).toLocaleString("en-GY")}/hour`
+                  ? `GYD ${Math.round(DEFAULT_LABOUR_USD_PER_HOUR * Number(shownLabourRate || settings.labourUsdToGydRate)).toLocaleString("en-GY")}/hour`
                   : ""
               }
               readOnly
             />
-            <p className="text-xs text-muted-foreground">USD 120 × labour FX.</p>
+            <p className="text-xs text-muted-foreground">
+              US${DEFAULT_LABOUR_USD_PER_HOUR} × labour FX. The FX value is not the USD hourly price.
+            </p>
           </div>
+        </div>
+        <div className="space-y-3 border-t border-primary/15 pt-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-medium">Brand overrides</h4>
+              <p className="text-xs text-muted-foreground">
+                Optional USD hourly prices. Brand matching ignores case and extra spaces.
+              </p>
+            </div>
+            {canManageLabourRate && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="button-add-brand-labour-rate"
+                onClick={() =>
+                  setBrandLabourRates([
+                    ...shownBrandLabourRates,
+                    { brand: "", labourUsdPerHour: "" },
+                  ])
+                }
+                disabled={shownBrandLabourRates.length >= 100}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add brand
+              </Button>
+            )}
+          </div>
+          {shownBrandLabourRates.length === 0 ? (
+            <p
+              className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-muted-foreground"
+              data-testid="text-no-brand-labour-rates"
+            >
+              No brand overrides. All brands currently use US${DEFAULT_LABOUR_USD_PER_HOUR}/hour.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {shownBrandLabourRates.map((rate, index) => {
+                const normalizedBrand = normalizeLabourBrand(rate.brand);
+                const duplicate = duplicateBrands.has(normalizedBrand);
+                const numericRate = Number(rate.labourUsdPerHour);
+                const invalidRate =
+                  rate.labourUsdPerHour.trim() === "" ||
+                  !Number.isFinite(numericRate) ||
+                  numericRate <= 0 ||
+                  numericRate > 100000;
+                const brandTooLong =
+                  rate.brand.normalize("NFKC").trim().replace(/\s+/g, " ").length >
+                  80;
+                return (
+                  <div
+                    key={`${index}-${configuredBrandRates[index]?.brand ?? "new"}`}
+                    className="grid gap-2 rounded-lg border border-white/10 bg-black/5 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)_minmax(0,180px)_auto] sm:items-start"
+                    data-testid={`row-brand-labour-rate-${index}`}
+                  >
+                    <div className="space-y-1">
+                      <Label htmlFor={`brand-labour-name-${index}`}>Brand</Label>
+                      <Input
+                        id={`brand-labour-name-${index}`}
+                        value={rate.brand}
+                        disabled={!canManageLabourRate}
+                        aria-invalid={!normalizedBrand || duplicate || brandTooLong}
+                        data-testid={`input-brand-labour-name-${index}`}
+                        placeholder="e.g. BMW"
+                        onChange={(event) => {
+                          const next = [...shownBrandLabourRates];
+                          next[index] = { ...rate, brand: event.target.value };
+                          setBrandLabourRates(next);
+                        }}
+                      />
+                      {!normalizedBrand && (
+                        <p className="text-xs text-destructive">Brand is required.</p>
+                      )}
+                      {duplicate && (
+                        <p className="text-xs text-destructive">
+                          This brand already has an override.
+                        </p>
+                      )}
+                      {brandTooLong && (
+                        <p className="text-xs text-destructive">
+                          Brand must be 80 characters or fewer.
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`brand-labour-usd-${index}`}>USD/hour</Label>
+                      <Input
+                        id={`brand-labour-usd-${index}`}
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={rate.labourUsdPerHour}
+                        disabled={!canManageLabourRate}
+                        aria-invalid={invalidRate}
+                        data-testid={`input-brand-labour-usd-${index}`}
+                        onChange={(event) => {
+                          const next = [...shownBrandLabourRates];
+                          next[index] = {
+                            ...rate,
+                            labourUsdPerHour: event.target.value,
+                          };
+                          setBrandLabourRates(next);
+                        }}
+                      />
+                      {invalidRate && (
+                        <p className="text-xs text-destructive">
+                          Enter an amount greater than zero and no more than US$100,000.
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>GYD/hour preview</Label>
+                      <div
+                        className="flex h-9 items-center rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm tabular-nums"
+                        data-testid={`text-brand-labour-gyd-${index}`}
+                      >
+                        {!invalidRate && Number(shownLabourRate) > 0
+                          ? `GYD ${Math.round(numericRate * Number(shownLabourRate)).toLocaleString("en-GY")}`
+                          : "—"}
+                      </div>
+                    </div>
+                    {canManageLabourRate && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="mt-6 text-destructive"
+                        aria-label={`Remove ${rate.brand || "brand"} override`}
+                        data-testid={`button-remove-brand-labour-rate-${index}`}
+                        onClick={() =>
+                          setBrandLabourRates(
+                            shownBrandLabourRates.filter((_, rowIndex) => rowIndex !== index),
+                          )
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
         {!canManageLabourRate && (
           <p className="text-xs text-muted-foreground">
@@ -519,8 +725,16 @@ function ServiceSettingsCard() {
                     ...(canManageLabourRate
                       ? { labourUsdToGydRate: Number(shownLabourRate) }
                       : {}),
+                    ...(canManageLabourRate
+                      ? {
+                          brandLabourRates: shownBrandLabourRates.map((rate) => ({
+                            brand: rate.brand.normalize("NFKC").trim().replace(/\s+/g, " "),
+                            labourUsdPerHour: Number(rate.labourUsdPerHour),
+                          })),
+                        }
+                      : {}),
                   },
-                })
+                } as never)
               }
             >
               {update.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

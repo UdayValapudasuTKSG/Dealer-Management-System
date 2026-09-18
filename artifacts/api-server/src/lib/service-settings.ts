@@ -11,11 +11,13 @@ import {
   FIXED_LABOUR_USD_PER_HOUR,
   SERVICE_SUMMARY_CADENCES,
   type DealerServiceSettings,
+  type BrandLabourRate,
   type ServiceSummaryCadence,
 } from "@workspace/db";
 import {
   calculateLabourRateGyd,
   isValidLabourUsdToGydRate,
+  normalizeBrandLabourRates,
 } from "./service-labour-pricing";
 
 /**
@@ -35,10 +37,12 @@ type ServiceSettings = Pick<
   | "leadSourceReportEnabled"
   | "leadSourceReportSendTime"
    | "labourUsdToGydRate"
+   | "brandLabourRates"
 > & {
   summaryCadence: ServiceSummaryCadence;
   labourUsdPerHour: typeof FIXED_LABOUR_USD_PER_HOUR;
   labourGydPerHour: number;
+  brandLabourRates: BrandLabourRate[];
 };
 
 const DEFAULT_LEAD_SOURCE_REPORT_SEND_TIME = "06:00";
@@ -76,6 +80,7 @@ export async function getServiceSettings(
     labourUsdToGydRate:
       row?.labourUsdToGydRate ?? DEFAULT_LABOUR_USD_TO_GYD_RATE,
     labourUsdPerHour: FIXED_LABOUR_USD_PER_HOUR,
+    brandLabourRates: normalizeBrandLabourRates(row?.brandLabourRates ?? []),
     labourGydPerHour: calculateLabourRateGyd(
       row?.labourUsdToGydRate ?? DEFAULT_LABOUR_USD_TO_GYD_RATE,
     ),
@@ -93,6 +98,7 @@ export async function updateServiceSettings(
     leadSourceReportEnabled?: boolean;
     leadSourceReportSendTime?: string;
     labourUsdToGydRate?: number;
+    brandLabourRates?: BrandLabourRate[];
   },
 ): Promise<ServiceSettings> {
   // Normalize only the fields actually supplied so concurrent partial
@@ -122,6 +128,9 @@ export async function updateServiceSettings(
       );
     }
     supplied.labourUsdToGydRate = patch.labourUsdToGydRate;
+  }
+  if (patch.brandLabourRates !== undefined) {
+    supplied.brandLabourRates = normalizeBrandLabourRates(patch.brandLabourRates);
   }
 
   if (Object.keys(supplied).length > 0) {
