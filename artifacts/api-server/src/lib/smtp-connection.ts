@@ -13,7 +13,12 @@
  */
 import nodemailer, { type Transporter } from "nodemailer";
 import { eq } from "drizzle-orm";
-import { db, smtpConnectionsTable, type SmtpConnection } from "@workspace/db";
+import {
+  db,
+  dealersTable,
+  smtpConnectionsTable,
+  type SmtpConnection,
+} from "@workspace/db";
 import { decryptSmtpPassword } from "./smtp-crypto";
 import { logger } from "./logger";
 
@@ -112,6 +117,27 @@ export async function getSmtpConnectionRow(
   const [row] = await db
     .select()
     .from(smtpConnectionsTable)
+    .where(eq(smtpConnectionsTable.dealerId, dealerId))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Server-only credential row for explicit Gmail IMAP intake. This does not
+ * discover dealers, apply fallbacks, or expose the decrypted password.
+ */
+export async function getDealerGmailCredentialRow(dealerId: number) {
+  const [row] = await db
+    .select({
+      dealerId: smtpConnectionsTable.dealerId,
+      dealerStatus: dealersTable.status,
+      host: smtpConnectionsTable.host,
+      username: smtpConnectionsTable.username,
+      enabled: smtpConnectionsTable.enabled,
+      passwordCiphertext: smtpConnectionsTable.passwordCiphertext,
+    })
+    .from(smtpConnectionsTable)
+    .innerJoin(dealersTable, eq(dealersTable.id, smtpConnectionsTable.dealerId))
     .where(eq(smtpConnectionsTable.dealerId, dealerId))
     .limit(1);
   return row ?? null;

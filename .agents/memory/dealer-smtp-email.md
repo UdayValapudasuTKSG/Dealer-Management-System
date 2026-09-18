@@ -9,4 +9,7 @@ description: Non-obvious rules for the per-dealer SMTP connections and template 
 - The email outbox worker claims rows with an atomic compare-and-set (queued/failed→sending guarded on id+status+attempts), same as the WhatsApp worker. Any new outbox-processing path must claim before side effects or multi-process workers duplicate sends.
 - The atomic claim increments `attempts` before skip decisions, so cancelled-for-no-SMTP rows end at attempts=1 (verify-smtp-email asserts ≤1).
 - Non-GM roles have no `settings:view` at all, so redaction of connection details is defense-in-depth behind an RBAC 403.
+- A saved SMTP “Connected” result is historical and does not establish current SMTP authentication or inbox access. Prefer reusing an explicitly opted-in dealer's saved Gmail credentials for service intake before requesting a separate connection.
+  **Why:** an existing connection displayed healthy while Google rejected both current SMTP and IMAP authentication; a separate global inbox was being mistaken for that dealership's inbox.
+  **How to apply:** verify the required protocol without sending mail or marking messages read, expose only fixed error classifications, and keep production inbox opt-ins out of development so preview workers cannot consume live mail.
 - Regression suite: `pnpm --filter @workspace/scripts run verify-smtp-email` (aborts if dealers 1/2 already have real SMTP rows).

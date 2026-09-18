@@ -1975,10 +1975,14 @@ try {
   expectStatus(timerTimesheet, 200, "authorization-optional timer timesheet");
   assert(Array.isArray(timerTimesheet.body?.rows),
     "authorization-optional timer timesheet: expected response rows");
-  const timerTimesheetRow = (timerTimesheet.body?.rows ?? [])
+  const timerTimesheetRows: Array<{
+    technicianUserId: number;
+    entries?: Array<{ source: string; jobCardId: number | null; durationMinutes: number }>;
+  }> = timerTimesheet.body.rows;
+  const timerTimesheetRow = timerTimesheetRows
     .find((row) => row.technicianUserId === technicianUserId);
   const capturedTimerEntry = timerTimesheetRow?.entries?.find(
-    (entry: any) => entry.source === "automatic" && entry.jobCardId === approvalGate.cardId,
+    (entry) => entry.source === "automatic" && entry.jobCardId === approvalGate.cardId,
   );
   assert(capturedTimerEntry,
     "timer work without estimate authorization did not reach the timesheet");

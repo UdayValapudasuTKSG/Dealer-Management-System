@@ -28,6 +28,12 @@ import {
   runAtomicInboundDeliveryOnce,
 } from "./gmail-service-intake";
 import { dealerTimezone, zonedDayKey } from "./timezone";
+import { decryptSmtpPassword } from "./smtp-crypto";
+import { getDealerGmailCredentialRow } from "./smtp-connection";
+import {
+  resolveServiceInboxes,
+  serviceInboxSearch,
+} from "./gmail-service-mailboxes";
 export {
   isServiceBookingSubject,
   normalizeServicePhone,
@@ -83,10 +89,14 @@ type MailboxConfig = {
   ledgerPrefix: string;
   /** webhook_events marker id holding this mailbox's enable-time watermark. */
   markerId: string;
+  /** Explicit dealer SMTP inboxes accept seen recovery mail and service only. */
+  serviceOnly?: boolean;
+  initialSince?: Date;
 };
 
 /** GT Automotive dealer id for the salesadmin@ inbox (name lookup, cached). */
 let gtDealerIdCache: number | null = null;
+const serviceConfigWarnings = new Set<string>();
 async function gtSalesDealerId(): Promise<number | null> {
   const fromEnv = Number(process.env["SALESADMIN_GMAIL_DEALER_ID"]);
   if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
@@ -100,7 +110,7 @@ async function gtSalesDealerId(): Promise<number | null> {
   return gtDealerIdCache;
 }
 
-function gmailConfigs(): MailboxConfig[] {
+async function gmailConfigs(): Promise<MailboxConfig[]> {
   const configs: MailboxConfig[] = [];
   const user = process.env["GMAIL_USER"];
   const pass = process.env["GMAIL_APP_PASSWORD"];
@@ -129,6 +139,41 @@ function gmailConfigs(): MailboxConfig[] {
       markerId: `enabled_at:${gtUser}`,
     });
   }
+  try {
+    const resolved = await resolveServiceInboxes({
+      raw: process.env["GMAIL_SERVICE_INBOXES"],
+      legacyMailboxes: [user, gtUser],
+      loadCredential: getDealerGmailCredentialRow,
+      decrypt: decryptSmtpPassword,
+    });
+    for (const issue of resolved.issues) {
+      const warningKey = `${issue.dealerId ?? "config"}:${issue.code}`;
+      if (serviceConfigWarnings.has(warningKey)) continue;
+      serviceConfigWarnings.add(warningKey);
+      logger.warn(
+        { dealerId: issue.dealerId, code: issue.code },
+        "Gmail service intake: mailbox configuration rejected",
+      );
+    }
+    configs.push(
+      ...resolved.inboxes.map((inbox) => ({
+        key: `service-${inbox.dealerId}-${inbox.identity}`,
+        user: inbox.user,
+        pass: inbox.pass,
+        dealerId: async () => inbox.dealerId,
+        subjectFilter: /website contact form \| book your service online/i,
+        ledgerPrefix: inbox.ledgerPrefix,
+        markerId: inbox.markerId,
+        serviceOnly: true,
+        initialSince: inbox.initialSince,
+      })),
+    );
+  } catch {
+    logger.warn(
+      { code: "config_resolution_failed" },
+      "Gmail service intake: could not resolve explicit mailbox configuration",
+    );
+  }
   return configs;
 }
 
@@ -140,7 +185,7 @@ function gmailConfigs(): MailboxConfig[] {
 
 const enabledAtCache = new Map<string, Date>();
 
-async function enabledAt(markerId: string): Promise<Date> {
+async function enabledAt(markerId: string, initialSince?: Date): Promise<Date> {
   const cached = enabledAtCache.get(markerId);
   if (cached) return cached;
   const [row] = await db
@@ -158,10 +203,25 @@ async function enabledAt(markerId: string): Promise<Date> {
   }
   const [inserted] = await db
     .insert(webhookEventsTable)
-    .values({ channel: MARKER_CHANNEL, externalId: markerId })
+    .values({
+      channel: MARKER_CHANNEL,
+      externalId: markerId,
+      ...(initialSince ? { createdAt: initialSince } : {}),
+    })
     .onConflictDoNothing()
     .returning();
-  const at = inserted?.createdAt ?? new Date();
+  const [winner] = inserted
+    ? [inserted]
+    : await db
+        .select()
+        .from(webhookEventsTable)
+        .where(
+          and(
+            eq(webhookEventsTable.channel, MARKER_CHANNEL),
+            eq(webhookEventsTable.externalId, markerId),
+          ),
+        );
+  const at = winner?.createdAt ?? initialSince ?? new Date();
   enabledAtCache.set(markerId, at);
   return at;
 }
@@ -638,7 +698,10 @@ async function ensureProcessedMailbox(client: ImapFlow): Promise<boolean> {
     if (code === "ALREADYEXISTS") return true;
     const text = (err as { responseText?: string }).responseText ?? "";
     if (/exists/i.test(text)) return true;
-    logger.warn({ err }, "Gmail intake: could not create processed mailbox");
+    logger.warn(
+      { code: "processed_mailbox_unavailable" },
+      "Gmail intake: could not create processed mailbox",
+    );
     return false;
   }
 }
@@ -654,7 +717,10 @@ async function markHandled(
       await client.messageCopy({ uid: String(uid) }, PROCESSED_MAILBOX, { uid: true });
     }
   } catch (err) {
-    logger.warn({ err, uid }, "Gmail intake: failed to mark message handled");
+    logger.warn(
+      { code: "mark_handled_failed", uid },
+      "Gmail intake: failed to mark message handled",
+    );
   }
 }
 
@@ -662,7 +728,16 @@ const pollingKeys = new Set<string>();
 let credWarned = false;
 
 export async function pollGmailInbox(): Promise<void> {
-  const configs = gmailConfigs();
+  let configs: MailboxConfig[];
+  try {
+    configs = await gmailConfigs();
+  } catch {
+    logger.error(
+      { code: "config_resolution_failed" },
+      "Gmail service intake: could not resolve mailbox configuration",
+    );
+    configs = [];
+  }
   if (configs.length === 0) {
     if (!credWarned) {
       logger.warn(
@@ -674,13 +749,29 @@ export async function pollGmailInbox(): Promise<void> {
   }
   // Sequential: one IMAP connection at a time keeps the worker gentle.
   for (const cfg of configs) {
-    await pollMailbox(cfg);
+    try {
+      await pollMailbox(cfg);
+    } catch {
+      logger.error(
+        { mailbox: cfg.key, code: "mailbox_setup_failed" },
+        "Gmail intake: mailbox setup failed",
+      );
+    }
   }
 }
 
 async function pollMailbox(cfg: MailboxConfig): Promise<void> {
   if (pollingKeys.has(cfg.key)) return;
-  const dealerId = await cfg.dealerId();
+  let dealerId: number | null;
+  try {
+    dealerId = await cfg.dealerId();
+  } catch {
+    logger.warn(
+      { mailbox: cfg.key, code: "dealer_lookup_failed" },
+      "Gmail intake: could not resolve dealer for mailbox — skipping",
+    );
+    return;
+  }
   if (!dealerId) {
     logger.warn(
       { mailbox: cfg.key },
@@ -697,10 +788,22 @@ async function pollMailbox(cfg: MailboxConfig): Promise<void> {
     secure: true,
     auth: { user: cfg.user, pass: cfg.pass },
     logger: false,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+  });
+  // ImapFlow can emit a socket error outside the awaited command promise.
+  // Never let a failed mailbox connection crash the worker process or log
+  // provider responses that may contain authentication details.
+  client.on("error", () => {
+    logger.warn(
+      { mailbox: cfg.key, code: "imap_connection_error" },
+      "Gmail intake: mailbox connection error",
+    );
   });
 
   try {
-    const since = await enabledAt(cfg.markerId);
+    const since = await enabledAt(cfg.markerId, cfg.initialSince);
     await client.connect();
     const hasProcessedBox = await ensureProcessedMailbox(client);
     const lock = await client.getMailboxLock("INBOX");
@@ -708,32 +811,57 @@ async function pollMailbox(cfg: MailboxConfig): Promise<void> {
       // IMAP SINCE is day-granular; the Message-ID ledger + enable-time check
       // below make the final call.
       const uids = await client.search(
-        { seen: false, since },
+        cfg.serviceOnly ? serviceInboxSearch(since) : { seen: false, since },
         { uid: true },
       );
       if (!uids || uids.length === 0) return;
 
       for (const uid of uids) {
         try {
-          const msg = await client.fetchOne(
+          const metadata = await client.fetchOne(
             String(uid),
-            { source: true, internalDate: true },
+            { envelope: true, internalDate: true },
             { uid: true },
           );
-          if (!msg || !msg.source) continue;
-          if (msg.internalDate && msg.internalDate < since) {
+          if (!metadata) continue;
+          if (metadata.internalDate && metadata.internalDate < since) {
             // Pre-launch mail — leave untouched (no backfill).
             continue;
           }
 
+          const subject = metadata.envelope?.subject?.trim() ?? "";
+          const messageId =
+            metadata.envelope?.messageId?.trim() || `gmail-uid-${uid}-${cfg.user}`;
+          const externalId = `${cfg.ledgerPrefix}${messageId}`;
+          const subjectMatches = cfg.serviceOnly
+            ? isServiceBookingSubject(subject)
+            : isServiceBookingSubject(subject) ||
+              !cfg.subjectFilter ||
+              cfg.subjectFilter.test(subject);
+          if (await alreadyProcessed(externalId)) {
+            // Service-only inboxes include seen mail, so this branch recurs
+            // on each poll. Do not repeatedly copy an already-handled email.
+            if (subjectMatches && !cfg.serviceOnly) {
+              await markHandled(client, uid, hasProcessedBox);
+            }
+            continue;
+          }
+          if (!subjectMatches) {
+            // Explicit dealer inboxes are service-only: unrelated mail is not
+            // read, marked, classified, or written to the non-service ledger.
+            if (!cfg.serviceOnly) await recordProcessed(externalId, null);
+            continue;
+          }
+          const msg = await client.fetchOne(
+            String(uid),
+            { source: true },
+            { uid: true },
+          );
+          if (!msg || !msg.source) continue;
           const parsed = await simpleParser(msg.source);
           const fromAddr =
             parsed.from?.value?.[0]?.address?.trim().toLowerCase() ?? "";
           const fromName = parsed.from?.value?.[0]?.name?.trim() ?? "";
-          const messageId =
-            parsed.messageId?.trim() || `gmail-uid-${uid}-${cfg.user}`;
-          const externalId = `${cfg.ledgerPrefix}${messageId}`;
-          const subject = parsed.subject?.trim() ?? "";
           const body = (parsed.text ?? "").trim();
           const html =
             typeof parsed.html === "string" ? parsed.html.trim() : null;
@@ -741,20 +869,6 @@ async function pollMailbox(cfg: MailboxConfig): Promise<void> {
           // Subject-filtered mailboxes (e.g. GT sales): mail that doesn't
           // match is NOT ours to touch — leave it unread and unlabelled for
           // the humans working that inbox. Ledger it so we skip it cheaply.
-          const subjectMatches =
-            isServiceBookingSubject(subject) ||
-            !cfg.subjectFilter ||
-            cfg.subjectFilter.test(subject);
-
-          if (await alreadyProcessed(externalId)) {
-            if (subjectMatches) await markHandled(client, uid, hasProcessedBox);
-            continue;
-          }
-          if (!subjectMatches) {
-            await recordProcessed(externalId, null);
-            continue;
-          }
-
           // Never loop the system's own outbound mail back into leads.
           // System mail is identified by the X-AURA-System header stamped in
           // email.ts — NOT by sender address, so genuine self-sent human mail
@@ -880,14 +994,22 @@ async function pollMailbox(cfg: MailboxConfig): Promise<void> {
         } catch (err) {
           // Leave the message unseen/unrecorded so the next poll retries it
           // (e.g. transient AI failure).
-          logger.error({ err, uid }, "Gmail intake: failed to process message");
+          logger.error(
+            cfg.serviceOnly
+              ? { code: "service_message_processing_failed", uid }
+              : { err, uid },
+            "Gmail intake: failed to process message",
+          );
         }
       }
     } finally {
       lock.release();
     }
   } catch (err) {
-    logger.error({ err, mailbox: cfg.key }, "Gmail intake: IMAP poll failed");
+    logger.error(
+      { mailbox: cfg.key, code: "imap_poll_failed" },
+      "Gmail intake: IMAP poll failed",
+    );
   } finally {
     pollingKeys.delete(cfg.key);
     try {

@@ -132,6 +132,7 @@ WHATSAPP_APP_SECRET = "1fe1a80018e411ecfe4809816891a6be"
 
 [userenv.production]
 SERVICE_QUOTE_PUBLIC_URL = "https://automotive-aura-journey.replit.app"
+GMAIL_SERVICE_INBOXES = "[{\"dealerId\":99,\"initialSince\":\"2026-09-18T16:40:00.000Z\"}]"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-f344ae42-7e40-44eb-8f65-d4aa608cb80d"

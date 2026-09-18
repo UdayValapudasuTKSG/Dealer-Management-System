@@ -4,6 +4,13 @@ import {
   parseServiceBookingForm,
   runAtomicInboundDeliveryOnce,
 } from "../lib/gmail-service-intake";
+import {
+  parseServiceInboxRequests,
+  resolveServiceInboxes,
+  serviceInboxSearch,
+  shouldFetchServiceSource,
+  type ServiceInboxCredentialRow,
+} from "../lib/gmail-service-mailboxes";
 
 const forwardedText = `---------- Forwarded message ---------
 From: website-relay@example.invalid
@@ -141,5 +148,165 @@ assert.deepEqual(
   ),
   { id: 1 },
 );
+
+// Explicit dealer inbox configuration is non-secret, strict, and scoped only
+// to listed dealer IDs. The fake rows stand in for saved smtp_connections.
+const now = new Date("2026-09-18T17:00:00.000Z");
+const rows = new Map<number, ServiceInboxCredentialRow>([
+  [
+    99,
+    {
+      dealerId: 99,
+      dealerStatus: "active",
+      host: "smtp.gmail.com",
+      username: " No-Reply@CamMotors.gy ",
+      enabled: true,
+      passwordCiphertext: "saved-ciphertext",
+    },
+  ],
+  [
+    100,
+    {
+      dealerId: 100,
+      dealerStatus: "active",
+      host: "mail.example.com",
+      username: "service@example.com",
+      enabled: true,
+      passwordCiphertext: "saved-ciphertext",
+    },
+  ],
+  [
+    101,
+    {
+      dealerId: 101,
+      dealerStatus: "active",
+      host: "smtp.gmail.com",
+      username: "paused@gmail.com",
+      enabled: false,
+      passwordCiphertext: "saved-ciphertext",
+    },
+  ],
+]);
+const loaded: number[] = [];
+const resolved = await resolveServiceInboxes({
+  raw: JSON.stringify([
+    { dealerId: 99, initialSince: "2026-09-18T16:40:00.000Z" },
+    { dealerId: 100 },
+    { dealerId: 101 },
+  ]),
+  legacyMailboxes: ["salesadmin@example.com"],
+  now,
+  loadCredential: async (dealerId) => {
+    loaded.push(dealerId);
+    return rows.get(dealerId) ?? null;
+  },
+  decrypt: (_ciphertext, dealerId) => `decrypted-for-${dealerId}`,
+});
+assert.deepEqual(loaded, [99, 100, 101]); // no unlisted SMTP discovery
+assert.equal(resolved.inboxes.length, 1);
+assert.equal(resolved.inboxes[0]!.dealerId, 99);
+assert.equal(resolved.inboxes[0]!.user, "no-reply@cammotors.gy");
+assert.equal(resolved.inboxes[0]!.pass, "decrypted-for-99");
+assert.equal(
+  resolved.inboxes[0]!.initialSince.toISOString(),
+  "2026-09-18T16:40:00.000Z",
+);
+assert.ok(resolved.inboxes[0]!.markerId.includes(":99:"));
+assert.ok(resolved.inboxes[0]!.ledgerPrefix.includes(":99:"));
+assert.deepEqual(
+  resolved.issues.map((issue) => issue.code),
+  ["not_gmail", "disabled"],
+);
+
+// Seen status is intentionally absent for recovery; metadata gates source
+// reads by watermark, ledger and service subject.
+assert.deepEqual(serviceInboxSearch(now), { since: now });
+assert.equal(
+  shouldFetchServiceSource({
+    subject: "Website Contact Form | Book Your Service Online",
+    internalDate: now,
+    since: now,
+    alreadyProcessed: false,
+  }),
+  true,
+);
+assert.equal(
+  shouldFetchServiceSource({
+    subject: "Website Contact Form | Book Your Service Online",
+    internalDate: new Date("2026-09-18T16:59:59.999Z"),
+    since: now,
+    alreadyProcessed: false,
+  }),
+  false,
+);
+assert.equal(
+  shouldFetchServiceSource({
+    subject: "Quote request",
+    since: now,
+    alreadyProcessed: false,
+  }),
+  false,
+);
+assert.equal(
+  shouldFetchServiceSource({
+    subject: "Website Contact Form | Book Your Service Online",
+    since: now,
+    alreadyProcessed: true,
+  }),
+  false,
+);
+
+// Legacy mailbox ownership conflicts fail closed, as do inactive dealers,
+// bad/future watermarks and duplicate dealer entries.
+const conflict = await resolveServiceInboxes({
+  raw: JSON.stringify([{ dealerId: 99 }]),
+  legacyMailboxes: ["NO-REPLY@CAMMOTORS.GY"],
+  now,
+  loadCredential: async () => rows.get(99)!,
+  decrypt: () => "unused",
+});
+assert.equal(conflict.inboxes.length, 0);
+assert.equal(conflict.issues[0]!.code, "ownership_conflict");
+const invalidConfig = parseServiceInboxRequests(
+  JSON.stringify([
+    { dealerId: 98, initialSince: "2026-09-18T17:00:00Z" },
+    { dealerId: 99 },
+    { dealerId: 99 },
+    { dealerId: 102, initialSince: "2026-09-19T00:00:00.000Z" },
+  ]),
+  now,
+);
+assert.equal(invalidConfig.requests.length, 1);
+assert.deepEqual(
+  invalidConfig.issues.map((issue) => issue.code),
+  ["invalid_config", "duplicate_dealer", "invalid_config"],
+);
+const inactive = await resolveServiceInboxes({
+  raw: JSON.stringify([{ dealerId: 99 }]),
+  legacyMailboxes: [],
+  now,
+  loadCredential: async () => ({ ...rows.get(99)!, dealerStatus: "suspended" }),
+  decrypt: () => "unused",
+});
+assert.equal(inactive.issues[0]!.code, "dealer_inactive");
+
+// Stable dealer+mailbox identities preserve marker/dedupe keys across runs,
+// while the same mailbox assigned to another dealer cannot share its ledger.
+const again = await resolveServiceInboxes({
+  raw: JSON.stringify([{ dealerId: 99 }]),
+  legacyMailboxes: [],
+  now,
+  loadCredential: async () => rows.get(99)!,
+  decrypt: () => "password",
+});
+assert.equal(again.inboxes[0]!.identity, resolved.inboxes[0]!.identity);
+const otherDealer = await resolveServiceInboxes({
+  raw: JSON.stringify([{ dealerId: 199 }]),
+  legacyMailboxes: [],
+  now,
+  loadCredential: async () => ({ ...rows.get(99)!, dealerId: 199 }),
+  decrypt: () => "password",
+});
+assert.notEqual(otherDealer.inboxes[0]!.ledgerPrefix, again.inboxes[0]!.ledgerPrefix);
 
 console.log("Gmail service intake parser checks passed");
