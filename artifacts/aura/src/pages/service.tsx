@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useFocusParam, useFocusHighlight } from "@/lib/use-focus-param";
 import {
@@ -175,6 +175,13 @@ import { ViewControls } from "@/components/view-controls";
 import { ListPagination } from "@/components/list-pagination";
 import { PartRequisitionForm } from "@/components/service/part-requisition-form";
 import { TechnicianTimesheetsTab } from "@/components/service/technician-timesheets";
+import { BookingFilterControls } from "@/components/service/booking-filter-controls";
+import {
+  emptyServiceBookingFilters,
+  filterServiceBookings,
+  hasServiceBookingFilters,
+  type ServiceBookingFilters,
+} from "@/lib/service-booking-filters";
 import { cn } from "@/lib/utils";
 import {
   isCurrentServiceVehicleLookup,
@@ -2011,19 +2018,36 @@ function BookingsTab() {
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [fromStr, setFromStr] = useState("");
   const [toStr, setToStr] = useState("");
-
-  const { data: orders, isLoading } = useListServiceOrders({
+  const [filters, setFilters] = useState<ServiceBookingFilters>(emptyServiceBookingFilters);
+  const queryParams = useMemo(() => ({
     ...(fromStr ? { from: fromStr } : {}),
     ...(toStr ? { to: toStr } : {}),
+  }), [fromStr, toStr]);
+  const {
+    data: orders,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useListServiceOrders(queryParams, {
+    query: {
+      queryKey: getListServiceOrdersQueryKey(queryParams),
+      staleTime: 30_000,
+      refetchInterval: 30_000,
+    },
   });
+  const filteredOrders = useMemo(
+    () => filterServiceBookings(orders ?? [], filters),
+    [orders, filters],
+  );
   const { density, setDensity, layout, setLayout } = useViewMode("service");
   const focusOrderId = useFocusParam("order");
   const bookingsPager = useListPagination(
-    orders ?? [],
-    `${fromStr}|${toStr}|${layout}`,
+    filteredOrders,
+    `${fromStr}|${toStr}|${filters.search}|${filters.status}|${filters.serviceType}|${layout}`,
   );
   const focusedOrderIndex =
-    focusOrderId == null ? -1 : (orders ?? []).findIndex((order) => order.id === focusOrderId);
+    focusOrderId == null ? -1 : filteredOrders.findIndex((order) => order.id === focusOrderId);
   const focusedOrderPage =
     focusedOrderIndex < 0 ? null : Math.floor(focusedOrderIndex / bookingsPager.pageSize) + 1;
   const focusHandledRef = useRef<string | null>(null);
@@ -2055,41 +2079,33 @@ function BookingsTab() {
   return (
     <>
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2 bg-white/5 rounded-full px-3 py-1.5 border border-white/10 text-sm">
-          <Calendar className="w-4 h-4 text-muted-foreground" />
-          <Input
-            type="date"
-            value={fromStr}
-            onChange={(event) => setFromStr(event.target.value)}
-            className="w-auto h-7 border-none bg-transparent shadow-none p-0 focus-visible:ring-0 text-xs"
-            data-testid="input-filter-from"
-          />
-          <span className="text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={toStr}
-            onChange={(event) => setToStr(event.target.value)}
-            className="w-auto h-7 border-none bg-transparent shadow-none p-0 focus-visible:ring-0 text-xs"
-            data-testid="input-filter-to"
-          />
-          {(fromStr || toStr) && (
-            <button
-              type="button"
-              onClick={() => {
-                setFromStr("");
-                setToStr("");
-              }}
-              className="text-muted-foreground hover:text-foreground ml-1"
-              data-testid="button-clear-date-filter"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
+      <BookingFilterControls
+        filters={filters}
+        from={fromStr}
+        to={toStr}
+        resultCount={filteredOrders.length}
+        totalCount={orders?.length ?? 0}
+        onFiltersChange={setFilters}
+        onFromChange={setFromStr}
+        onToChange={setToStr}
+        onClearAll={() => {
+          setFilters(emptyServiceBookingFilters);
+          setFromStr("");
+          setToStr("");
+        }}
+      />
 
-      {!isLoading && orders?.length !== 0 && layout === "list" ? (
+      {isError ? (
+        <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6 text-center">
+          <p className="font-medium">Bookings could not be loaded.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {error instanceof Error ? error.message : "Please try again."}
+          </p>
+          <Button type="button" variant="outline" className="mt-4" onClick={() => refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : !isLoading && filteredOrders.length !== 0 && layout === "list" ? (
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
           <table className="w-full text-sm">
             <thead>
@@ -2164,8 +2180,15 @@ function BookingsTab() {
             [...Array(4)].map((_, i) => (
               <div key={i} className="h-24 bg-white/[0.05] rounded-2xl animate-pulse" />
             ))
-          ) : !orders?.length ? (
-            <EmptyState icon={Calendar} text="No bookings yet. Book the first service." />
+          ) : !filteredOrders.length ? (
+            <EmptyState
+              icon={hasServiceBookingFilters(filters) || fromStr || toStr ? Search : Calendar}
+              text={
+                hasServiceBookingFilters(filters) || fromStr || toStr
+                  ? "No bookings match your search and filters."
+                  : "No bookings yet. Book the first service."
+              }
+            />
           ) : (
             bookingsPager.items.map((order) => (
               <div
@@ -2349,7 +2372,7 @@ function BookingsTab() {
           )}
         </div>
       )}
-      {!isLoading && !!orders?.length && (
+      {!isLoading && !isError && filteredOrders.length > 0 && (
         <ListPagination {...bookingsPager} label="bookings" />
       )}
     </div>

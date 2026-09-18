@@ -1,12 +1,22 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import { and, eq, notInArray, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  notInArray,
+  isNotNull,
+  isNull,
+} from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
   db,
   dealersTable,
   leadsTable,
   customersTable,
+  jobCardsTable,
   serviceOrdersTable,
   timelineEventsTable,
   webhookEventsTable,
@@ -30,6 +40,7 @@ import {
 import { dealerTimezone, zonedDayKey } from "./timezone";
 import { decryptSmtpPassword } from "./smtp-crypto";
 import { getDealerGmailCredentialRow } from "./smtp-connection";
+import { ensureInitialJobCard } from "./initial-job-card";
 import {
   resolveServiceInboxes,
   serviceInboxSearch,
@@ -270,7 +281,7 @@ type ServiceBookingResult = {
  * confirms it.  No VIN, registration, time, or other customer data is
  * invented here.
  */
-async function createServiceBookingFromEmail(opts: {
+export async function createServiceBookingFromEmail(opts: {
   dealerId: number;
   externalId: string;
   subject: string;
@@ -459,8 +470,10 @@ async function createServiceBookingFromEmail(opts: {
             createdByName: "AURA Gmail Service Intake",
             createdOrigin: "system",
           })
-          .returning({ id: serviceOrdersTable.id });
+          .returning();
         if (!createdOrder) return null;
+        // The form requests a date, not a confirmed appointment time.
+        await ensureInitialJobCard(tx, createdOrder, { scheduledAt: null });
         await tx
           .update(webhookEventsTable)
           .set({ serviceOrderId: createdOrder.id })
@@ -518,6 +531,131 @@ async function createServiceBookingFromEmail(opts: {
     pastRequestedDate,
     identityReview,
   };
+}
+
+/**
+ * Narrow historical repair: only bookings already linked from the Gmail
+ * idempotency ledger and lacking every job card are eligible. Each candidate
+ * is rechecked under the same dealer/order lock used by live intake.
+ */
+export async function repairMissingGmailServiceJobCards(
+  limit = 100,
+  externalIdPrefix?: string,
+): Promise<number> {
+  const cursorFilter =
+    !externalIdPrefix && gmailRepairCursor > 0
+      ? gt(serviceOrdersTable.id, gmailRepairCursor)
+      : undefined;
+  const candidates = await db
+    .select({
+      orderId: serviceOrdersTable.id,
+      dealerId: serviceOrdersTable.dealerId,
+      externalId: webhookEventsTable.externalId,
+    })
+    .from(webhookEventsTable)
+    .innerJoin(
+      serviceOrdersTable,
+      and(
+        eq(serviceOrdersTable.id, webhookEventsTable.serviceOrderId),
+        eq(serviceOrdersTable.dealerId, webhookEventsTable.dealerId),
+      ),
+    )
+    .leftJoin(
+      jobCardsTable,
+      and(
+        eq(jobCardsTable.serviceOrderId, serviceOrdersTable.id),
+        eq(jobCardsTable.dealerId, serviceOrdersTable.dealerId),
+      ),
+    )
+    .where(
+      and(
+        eq(webhookEventsTable.channel, CHANNEL),
+        isNotNull(webhookEventsTable.serviceOrderId),
+        isNull(jobCardsTable.id),
+        inArray(serviceOrdersTable.status, [
+          "open",
+          "acknowledged",
+          "in_progress",
+          "on_hold",
+        ]),
+        externalIdPrefix
+          ? ilike(webhookEventsTable.externalId, `${externalIdPrefix}%`)
+          : undefined,
+        cursorFilter,
+      ),
+    )
+    .orderBy(serviceOrdersTable.id)
+    .limit(Math.max(1, Math.min(limit, 500)));
+  if (!externalIdPrefix && candidates.length === 0 && gmailRepairCursor > 0) {
+    gmailRepairCursor = 0;
+  }
+  let created = 0;
+  for (const candidate of candidates) {
+    if (!externalIdPrefix) gmailRepairCursor = candidate.orderId;
+    try {
+      if (!(await isAgentEnabled(candidate.dealerId, "intake_dedup"))) continue;
+      const card = await db.transaction(async (tx) => {
+        // Lifecycle changes serialize here. Never let a stale candidate snapshot
+        // resurrect a terminal/deleted booking or write into a paused dealer.
+        const [dealer] = await tx
+          .select({
+            status: dealersTable.status,
+            entitlements: dealersTable.entitlements,
+          })
+          .from(dealersTable)
+          .where(eq(dealersTable.id, candidate.dealerId))
+          .for("update");
+        if (
+          dealer?.status !== "active" ||
+          dealer.entitlements?.ai_agents === false ||
+          dealer.entitlements?.gmail_intake === false
+        ) {
+          return null;
+        }
+        const [locked] = await tx
+          .select({ order: serviceOrdersTable })
+          .from(serviceOrdersTable)
+          .innerJoin(
+            webhookEventsTable,
+            and(
+              eq(webhookEventsTable.channel, CHANNEL),
+              eq(webhookEventsTable.externalId, candidate.externalId),
+              eq(webhookEventsTable.dealerId, candidate.dealerId),
+              eq(webhookEventsTable.serviceOrderId, serviceOrdersTable.id),
+            ),
+          )
+          .where(
+            and(
+              eq(serviceOrdersTable.id, candidate.orderId),
+              eq(serviceOrdersTable.dealerId, candidate.dealerId),
+              inArray(serviceOrdersTable.status, [
+                "open",
+                "acknowledged",
+                "in_progress",
+                "on_hold",
+              ]),
+            ),
+          )
+          .for("update");
+        if (!locked) return null;
+        return ensureInitialJobCard(tx, locked.order, { scheduledAt: null });
+      });
+      if (card) created += 1;
+    } catch (err) {
+      // Fixture-scoped calls surface failures; the recurring production sweep
+      // isolates candidates so one malformed legacy row cannot starve backlog.
+      if (externalIdPrefix) throw err;
+      logger.error(
+        {
+          code: "gmail_service_job_card_candidate_failed",
+          dealerId: candidate.dealerId,
+          serviceOrderId: candidate.orderId,
+        },
+        "Gmail intake: skipped failed historical job-card candidate",
+      );
+    }
+  }
+  return created;
 }
 
 // ---------------------------------------------------------------------------
@@ -1021,14 +1159,33 @@ async function pollMailbox(cfg: MailboxConfig): Promise<void> {
 }
 
 let gmailTimer: ReturnType<typeof setInterval> | null = null;
+let gmailRepairRunning = false;
+let gmailRepairCursor = 0;
+
+async function runGmailJobCardRepair(): Promise<void> {
+  if (gmailRepairRunning) return;
+  gmailRepairRunning = true;
+  try {
+    await repairMissingGmailServiceJobCards();
+  } catch {
+    logger.error(
+      { code: "gmail_service_job_card_repair_failed" },
+      "Gmail intake: historical job-card repair failed",
+    );
+  } finally {
+    gmailRepairRunning = false;
+  }
+}
 
 export function startGmailIntakeWorker(): void {
   if (gmailTimer) return;
   gmailTimer = setInterval(() => {
+    void runGmailJobCardRepair();
     void pollGmailInbox();
   }, POLL_MS);
   // First check shortly after boot so new mail shows up fast.
   setTimeout(() => {
+    void runGmailJobCardRepair();
     void pollGmailInbox();
   }, 5_000);
   logger.info("Gmail email-to-lead intake worker started");

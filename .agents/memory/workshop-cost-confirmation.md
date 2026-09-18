@@ -25,3 +25,9 @@ Stock returns and financial credits are separate effects. A financial credit mus
 **Why:** A returned issued part already restores operational stock. Sending a stock-updating accounting return would restore it twice, while silently refunding cash exceeds the workshop's authority.
 
 **How to apply:** Keep ERPNext financial returns stock-neutral and retain the original issued document and an explicit adjusted balance.
+
+Gmail service enquiries should produce an initial job card automatically, but this must not imply appointment confirmation, customer authorization, or work already performed.
+
+**Why:** The user wants email bookings visible as job cards; the form supplies a preferred date, not an agreed appointment time or approval to invoice.
+
+**How to apply:** Preserve the requested booking date, leave the email-created card's appointment time unset until staff schedules it, and repair only eligible active Gmail-linked bookings without existing cards. Never reopen terminal bookings to fill historical gaps.

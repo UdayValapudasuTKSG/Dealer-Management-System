@@ -13,6 +13,7 @@ const read = (relativePath: string) =>
   readFileSync(resolve(workspaceRoot, relativePath), "utf8");
 
 const serviceRoutes = read("artifacts/api-server/src/routes/service.ts");
+const initialJobCard = read("artifacts/api-server/src/lib/initial-job-card.ts");
 const estimateBreakdown = read("artifacts/api-server/src/lib/service-estimate-breakdown.ts");
 const routeIndex = read("artifacts/api-server/src/routes/index.ts");
 const rbac = read("artifacts/api-server/src/middlewares/rbac.ts");
@@ -93,7 +94,7 @@ assert.equal(
   "quoted labour calculation must use planned hours only when override is null",
 );
 assert.match(
-  serviceRoutes,
+  initialJobCard,
   /quotedLaborHours\s*=\s*laborHours/,
   "new job cards must initialize quoted hours from planned booking hours",
 );
