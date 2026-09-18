@@ -25,6 +25,7 @@ import {
   canonicalServiceBrand,
   labourUsdPerHourForBrand,
   resolveNewCardLabourRate,
+  serviceBrandsFromInventoryMakes,
 } from "../lib/service-labour-pricing";
 import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
 import { effectiveQuotedLaborHours } from "../lib/service-labor-hours";
@@ -573,10 +574,10 @@ router.get("/service-booking/labour-rates", async (_req, res): Promise<void> => 
         isNull(vehiclesTable.deletedAt),
       )),
   ]);
-  const brands = [...new Set([
-    ...inventoryMakes.map(({ make }) => canonicalServiceBrand(make)),
-    ...settings.brandLabourRates.map(({ brand }) => brand),
-  ].filter(Boolean))].sort();
+  // This is intentionally scoped to this dealer's non-deleted inventory and
+  // does not filter by status: sold/history rows keep the taxonomy stable.
+  // Configured overrides are pricing data only and must not add selector values.
+  const brands = serviceBrandsFromInventoryMakes(inventoryMakes.map(({ make }) => make));
   res.json(GetServiceBookingLabourRatesResponse.parse({
     labourUsdToGydRate: settings.labourUsdToGydRate,
     defaultLabourUsdPerHour: settings.labourUsdPerHour,

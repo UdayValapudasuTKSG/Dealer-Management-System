@@ -9,6 +9,7 @@ import {
   useDeleteDealerTax,
   getListDealerTaxesQueryKey,
   useGetServiceSettings,
+  useGetServiceBookingLabourRates,
   useUpdateServiceSettings,
   getGetServiceSettingsQueryKey,
   getGetServiceBookingLabourRatesQueryKey,
@@ -39,6 +40,7 @@ import { Loader2, Percent, Plus, Trash2, Wrench } from "lucide-react";
 import {
   DEFAULT_LABOUR_USD_PER_HOUR,
   normalizeLabourBrand,
+  sortedUniqueBrands,
   type BrandLabourRate,
 } from "@/lib/brand-labour-rates";
 
@@ -353,6 +355,12 @@ function ServiceSettingsCard() {
     isError: settingsError,
     error: settingsLoadError,
   } = useGetServiceSettings();
+  const {
+    data: bookingRates,
+    isLoading: bookingRatesLoading,
+    isError: bookingRatesError,
+    error: bookingRatesLoadError,
+  } = useGetServiceBookingLabourRates();
   const { can, me } = useAuthz();
   const canManageLabourRate =
     can("settings", "admin") || !!me?.isSuperAdmin;
@@ -403,6 +411,18 @@ function ServiceSettingsCard() {
       brand: rate.brand,
       labourUsdPerHour: String(rate.labourUsdPerHour),
     }));
+  const inventoryBrands = sortedUniqueBrands(bookingRates?.brands ?? []);
+  const inventoryBrandNames = new Set(inventoryBrands.map(normalizeLabourBrand));
+  const configuredInventoryBrands = new Set(
+    shownBrandLabourRates
+      .map((rate) => normalizeLabourBrand(rate.brand))
+      .filter((brand) => inventoryBrandNames.has(brand)),
+  );
+  const canAddBrandRate =
+    !bookingRatesLoading &&
+    !bookingRatesError &&
+    inventoryBrands.length > configuredInventoryBrands.size &&
+    shownBrandLabourRates.length < 100;
   const normalizedBrands = shownBrandLabourRates.map((rate) =>
     normalizeLabourBrand(rate.brand),
   );
@@ -532,12 +552,28 @@ function ServiceSettingsCard() {
                     { brand: "", labourUsdPerHour: "" },
                   ])
                 }
-                disabled={shownBrandLabourRates.length >= 100}
+                disabled={!canAddBrandRate}
               >
                 <Plus className="mr-1.5 h-3.5 w-3.5" /> Add brand
               </Button>
             )}
           </div>
+          {bookingRatesLoading && (
+            <p className="text-xs text-muted-foreground">Loading inventory makes…</p>
+          )}
+          {bookingRatesError && (
+            <p className="text-xs text-destructive" role="alert">
+              Inventory makes could not be loaded
+              {bookingRatesLoadError instanceof Error
+                ? `: ${bookingRatesLoadError.message}`
+                : "."}
+            </p>
+          )}
+          {!bookingRatesLoading && !bookingRatesError && inventoryBrands.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Add a vehicle make in Inventory first to configure brand rates.
+            </p>
+          )}
           {shownBrandLabourRates.length === 0 ? (
             <p
               className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-muted-foreground"
@@ -559,6 +595,7 @@ function ServiceSettingsCard() {
                 const brandTooLong =
                   rate.brand.normalize("NFKC").trim().replace(/\s+/g, " ").length >
                   80;
+                const isInventoryBrand = inventoryBrandNames.has(normalizedBrand);
                 return (
                   <div
                     key={`${index}-${configuredBrandRates[index]?.brand ?? "new"}`}
@@ -567,19 +604,37 @@ function ServiceSettingsCard() {
                   >
                     <div className="space-y-1">
                       <Label htmlFor={`brand-labour-name-${index}`}>Brand</Label>
-                      <Input
-                        id={`brand-labour-name-${index}`}
-                        value={rate.brand}
-                        disabled={!canManageLabourRate}
-                        aria-invalid={!normalizedBrand || duplicate || brandTooLong}
-                        data-testid={`input-brand-labour-name-${index}`}
-                        placeholder="e.g. BMW"
-                        onChange={(event) => {
+                      <Select
+                        value={rate.brand || undefined}
+                        onValueChange={(brand) => {
                           const next = [...shownBrandLabourRates];
-                          next[index] = { ...rate, brand: event.target.value };
+                          next[index] = { ...rate, brand };
                           setBrandLabourRates(next);
                         }}
-                      />
+                        disabled={!canManageLabourRate || bookingRatesLoading || !!bookingRatesError}
+                      >
+                        <SelectTrigger
+                          id={`brand-labour-name-${index}`}
+                          className="h-9"
+                          aria-label={`Brand for labour rate ${index + 1}`}
+                          aria-invalid={!normalizedBrand || duplicate || brandTooLong}
+                          data-testid={`input-brand-labour-name-${index}`}
+                        >
+                          <SelectValue placeholder="Select an inventory make" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {inventoryBrands.map((brand) => (
+                            <SelectItem key={normalizeLabourBrand(brand)} value={brand}>
+                              {brand}
+                            </SelectItem>
+                          ))}
+                          {rate.brand && !isInventoryBrand && (
+                            <SelectItem value={rate.brand} disabled>
+                              {rate.brand} (legacy make)
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
                       {!normalizedBrand && (
                         <p className="text-xs text-destructive">Brand is required.</p>
                       )}

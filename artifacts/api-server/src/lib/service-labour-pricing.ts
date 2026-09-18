@@ -10,6 +10,21 @@ export function canonicalServiceBrand(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en");
 }
 
+/**
+ * The brand selector is an inventory taxonomy, not a settings taxonomy.
+ * Keep this transformation separate from saved labour-rate overrides: old
+ * overrides remain valid for pricing, but must not create new selector values.
+ */
+export function serviceBrandsFromInventoryMakes(
+  makes: Array<string | null | undefined>,
+): string[] {
+  return [...new Set(
+    makes
+      .map((make) => (make == null ? "" : canonicalServiceBrand(make)))
+      .filter((make) => make.length > 0),
+  )].sort();
+}
+
 export function normalizeBrandLabourRates(value: BrandLabourRate[]): BrandLabourRate[] {
   if (value.length > MAX_LABOUR_BRANDS) {
     throw new Error(`At most ${MAX_LABOUR_BRANDS} brand labour rates are allowed`);

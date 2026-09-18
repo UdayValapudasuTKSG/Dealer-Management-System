@@ -188,6 +188,7 @@ import { cn } from "@/lib/utils";
 import {
   DEFAULT_LABOUR_USD_PER_HOUR,
   effectiveBrandLabourUsdRate,
+  normalizeLabourBrand,
   sortedUniqueBrands,
 } from "@/lib/brand-labour-rates";
 import {
@@ -680,9 +681,11 @@ function BookingBrandRateField({
 }) {
   const brandOptions = sortedUniqueBrands([
     ...(rates?.brands ?? []),
-    ...(rates?.brandLabourRates.map((rate) => rate.brand) ?? []),
-    value,
   ]);
+  const normalizedValue = normalizeLabourBrand(value);
+  const isInventoryBrand = brandOptions.some(
+    (brand) => normalizeLabourBrand(brand) === normalizedValue,
+  );
   const usdRate = effectiveBrandLabourUsdRate(
     value,
     rates?.brandLabourRates ?? [],
@@ -710,10 +713,15 @@ function BookingBrandRateField({
         <SelectContent>
           <SelectItem value="not-specified">Not specified</SelectItem>
           {brandOptions.map((brand) => (
-            <SelectItem key={brand.toLocaleLowerCase()} value={brand}>
+            <SelectItem key={normalizeLabourBrand(brand)} value={brand}>
               {brand}
             </SelectItem>
           ))}
+          {value && !isInventoryBrand && (
+            <SelectItem value={value} disabled>
+              {value} (legacy make)
+            </SelectItem>
+          )}
         </SelectContent>
       </Select>
       {isLoading ? (

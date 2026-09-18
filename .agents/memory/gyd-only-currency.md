@@ -26,3 +26,9 @@ Brand overrides are dealer-specific USD/hour inputs. Do not invent premium-brand
 **Why:** The user requested customization, not an automatic change to the dealership's price schedule.
 
 **How to apply:** Track the selected booking brand, use authoritative linked-vehicle make when present, and snapshot its effective rate on new cards. Changing brand metadata or rate settings must leave existing cards unchanged until the explicit apply-current-rate action.
+
+Brand choices throughout labour settings and service bookings must come from the dealership's inventory makes, not free-text rate entries or a separate brand list.
+
+**Why:** The user explicitly requested Inventory Make as the shared source for all brand dropdowns.
+
+**How to apply:** Normalize/deduplicate inventory makes consistently; preserve historical non-inventory selections without offering them as new choices, and never delete their saved prices merely because inventory changes.

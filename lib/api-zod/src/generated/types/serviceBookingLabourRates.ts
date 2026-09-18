@@ -11,7 +11,7 @@ export interface ServiceBookingLabourRates {
   labourUsdToGydRate: number;
   defaultLabourUsdPerHour: 120;
   defaultLabourGydPerHour: number;
-  /** Canonical union of active dealer inventory makes and configured overrides; absence of an override means the USD 120 fallback */
+  /** Unique canonical makes from this dealer's non-deleted inventory across all stock statuses. Configured rate overrides do not add makes; absence of an override means the USD 120 fallback. */
   brands: string[];
   brandLabourRates: ServiceBookingBrandLabourRate[];
 }

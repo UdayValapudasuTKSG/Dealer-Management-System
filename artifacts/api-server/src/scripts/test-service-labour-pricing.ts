@@ -5,6 +5,7 @@ import {
   labourUsdPerHourForBrand,
   normalizeBrandLabourRates,
   resolveNewCardLabourRate,
+  serviceBrandsFromInventoryMakes,
 } from "../lib/service-labour-pricing";
 import { calculateQuotedLaborTotal } from "../lib/service-labor-hours";
 import {
@@ -21,6 +22,20 @@ assert.equal(labourUsdPerHourForBrand(" Toyota ", rates), 150);
 assert.equal(calculateLabourRateGyd(209, 150), 31350);
 assert.equal(labourUsdPerHourForBrand("unknown", rates), 120);
 assert.equal(canonicalServiceBrand("  Land   Rover "), "land rover");
+// The selector source is inventory makes only: normalize, deduplicate, and
+// discard empty values. Settings-only brands are deliberately not included.
+assert.deepEqual(
+  serviceBrandsFromInventoryMakes([
+    "  Toyota ",
+    "TOYOTA",
+    "Land   Rover",
+    "",
+    "   ",
+    null,
+    undefined,
+  ]),
+  ["land rover", "toyota"],
+);
 assert.throws(() => normalizeBrandLabourRates([
   { brand: "Toyota", labourUsdPerHour: 150 },
   { brand: " toyota ", labourUsdPerHour: 160 },

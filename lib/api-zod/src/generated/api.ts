@@ -5443,7 +5443,7 @@ export const GetServiceBookingLabourRatesResponse = zod.object({
   "labourUsdToGydRate": zod.number(),
   "defaultLabourUsdPerHour": zod.number(),
   "defaultLabourGydPerHour": zod.number(),
-  "brands": zod.array(zod.string()).describe('Canonical union of active dealer inventory makes and configured overrides; absence of an override means the USD 120 fallback'),
+  "brands": zod.array(zod.string()).describe('Unique canonical makes from this dealer\'s non-deleted inventory across all stock statuses. Configured rate overrides do not add makes; absence of an override means the USD 120 fallback.'),
   "brandLabourRates": zod.array(zod.object({
   "brand": zod.string(),
   "labourUsdPerHour": zod.number(),

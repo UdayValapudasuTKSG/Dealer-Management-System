@@ -14793,7 +14793,7 @@ components:
         defaultLabourGydPerHour: { type: number }
         brands:
           type: array
-          description: Canonical union of active dealer inventory makes and configured overrides; absence of an override means the USD 120 fallback
+          description: Unique canonical makes from this dealer's non-deleted inventory across all stock statuses. Configured rate overrides do not add makes; absence of an override means the USD 120 fallback.
           items: { type: string }
         brandLabourRates:
           type: array
