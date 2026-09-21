@@ -472,22 +472,27 @@ async function handleAiLeadCapture(
 }
 
 /** Distinct makes with available stock — first menu level. */
-async function buildBrandRows(dealerId: number): Promise<WhatsappListRow[]> {
-  const vehicles = await availableVehicles(dealerId);
-  const byMake = new Map<string, number>();
-  for (const v of vehicles) {
-    if (!v.make) continue;
-    byMake.set(v.make, (byMake.get(v.make) ?? 0) + 1);
+export function buildBrandRowsFromVehicles(
+  vehicles: Array<{ make: string | null }>,
+): WhatsappListRow[] {
+  const makes = new Set<string>();
+  for (const vehicle of vehicles) {
+    if (vehicle.make) makes.add(vehicle.make);
   }
   // WhatsApp lists cap at 10 rows: up to 9 brands + an "Other" fallback.
-  return [...byMake.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  return [...makes]
+    .sort((a, b) => a.localeCompare(b))
     .slice(0, 9)
-    .map(([make, count]) => ({
+    .map((make) => ({
       id: `brand_${make}`,
       title: make,
-      description: `${count} in stock`,
+      description: "Currently available",
     }));
+}
+
+async function buildBrandRows(dealerId: number): Promise<WhatsappListRow[]> {
+  const vehicles = await availableVehicles(dealerId);
+  return buildBrandRowsFromVehicles(vehicles);
 }
 
 /** Models of a chosen make — second menu level. */

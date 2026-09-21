@@ -39,6 +39,7 @@
     "test:service-appointment-whatsapp": "tsx src/scripts/test-service-appointment-whatsapp.ts",
     "diagnose:whatsapp-template": "NODE_ENV=production tsx src/scripts/diagnose-whatsapp-template.ts",
     "test:whatsapp-diagnostics": "tsx src/scripts/test-whatsapp-diagnostics.ts",
+    "test:whatsapp-inventory-safety": "tsx src/scripts/test-whatsapp-inventory-safety.ts",
     "test:service-appointment-confirmation-worker": "NODE_ENV=development tsx src/scripts/test-service-appointment-confirmation-worker.ts",
     "test:service-appointment-confirmation-retry": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/test-service-appointment-confirmation-retry.ts",
     "test:technician-timesheet-aggregates": "tsx src/scripts/test-technician-timesheet-aggregates.ts",
