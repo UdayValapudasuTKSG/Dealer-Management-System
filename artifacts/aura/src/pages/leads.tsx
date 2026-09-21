@@ -69,29 +69,17 @@ import { useAuthz } from "@/lib/auth";
 import { SendFeedbackDialog } from "@/components/send-feedback-dialog";
 import { StyledSelect } from "@/components/ui/styled-select";
 import { CONTACT_SLA_HOURS, hoursSince, humanHours } from "@/lib/triage";
+import {
+  PIPELINE_STAGES,
+  PIPELINE_STAGE_LABEL,
+  matchesPipelinePhase,
+  parsePipelinePhase,
+  pipelinePhaseLabel,
+  type PipelinePhaseFilter,
+  type PipelineStage,
+} from "@/lib/pipeline-phase-filter";
 
-const STAGES = [
-  "new_lead",
-  "contacted",
-  "engaged",
-  "pre_book",
-  "vehicle_allocated",
-  "payment",
-  "pre_delivery",
-  "delivered",
-] as const;
-type Stage = (typeof STAGES)[number];
-
-const STAGE_LABEL: Record<Stage, string> = {
-  new_lead: "New",
-  contacted: "Contacted",
-  engaged: "Engaged",
-  pre_book: "Pre-Book",
-  vehicle_allocated: "Vehicle Allocated",
-  payment: "Payment",
-  pre_delivery: "Pre-Delivery",
-  delivered: "Delivered",
-};
+type Stage = PipelineStage;
 
 // Four master phases drive the queue tabs; the 8 rail stages fold into them.
 type Macro = "lead" | "prebooking" | "payment" | "delivery";
@@ -106,15 +94,6 @@ const MACRO_OF: Record<Stage, Macro> = {
   pre_delivery: "delivery",
   delivered: "delivery",
 };
-
-const MACRO_LABEL: Record<Macro, string> = {
-  lead: "Lead",
-  prebooking: "Pre-Booking",
-  payment: "Payment",
-  delivery: "Delivery",
-};
-
-const MACRO_ORDER: Macro[] = ["lead", "prebooking", "payment", "delivery"];
 
 const SOURCE_LABEL: Record<string, string> = {
   website: "Website",
@@ -263,7 +242,8 @@ export default function Leads() {
     const regex = /(?:([a-z0-9_-]+):"([^"]+)")|(?:([a-z0-9_-]+):([^\s]+))|(?:"([^"]+)")|([^\s]+)/gi;
 
     let isMine = false;
-    let phase: Macro | "lost" | "all" = "all";
+    let phase: PipelinePhaseFilter | "all" = "all";
+    let invalidPhase: string | null = null;
     let source = "__all__";
     let advisor = "all";
     const text: string[] = [];
@@ -278,15 +258,10 @@ export default function Leads() {
       if (key && val) {
         const vLower = val.toLowerCase();
         if (key === "is" && vLower === "mine") isMine = true;
-        else if (
-          key === "phase" &&
-          (vLower === "lead" ||
-            vLower === "prebooking" ||
-            vLower === "payment" ||
-            vLower === "delivery" ||
-            vLower === "lost")
-        ) {
-          phase = vLower;
+        else if (key === "phase") {
+          const parsedPhase = parsePipelinePhase(vLower);
+          phase = parsedPhase ?? "all";
+          invalidPhase = parsedPhase ? null : val;
         }
         else if (key === "source") source = val;
         else if (key === "advisor") advisor = val;
@@ -301,6 +276,7 @@ export default function Leads() {
     return {
       isMine,
       phase,
+      invalidPhase,
       source,
       advisor,
       search: text.join(" ").toLowerCase()
@@ -496,11 +472,7 @@ export default function Leads() {
         return false;
       if (filters.isMine && !isMine(r.lead)) return false;
       if (filters.phase !== "all") {
-        if (filters.phase === "lost") {
-          if (r.macro !== null) return false;
-        } else {
-          if (r.macro !== filters.phase) return false;
-        }
+        if (!matchesPipelinePhase(r.stage, filters.phase)) return false;
       }
       return true;
     });
@@ -515,7 +487,7 @@ export default function Leads() {
   const sortedVisible = useMemo(() => {
     if (!sortKey) return visible;
     const dir = sortDir === "asc" ? 1 : -1;
-    const stageOrder: readonly string[] = STAGES;
+    const stageOrder: readonly string[] = PIPELINE_STAGES;
     const val = (
       r: (typeof visible)[number],
     ): string | number | null => {
@@ -859,7 +831,7 @@ export default function Leads() {
                 value={filterQuery}
                 onChange={e => setFilterQuery(e.target.value)}
                 className="w-full pl-9 bg-foreground/[0.02] border-white/10 font-mono text-sm focus-visible:ring-1 focus-visible:ring-primary/50"
-                placeholder="Filter by text or tags (e.g. is:mine phase:lead source:website)"
+                placeholder="Filter by text or tags (e.g. is:mine phase:pre-book source:website)"
                 data-testid="input-pipeline-search"
               />
               {filterQuery && (
@@ -897,13 +869,18 @@ export default function Leads() {
 
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Phase</Label>
-                  <Select value={filters.phase} onValueChange={v => setFilterQuery(setToken(filterQuery, 'phase', v === 'all' ? '' : v))}>
+                  <Select value={filters.invalidPhase ? "__invalid__" : filters.phase} onValueChange={v => setFilterQuery(setToken(filterQuery, 'phase', v === 'all' ? '' : v))}>
                     <SelectTrigger className="bg-foreground/[0.02] border-white/10 h-8 text-sm" data-testid="select-filter-phase">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All phases</SelectItem>
-                      {MACRO_ORDER.map(m => <SelectItem key={m} value={m}>{MACRO_LABEL[m]}</SelectItem>)}
+                      {filters.invalidPhase && (
+                        <SelectItem value="__invalid__" disabled>
+                          Unknown: {filters.invalidPhase}
+                        </SelectItem>
+                      )}
+                      {PIPELINE_STAGES.map(stage => <SelectItem key={stage} value={stage}>{PIPELINE_STAGE_LABEL[stage]}</SelectItem>)}
                       <SelectItem value="lost">Lost</SelectItem>
                     </SelectContent>
                   </Select>
@@ -967,7 +944,7 @@ export default function Leads() {
 
           <div className="flex flex-wrap items-center justify-between gap-2 min-h-[24px]">
             <div className="flex flex-wrap items-center gap-2">
-              {(filters.isMine || filters.phase !== "all" || filters.source !== "__all__" || filters.advisor !== "all" || createdFrom || createdTo) && (
+              {(filters.isMine || filters.phase !== "all" || filters.invalidPhase || filters.source !== "__all__" || filters.advisor !== "all" || createdFrom || createdTo) && (
                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1 flex items-center h-6">Active:</span>
               )}
 
@@ -978,9 +955,9 @@ export default function Leads() {
                 </Badge>
               )}
 
-              {filters.phase !== "all" && (
+              {(filters.phase !== "all" || filters.invalidPhase) && (
                 <Badge variant="secondary" className="gap-1.5 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border-sky-500/20 transition-colors h-6 rounded-md px-2" data-testid="badge-filter-phase">
-                  Phase: {filters.phase === "lost" ? "Lost" : MACRO_LABEL[filters.phase as Macro]}
+                  Phase: {filters.invalidPhase ? `Unknown (${filters.invalidPhase})` : pipelinePhaseLabel(filters.phase as PipelinePhaseFilter)}
                    <button type="button" aria-label="Remove phase filter" onClick={() => setFilterQuery(removeToken(filterQuery, 'phase'))} className="opacity-70 hover:opacity-100" data-testid="btn-remove-filter-phase"><X className="w-3 h-3" /></button>
                 </Badge>
               )}
@@ -1015,7 +992,7 @@ export default function Leads() {
                 </Badge>
               )}
 
-              {(filters.isMine || filters.phase !== "all" || filters.source !== "__all__" || filters.advisor !== "all" || createdFrom || createdTo) && (
+              {(filters.isMine || filters.phase !== "all" || filters.invalidPhase || filters.source !== "__all__" || filters.advisor !== "all" || createdFrom || createdTo) && (
                 <button
                    type="button"
                   onClick={() => {
@@ -1189,7 +1166,7 @@ export default function Leads() {
                     <td className="px-4 py-2 whitespace-nowrap">
                       {r.stage ? (
                         <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                          {STAGE_LABEL[r.stage]}
+                          {PIPELINE_STAGE_LABEL[r.stage]}
                         </span>
                       ) : (
                         <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-foreground/[0.06] px-2 py-0.5 rounded-full">
@@ -1284,7 +1261,7 @@ export default function Leads() {
                 <div className="flex items-center gap-1.5 flex-wrap mt-3">
                   {r.stage ? (
                     <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      {STAGE_LABEL[r.stage]}
+                      {PIPELINE_STAGE_LABEL[r.stage]}
                     </span>
                   ) : (
                     <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-foreground/[0.06] px-2 py-0.5 rounded-full">
