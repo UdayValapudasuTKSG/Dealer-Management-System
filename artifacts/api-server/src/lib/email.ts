@@ -97,6 +97,24 @@ export const SYSTEM_MAIL_HEADER = "X-AURA-System";
 
 export type TemplateData = Record<string, string>;
 
+export type ServiceSummaryScheduleRow = {
+  date: string;
+  vehicle: string;
+  type: string;
+  customerName?: string | null;
+  technician?: string | null;
+};
+
+/**
+ * Keep schedule-row markup server-owned. The outbox stores structured values;
+ * renderEmail escapes every value before adding the fixed strong/br markup.
+ */
+export function serializeServiceSummaryRows(
+  rows: ServiceSummaryScheduleRow[],
+): string {
+  return JSON.stringify(rows);
+}
+
 /**
  * A send-quote action needs to fail before it creates a customer decision link
  * when the owning dealership cannot send mail. This deliberately resolves only
@@ -820,7 +838,26 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     sample: {
       count: "3",
       window: "over the next 3 days",
-      rows: "<strong>Aug 12</strong> — 2025 BMW X7, maintenance (Alex Mensah)<br/><strong>Aug 13</strong> — Toyota Hilux, repair (Priya Persaud)<br/><strong>Aug 14</strong> — Audi e-tron GT, inspection (Nana Adjei)",
+      rows: serializeServiceSummaryRows([
+        {
+          date: "Aug 12",
+          vehicle: "2025 BMW X7",
+          type: "maintenance",
+          customerName: "Alex Mensah",
+        },
+        {
+          date: "Aug 13",
+          vehicle: "Toyota Hilux",
+          type: "repair",
+          customerName: "Priya Persaud",
+        },
+        {
+          date: "Aug 14",
+          vehicle: "Audi e-tron GT",
+          type: "inspection",
+          customerName: "Nana Adjei",
+        },
+      ]),
     },
   },
   "collision.claim.action": {
@@ -890,6 +927,60 @@ const escapeHtml = (s: string) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+
+function renderServiceSummaryRows(encoded: string | undefined): string {
+  if (!encoded) return "No services are currently booked in this window.";
+  try {
+    const parsed = JSON.parse(encoded) as unknown;
+    if (!Array.isArray(parsed) || parsed.length > 50) throw new Error("invalid rows");
+    const rows = parsed.map((value): ServiceSummaryScheduleRow => {
+      if (!value || typeof value !== "object") throw new Error("invalid row");
+      const row = value as Record<string, unknown>;
+      if (
+        typeof row.date !== "string" ||
+        typeof row.vehicle !== "string" ||
+        typeof row.type !== "string" ||
+        !(row.customerName == null || typeof row.customerName === "string") ||
+        !(row.technician == null || typeof row.technician === "string")
+      ) {
+        throw new Error("invalid row");
+      }
+      return {
+        date: row.date,
+        vehicle: row.vehicle,
+        type: row.type,
+        customerName: row.customerName ?? null,
+        technician: row.technician ?? null,
+      };
+    });
+    if (rows.length === 0) {
+      return "No services are currently booked in this window.";
+    }
+    return rows
+      .map((row) => {
+        const customer = row.customerName
+          ? ` (${escapeHtml(row.customerName)})`
+          : "";
+        const technician = row.technician
+          ? ` — ${escapeHtml(row.technician)}`
+          : "";
+        return `<strong>${escapeHtml(row.date)}</strong> — ${escapeHtml(row.vehicle)}, ${escapeHtml(row.type)}${customer}${technician}`;
+      })
+      .join("<br/>");
+  } catch {
+    // Old queued digests used this exact generated shape. Rebuild its markup
+    // while escaping all captured text; arbitrary HTML is never passed through.
+    const legacy = encoded.split(/<br\s*\/?>/i).map((row) =>
+      row.match(/^<strong>([^<>]*)<\/strong>\s+—\s+([\s\S]*)$/i),
+    );
+    if (legacy.length > 0 && legacy.every(Boolean)) {
+      return legacy
+        .map((match) => `<strong>${escapeHtml(match![1] ?? "")}</strong> — ${escapeHtml(match![2] ?? "")}`)
+        .join("<br/>");
+    }
+    return escapeHtml(encoded);
+  }
+}
 
 type ServiceEstimateQuoteLinePayload = {
   kind: "part" | "labour" | "surcharge" | "tax";
@@ -1271,6 +1362,9 @@ export function renderEmail(
   const safeX: TemplateData = Object.fromEntries(
     Object.entries(x).map(([key, value]) => [key, escapeHtml(value)]),
   );
+  if (template === "service.summary.management") {
+    safeX.rows = renderServiceSummaryRows(data.rows);
+  }
   // Headings always end with a full stop for consistent punctuation.
   const headingRaw = (
     ovHeading ? applyMergeTokens(ovHeading, safeX) : def.heading(safeX)

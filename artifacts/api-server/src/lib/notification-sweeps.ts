@@ -29,6 +29,7 @@ import {
   enqueueEmail,
   enqueueWhatsapp,
   notifyUser,
+  serializeServiceSummaryRows,
   type TemplateData,
 } from "./email";
 import { divisionSalesManagers } from "./notify-matrix";
@@ -465,14 +466,15 @@ async function sweepServiceSummaries(): Promise<void> {
         .orderBy(asc(serviceOrdersTable.scheduledDate))
         .limit(50);
 
-      const rows = upcoming
-        .map((o) => {
-          const day = formatDealerDate(o.scheduledDate, tz);
-          const who = o.customerName ? ` (${o.customerName})` : "";
-          const tech = o.technician ? ` — ${o.technician}` : "";
-          return `<strong>${day}</strong> — ${o.vehicleInfo}, ${o.type}${who}${tech}`;
-        })
-        .join("<br/>");
+      const rows = serializeServiceSummaryRows(
+        upcoming.map((o) => ({
+          date: formatDealerDate(o.scheduledDate, tz),
+          vehicle: o.vehicleInfo,
+          type: o.type,
+          customerName: o.customerName,
+          technician: o.technician,
+        })),
+      );
 
       const data: TemplateData = {
         count: String(upcoming.length),
