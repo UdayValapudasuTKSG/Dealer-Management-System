@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartInputCostingMethod } from './partInputCostingMethod';
 import type { PartInputStatus } from './partInputStatus';
 
 export interface PartInput {
@@ -21,4 +22,10 @@ export interface PartInput {
   status?: PartInputStatus;
   supersededByPartId?: number;
   location?: string;
+  description?: string;
+  barcode?: string;
+  costingMethod?: PartInputCostingMethod;
+  /** @minimum 0 */
+  reorderMax?: number;
+  active?: boolean;
 }

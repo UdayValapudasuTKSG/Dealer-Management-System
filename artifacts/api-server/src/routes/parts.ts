@@ -1,11 +1,28 @@
 import { Router, type IRouter } from "express";
+import { createHash } from "node:crypto";
+import { ensureInventory, moveStock } from "../lib/parts-inventory";
+import { reserveJobPart } from "../lib/job-part-stock";
+import { createPartsImport } from "./parts-imports";
+import { postPartsReceipt, validateLocation } from "../lib/parts-operations";
+import { calculateLandedUnitCost, purchaseOrderReceiptUnitCost } from "../lib/parts-landed-cost";
+import { z } from "zod";
 import multer from "multer";
 import ExcelJS from "exceljs";
-import { activeDealerId } from "../middlewares/rbac";
-import { and, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
+import { activeDealerId, hasPermission } from "../middlewares/rbac";
+import { idempotent } from "../middlewares/idempotency";
+import { dealerExchangeRate } from "../lib/invoicing";
+import { dealerTimezone, zonedParts } from "../lib/timezone";
+import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
+import { queueInvoiceSync } from "../lib/erpnext/entities";
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   partsTable,
+  inventoryLevelsTable,
+  inventoryHoldsTable,
+  inventoryTransactionsTable,
+  invoicesTable,
+  customersTable,
   suppliersTable,
   partPurchasesTable,
   purchaseOrdersTable,
@@ -79,6 +96,99 @@ import {
 const router: IRouter = Router();
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+router.post("/parts/otc-invoices", idempotent("parts.otc-invoice"), async (req, res): Promise<void> => {
+  if (!res.locals.user || !hasPermission(res.locals.user, "finance", "create")) {
+    res.status(403).json({ error: "Finance invoice-create permission is required" }); return;
+  }
+  const requestKey = req.header("x-idempotency-key")?.trim();
+  if (!requestKey || requestKey.length > 200) {
+    res.status(400).json({ error: "A unique X-Idempotency-Key header is required" }); return;
+  }
+  const parsed = z.object({
+    customerId: z.number().int().positive().optional(),
+    customerName: z.string().trim().min(1).max(300),
+    lines: z.array(z.object({
+      partId: z.number().int().positive(), quantity: z.number().int().positive(),
+      locationId: z.number().int().positive().optional(), binId: z.number().int().positive().nullable().optional(),
+    })).min(1).max(100),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const dealerId = activeDealerId(res);
+  const fingerprint = createHash("sha256").update(JSON.stringify(parsed.data)).digest("hex");
+  const taxes = (await ensureDealerTaxes(dealerId)).filter(t => t.code === "vat");
+  const exchangeRate = await dealerExchangeRate(dealerId);
+  const year = zonedParts(new Date(), await dealerTimezone(dealerId)).year;
+  try {
+    const result = await db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`otc:${dealerId}:${requestKey}`}))`);
+      const [prior] = await tx.select().from(inventoryTransactionsTable).where(and(
+        eq(inventoryTransactionsTable.dealerId, dealerId),
+        eq(inventoryTransactionsTable.idempotencyKey, `otc-invoice:${dealerId}:${requestKey}:0`),
+      ));
+      if (prior) {
+        if (prior.notes !== fingerprint) throw Object.assign(new Error("Idempotency key was used for a different sale"), { status: 422 });
+        const [invoice] = await tx.select().from(invoicesTable).where(and(
+          eq(invoicesTable.id, Number(prior.referenceId)), eq(invoicesTable.dealerId, dealerId),
+        ));
+        if (!invoice) throw new Error("Stock issue has no linked invoice; reconciliation required");
+        const movements = await tx.select().from(inventoryTransactionsTable).where(and(
+          eq(inventoryTransactionsTable.dealerId, dealerId), eq(inventoryTransactionsTable.referenceType, "otc_invoice"),
+          eq(inventoryTransactionsTable.referenceId, String(invoice.id)),
+        ));
+        return { invoice, movements };
+      }
+      if (parsed.data.customerId) {
+        const [customer] = await tx.select({ id: customersTable.id }).from(customersTable).where(and(
+          eq(customersTable.id, parsed.data.customerId), eq(customersTable.dealerId, dealerId),
+        ));
+        if (!customer) throw Object.assign(new Error("Customer not found in dealership"), { status: 404 });
+      }
+      const lines = [];
+      for (const input of [...parsed.data.lines].sort((a, b) => a.partId - b.partId)) {
+        const [part] = await tx.select().from(partsTable).where(and(
+          eq(partsTable.id, input.partId), eq(partsTable.dealerId, dealerId),
+        )).for("update");
+        if (!part || !part.active) throw Object.assign(new Error("Active part not found in dealership"), { status: 404 });
+        lines.push({ ...input, sku: part.sku, name: part.name, unitPrice: part.unitPrice });
+      }
+      const subtotal = Math.round(lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0) * 100) / 100;
+      const tax = computeTaxes(subtotal, taxes);
+      const [invoice] = await tx.insert(invoicesTable).values({
+        dealerId, invoiceNumber: "PENDING", customerId: parsed.data.customerId,
+        customerName: parsed.data.customerName, kind: "final", status: "issued",
+        description: `OTC parts sale\n${lines.map(l => `${l.sku} — ${l.name}: ${l.quantity} × ${l.unitPrice}`).join("\n")}`,
+        amount: tax.totalWithTax, taxLines: tax.lines, currency: "GYD", exchangeRate,
+      }).returning();
+      const movements = [];
+      for (const [index, line] of lines.entries()) {
+        movements.push(await moveStock(tx, {
+          dealerId, partId: line.partId, locationId: line.locationId, binId: line.binId,
+          type: "issue", quantityDelta: -line.quantity,
+          referenceType: "otc_invoice", referenceId: String(invoice.id),
+          idempotencyKey: `otc-invoice:${dealerId}:${requestKey}:${index}`,
+          createdBy: res.locals.user?.id,
+          notes: fingerprint,
+        }));
+      }
+      const [numbered] = await tx.update(invoicesTable).set({
+        invoiceNumber: `INV-${year}-${String(invoice.id).padStart(4, "0")}`,
+      }).where(and(eq(invoicesTable.id, invoice.id), eq(invoicesTable.dealerId, dealerId))).returning();
+      return { invoice: numbered, movements };
+    });
+    queueInvoiceSync(dealerId, result.invoice.id, "create");
+    for (const movement of result.movements) enqueueStockEntrySync({
+      dealerId, partId: movement.partId, qty: -movement.quantityDelta, direction: "out",
+      entityType: "invoice", entityId: result.invoice.id,
+      remark: `AURA OTC invoice #${result.invoice.id}`,
+      dedupeKey: `erp:se:otc:${dealerId}:${movement.id}`,
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    res.status(failure.status ?? 409).json({ error: failure.message });
+  }
+});
+
 export type BackorderRelease = {
   available: number;
   /** Job-card lines filled by this release — each is a stock issue. */
@@ -92,9 +202,27 @@ export type BackorderRelease = {
   }[];
 };
 
+async function lockReceiptInventory(tx: Tx, dealerId: number, partIds: number[]) {
+  const ids = [...new Set(partIds)].sort((a, b) => a - b);
+  if (!ids.length) return;
+  const waiting = await tx.select({ jobCardId: jobCardPartsTable.jobCardId }).from(jobCardPartsTable)
+    .where(and(eq(jobCardPartsTable.dealerId, dealerId), inArray(jobCardPartsTable.partId, ids),
+      eq(jobCardPartsTable.backordered, true)));
+  // Same order as attach/issue/billing: card first, then parts in ascending order.
+  for (const id of [...new Set(waiting.map(l => l.jobCardId))].sort((a, b) => a - b)) {
+    await tx.select({ id: jobCardsTable.id }).from(jobCardsTable).where(and(
+      eq(jobCardsTable.id, id), eq(jobCardsTable.dealerId, dealerId),
+    )).for("update");
+  }
+  for (const id of ids) {
+    await tx.select({ id: partsTable.id }).from(partsTable).where(and(
+      eq(partsTable.id, id), eq(partsTable.dealerId, dealerId),
+    )).for("update");
+  }
+}
+
 /**
- * Fill backordered job-card lines for a part oldest-first while stock lasts
- * (decrementing stock per fill) and flip touched on_hold job cards back to
+ * Make reserved backorders ready without physical issuance, and flip touched on_hold job cards back to
  * in_progress once none of their lines wait. A receipt never starts work:
  * released cards remain timer-paused and require an explicit technician
  * resume, so one stock transaction cannot conflict with an unassigned/busy
@@ -116,6 +244,8 @@ export async function releaseBackorders(
         eq(jobCardPartsTable.dealerId, dealerId),
         eq(jobCardPartsTable.partId, partId),
         eq(jobCardPartsTable.backordered, true),
+        sql`exists (select 1 from ${jobCardsTable} where ${jobCardsTable.id} = ${jobCardPartsTable.jobCardId}
+          and ${jobCardsTable.dealerId} = ${dealerId} and ${jobCardsTable.status} not in ('cancelled','closed'))`,
       ),
     )
     .orderBy(jobCardPartsTable.createdAt);
@@ -123,24 +253,27 @@ export async function releaseBackorders(
   const filledLines: BackorderRelease["filledLines"] = [];
   const resumedClaims: BackorderRelease["resumedClaims"] = [];
   for (const line of waiting) {
-    if (line.quantity > available) continue;
-    available -= line.quantity;
-    filledLines.push({
-      id: line.id,
-      partId: line.partId,
-      quantity: line.quantity,
-      jobCardId: line.jobCardId,
-    });
+    // Receipt fulfils availability, not physical issuance. Legacy backorders
+    // never deducted stock, so they too become explicitly unissued holds.
+    const hold = line.inventoryHoldId
+      ? (await tx.select().from(inventoryHoldsTable).where(and(
+        eq(inventoryHoldsTable.id, line.inventoryHoldId), eq(inventoryHoldsTable.dealerId, dealerId),
+      )))[0]
+      : await reserveJobPart(tx, line);
+    if (!hold || hold.status !== "active") continue;
+    const [level] = await tx.select().from(inventoryLevelsTable).where(and(
+      eq(inventoryLevelsTable.dealerId, dealerId), eq(inventoryLevelsTable.partId, partId),
+      eq(inventoryLevelsTable.locationId, hold.locationId),
+      hold.binId == null ? isNull(inventoryLevelsTable.binId) : eq(inventoryLevelsTable.binId, hold.binId),
+    ));
+    if (!level || level.quantityOnHand - level.quantityNonSellable - level.quantityReserved < 0) continue;
+    await tx.update(inventoryHoldsTable).set({ backorderRisk: false }).where(and(
+      eq(inventoryHoldsTable.id, hold.id), eq(inventoryHoldsTable.dealerId, dealerId),
+    ));
     await tx
       .update(jobCardPartsTable)
       .set({ backordered: false })
       .where(eq(jobCardPartsTable.id, line.id));
-    await tx
-      .update(partsTable)
-      .set({ stock: sql`${partsTable.stock} - ${line.quantity}` })
-      .where(
-        and(eq(partsTable.id, partId), eq(partsTable.dealerId, dealerId)),
-      );
     touchedCards.add(line.jobCardId);
   }
   if (touchedCards.size > 0) {
@@ -351,7 +484,7 @@ router.get("/parts", async (req, res): Promise<void> => {
   if (query.data.search) {
     const term = `%${query.data.search}%`;
     filters.push(
-      or(ilike(partsTable.name, term), ilike(partsTable.sku, term))!,
+      or(ilike(partsTable.name, term), ilike(partsTable.sku, term), ilike(partsTable.barcode, term))!,
     );
   }
   if (query.data.lowStock === "1") {
@@ -362,7 +495,18 @@ router.get("/parts", async (req, res): Promise<void> => {
     .from(partsTable)
     .where(sql.join(filters, sql` and `))
     .orderBy(partsTable.name);
-  res.json(ListPartsResponse.parse(rows));
+  const quantities = await db.select({
+    partId: inventoryLevelsTable.partId,
+    reserved: sql<number>`coalesce(sum(${inventoryLevelsTable.quantityReserved}),0)::integer`,
+    nonSellable: sql<number>`coalesce(sum(${inventoryLevelsTable.quantityNonSellable}),0)::integer`,
+  }).from(inventoryLevelsTable).where(eq(inventoryLevelsTable.dealerId, activeDealerId(res)))
+    .groupBy(inventoryLevelsTable.partId);
+  const byPart = new Map(quantities.map(row => [row.partId, row]));
+  const parsedRows = ListPartsResponse.parse(rows);
+  res.json(parsedRows.map(row => ({
+    ...row, quantityReserved: byPart.get(row.id)?.reserved ?? 0,
+    quantityAvailable: row.stock - (byPart.get(row.id)?.reserved ?? 0) - (byPart.get(row.id)?.nonSellable ?? 0),
+  })));
 });
 
 router.post("/parts", async (req, res): Promise<void> => {
@@ -371,10 +515,25 @@ router.post("/parts", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [part] = await db
-    .insert(partsTable)
-    .values({ ...parsed.data, dealerId: activeDealerId(res) })
-    .returning();
+  const part = await db.transaction(async tx => {
+    if (parsed.data.supplierId != null) {
+      const [supplier] = await tx.select({ id: suppliersTable.id }).from(suppliersTable).where(and(
+        eq(suppliersTable.id, parsed.data.supplierId), eq(suppliersTable.dealerId, activeDealerId(res)),
+      ));
+      if (!supplier) throw Object.assign(new Error("Supplier not found in dealership"), { status: 422 });
+    }
+    const [created] = await tx.insert(partsTable)
+      .values({ ...parsed.data, stock: 0, dealerId: activeDealerId(res) }).returning();
+    await ensureInventory(tx, created.dealerId, created.id);
+    if ((parsed.data.stock ?? 0) > 0) await moveStock(tx, {
+      dealerId: created.dealerId, partId: created.id, type: "opening",
+      quantityDelta: parsed.data.stock!, unitCost: created.unitCost,
+      referenceType: "part_opening", referenceId: String(created.id),
+      idempotencyKey: `part-opening:${created.dealerId}:${created.id}`,
+    });
+    const [result] = await tx.select().from(partsTable).where(eq(partsTable.id, created.id));
+    return result;
+  });
   enqueuePartItemSync(part.dealerId, part.id, "insert");
   // A part created with opening stock is an opening Material Receipt.
   if (part.stock > 0) {
@@ -402,19 +561,29 @@ router.patch("/parts/:id", async (req, res): Promise<void> => {
     return;
   }
   const dealerId = activeDealerId(res);
-  const [before] = await db
-    .select({ stock: partsTable.stock, reorderLevel: partsTable.reorderLevel })
-    .from(partsTable)
-    .where(
-      and(eq(partsTable.id, params.data.id), eq(partsTable.dealerId, dealerId)),
-    );
-  const [part] = await db
-    .update(partsTable)
-    .set(parsed.data)
-    .where(
-      and(eq(partsTable.id, params.data.id), eq(partsTable.dealerId, dealerId)),
-    )
-    .returning();
+  const { before, part } = await db.transaction(async tx => {
+    const [before] = await tx.select().from(partsTable).where(and(
+      eq(partsTable.id, params.data.id), eq(partsTable.dealerId, dealerId),
+    )).for("update");
+    if (!before) return { before, part: undefined };
+    const { stock, ...metadata } = parsed.data;
+    if (metadata.supplierId != null) {
+      const [supplier] = await tx.select({ id: suppliersTable.id }).from(suppliersTable).where(and(
+        eq(suppliersTable.id, metadata.supplierId), eq(suppliersTable.dealerId, dealerId),
+      ));
+      if (!supplier) throw Object.assign(new Error("Supplier not found in dealership"), { status: 422 });
+    }
+    await ensureInventory(tx, dealerId, before.id);
+    if (stock !== undefined && stock !== before.stock) await moveStock(tx, {
+      dealerId, partId: before.id, type: "adjustment", quantityDelta: stock - before.stock,
+      referenceType: "manual_adjustment", referenceId: String(before.id),
+      unitCost: metadata.unitCost ?? before.unitCost,
+    });
+    const [part] = await tx.update(partsTable).set(metadata).where(and(
+      eq(partsTable.id, before.id), eq(partsTable.dealerId, dealerId),
+    )).returning();
+    return { before, part };
+  });
   if (!part) {
     res.status(404).json({ error: "Part not found" });
     return;
@@ -600,15 +769,12 @@ router.post("/part-purchases", async (req, res): Promise<void> => {
       })
       .returning();
     if (!isOrdered) {
-      await tx
-        .update(partsTable)
-        .set({
-          stock: sql`${partsTable.stock} + ${parsed.data.quantity}`,
-          ...(parsed.data.unitCost != null
-            ? { unitCost: parsed.data.unitCost }
-            : {}),
-        })
-        .where(eq(partsTable.id, parsed.data.partId));
+      await moveStock(tx, {
+        dealerId: part.dealerId, partId: part.id, type: "receipt",
+        quantityDelta: parsed.data.quantity, unitCost: parsed.data.unitCost ?? part.unitCost,
+        referenceType: "part_purchase", referenceId: String(inserted[0].id),
+        idempotencyKey: `part-purchase:${part.dealerId}:${inserted[0].id}:initial`,
+      });
     }
     return inserted;
   });
@@ -690,6 +856,14 @@ router.post("/part-purchases/:id/receive", async (req, res): Promise<void> => {
       : part.unitCost;
 
   const updated = await db.transaction(async (tx) => {
+    const [lockedPurchase] = await tx.select().from(partPurchasesTable).where(and(
+      eq(partPurchasesTable.id, purchase.id), eq(partPurchasesTable.dealerId, dealerId),
+    )).for("update");
+    if (!lockedPurchase || lockedPurchase.qtyReceived !== purchase.qtyReceived ||
+        received > lockedPurchase.quantity - lockedPurchase.qtyReceived) {
+      throw Object.assign(new Error("Purchase receipt changed; reload and retry"), { status: 409 });
+    }
+    await lockReceiptInventory(tx, dealerId, [part.id]);
     const [po] = await tx
       .update(partPurchasesTable)
       .set({
@@ -703,12 +877,11 @@ router.post("/part-purchases/:id/receive", async (req, res): Promise<void> => {
         ),
       )
       .returning();
-    await tx
-      .update(partsTable)
-      .set({ stock: sql`${partsTable.stock} + ${received}`, unitCost: newCost })
-      .where(
-        and(eq(partsTable.id, part.id), eq(partsTable.dealerId, dealerId)),
-      );
+    await moveStock(tx, {
+      dealerId, partId: part.id, type: "receipt", quantityDelta: received,
+      unitCost: purchase.unitCost, referenceType: "part_purchase", referenceId: String(purchase.id),
+      idempotencyKey: `part-purchase:${dealerId}:${purchase.id}:${newQtyReceived}`,
+    });
 
     // Backorder resolution: fill waiting job-card lines oldest-first while
     // stock lasts, and release job cards that no longer wait on any part.
@@ -896,297 +1069,9 @@ function excelCellText(value: ExcelJS.CellValue): string {
   return String(value).trim();
 }
 
-router.post("/parts/import", async (req, res): Promise<void> => {
-  if (!(await handleUpload(req, res))) return;
-  const file = (req as { file?: { buffer: Buffer; originalname: string } })
-    .file;
-  if (!file) {
-    res.status(400).json({ error: "No file uploaded — attach a .csv or .xlsx as `file`" });
-    return;
-  }
-
-  // ---- Parse the file into a grid of strings -----------------------------
-  let grid: string[][];
-  const lower = file.originalname.toLowerCase();
-  if (lower.endsWith(".csv")) {
-    grid = parseCsv(file.buffer.toString("utf-8").replace(/^\uFEFF/, ""));
-  } else {
-    const workbook = new ExcelJS.Workbook();
-    try {
-      await workbook.xlsx.load(file.buffer as unknown as ArrayBuffer);
-    } catch {
-      res.status(400).json({
-        error: "Could not read the file — upload a .csv or Excel .xlsx",
-      });
-      return;
-    }
-    const sheet = workbook.worksheets[0];
-    if (!sheet) {
-      res.status(422).json({ error: "The workbook has no sheets" });
-      return;
-    }
-    grid = [];
-    sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-      const cells: string[] = [];
-      const count = Math.max(row.cellCount, sheet.columnCount);
-      for (let c = 1; c <= count; c++)
-        cells.push(excelCellText(row.getCell(c).value));
-      grid[rowNumber - 1] = cells;
-    });
-    grid = grid.map((r) => r ?? []);
-  }
-
-  const headerRow = grid[0] ?? [];
-  const fieldByCol = headerRow.map(
-    (h) => PART_HEADER_MAP[normalizeHeader(h)] ?? null,
-  );
-  const mapped = new Set(fieldByCol.filter(Boolean));
-  if (!mapped.has("sku") || !mapped.has("name")) {
-    res.status(422).json({
-      error:
-        "No recognizable part columns — the file needs at least a Part Number and a Description column (download the template)",
-    });
-    return;
-  }
-
-  const dealerId = activeDealerId(res);
-  const [dealer] = await db
-    .select({ markup: dealersTable.partsMarkupPercent })
-    .from(dealersTable)
-    .where(eq(dealersTable.id, dealerId));
-  const markup = dealer?.markup ?? 25;
-
-  type ImportRow = {
-    row: number;
-    sku: string;
-    name: string;
-    category?: string;
-    supplier?: string;
-    unitCost?: number;
-    unitPrice?: number;
-    stock?: number;
-    reorderLevel?: number;
-    location?: string;
-  };
-  const errors: { row: number; field?: string | null; message: string }[] = [];
-  const rows: ImportRow[] = [];
-  const MAX_ROWS = 1000;
-
-  const dataRows = grid.slice(1);
-  let total = 0;
-  for (let i = 0; i < dataRows.length; i++) {
-    const cells = dataRows[i] ?? [];
-    if (cells.every((c) => !c || !String(c).trim())) continue; // blank row
-    const rowNum = i + 2; // 1-based incl. header
-    total++;
-    if (total > MAX_ROWS) {
-      errors.push({ row: rowNum, message: `Row cap of ${MAX_ROWS} exceeded — split the file` });
-      continue;
-    }
-    const raw: Record<string, string> = {};
-    fieldByCol.forEach((field, col) => {
-      if (field) {
-        const v = String(cells[col] ?? "").trim();
-        if (v) raw[field] = v;
-      }
-    });
-    if (!raw.sku) {
-      errors.push({ row: rowNum, field: "sku", message: "Part number is required" });
-      continue;
-    }
-    if (!raw.name) {
-      errors.push({ row: rowNum, field: "name", message: "Description is required" });
-      continue;
-    }
-    const num = (field: string, integer = false): number | undefined => {
-      if (raw[field] == null) return undefined;
-      const n = Number(raw[field].replace(/[$, ]/g, ""));
-      if (!Number.isFinite(n) || n < 0 || (integer && !Number.isInteger(n))) {
-        errors.push({
-          row: rowNum,
-          field,
-          message: `"${raw[field]}" is not a valid ${integer ? "whole " : ""}number`,
-        });
-        return NaN;
-      }
-      return n;
-    };
-    const unitCost = num("unitCost");
-    const unitPrice = num("unitPrice");
-    const stock = num("stock", true);
-    const reorderLevel = num("reorderLevel", true);
-    if ([unitCost, unitPrice, stock, reorderLevel].some((n) => Number.isNaN(n)))
-      continue;
-    rows.push({
-      row: rowNum,
-      sku: raw.sku,
-      name: raw.name,
-      category: raw.category,
-      supplier: raw.supplier,
-      unitCost,
-      unitPrice,
-      stock,
-      reorderLevel,
-      location: raw.location,
-    });
-  }
-
-  // In-file duplicate part numbers: last row wins, earlier ones are skipped.
-  const bySku = new Map<string, ImportRow>();
-  for (const r of rows) {
-    const key = r.sku.toUpperCase();
-    const prev = bySku.get(key);
-    if (prev) {
-      errors.push({
-        row: prev.row,
-        field: "sku",
-        message: `Duplicate part number ${r.sku} — row ${r.row} takes precedence`,
-      });
-    }
-    bySku.set(key, r);
-  }
-
-  // Resolve/create suppliers by name (case-insensitive, dealer-scoped).
-  const supplierIds = new Map<string, number>();
-  for (const s of await db
-    .select({ id: suppliersTable.id, name: suppliersTable.name })
-    .from(suppliersTable)
-    .where(eq(suppliersTable.dealerId, dealerId)))
-    supplierIds.set(s.name.toLowerCase(), s.id);
-  const resolveSupplier = async (name: string): Promise<number> => {
-    const key = name.toLowerCase();
-    const existing = supplierIds.get(key);
-    if (existing) return existing;
-    const [created] = await db
-      .insert(suppliersTable)
-      .values({ dealerId, name })
-      .returning({ id: suppliersTable.id });
-    supplierIds.set(key, created.id);
-    enqueueSupplierSync(dealerId, created.id, "insert");
-    return created.id;
-  };
-
-  // Preview mode: classify every row (create vs update, new suppliers)
-  // without touching the database, so staff can confirm before applying.
-  const mode = req.query.mode === "preview" ? "preview" : "apply";
-  if (mode === "preview") {
-    const skus = [...bySku.keys()];
-    const existingSkus = new Set<string>(
-      skus.length
-        ? (
-            await db
-              .select({ sku: partsTable.sku })
-              .from(partsTable)
-              .where(
-                and(
-                  eq(partsTable.dealerId, dealerId),
-                  inArray(sql`upper(${partsTable.sku})`, skus),
-                ),
-              )
-          ).map((p) => p.sku.toUpperCase())
-        : [],
-    );
-    const previewRows = [...bySku.values()].map((r) => ({
-      row: r.row,
-      sku: r.sku,
-      name: r.name,
-      action: existingSkus.has(r.sku.toUpperCase()) ? "update" : "create",
-      supplier: r.supplier ?? null,
-      newSupplier: r.supplier
-        ? !supplierIds.has(r.supplier.toLowerCase())
-        : false,
-    }));
-    const wouldUpdate = previewRows.filter((p) => p.action === "update").length;
-    res.json(
-      ImportPartsResponse.parse({
-        total,
-        inserted: previewRows.length - wouldUpdate,
-        updated: wouldUpdate,
-        skipped: total - previewRows.length,
-        mode,
-        rows: previewRows,
-        errors,
-      }),
-    );
-    return;
-  }
-
-  let inserted = 0;
-  let updated = 0;
-  for (const r of bySku.values()) {
-    try {
-      const supplierId = r.supplier ? await resolveSupplier(r.supplier) : undefined;
-      // Cost-plus markup: derive the sell price whenever it isn't supplied.
-      const cost = r.unitCost;
-      const price =
-        r.unitPrice ??
-        (cost != null
-          ? Math.round(cost * (1 + markup / 100) * 100) / 100
-          : undefined);
-      const [existing] = await db
-        .select()
-        .from(partsTable)
-        .where(
-          and(
-            eq(partsTable.dealerId, dealerId),
-            sql`upper(${partsTable.sku}) = ${r.sku.toUpperCase()}`,
-          ),
-        );
-      if (existing) {
-        await db
-          .update(partsTable)
-          .set({
-            name: r.name,
-            ...(r.category ? { category: r.category } : {}),
-            ...(supplierId ? { supplierId } : {}),
-            ...(cost != null ? { unitCost: cost } : {}),
-            ...(price != null ? { unitPrice: price } : {}),
-            ...(r.stock != null ? { stock: r.stock } : {}),
-            ...(r.reorderLevel != null ? { reorderLevel: r.reorderLevel } : {}),
-            ...(r.location ? { location: r.location } : {}),
-          })
-          .where(eq(partsTable.id, existing.id));
-        updated++;
-        enqueuePartItemSync(dealerId, existing.id, "update");
-      } else {
-        const [createdPart] = await db.insert(partsTable).values({
-          dealerId,
-          sku: r.sku,
-          name: r.name,
-          category: r.category ?? "general",
-          supplierId,
-          unitCost: cost ?? 0,
-          unitPrice: price ?? 0,
-          stock: r.stock ?? 0,
-          reorderLevel: r.reorderLevel ?? 5,
-          location: r.location,
-        }).returning({ id: partsTable.id });
-        inserted++;
-        enqueuePartItemSync(dealerId, createdPart.id, "insert");
-      }
-    } catch (err) {
-      errors.push({
-        row: r.row,
-        field: "sku",
-        message:
-          (err as { code?: string }).code === "23505"
-            ? `Part number ${r.sku} is already registered to another dealership`
-            : "Row could not be saved",
-      });
-    }
-  }
-
-  res.json(
-    ImportPartsResponse.parse({
-      total,
-      inserted,
-      updated,
-      skipped: total - inserted - updated,
-      mode,
-      errors,
-    }),
-  );
-});
+// Legacy URL delegates to the same durable preview/commit import API. The
+// There is no second raw-stock import write path.
+router.post("/parts/import", createPartsImport);
 
 // Current parts inventory as Excel — same columns as the import template so
 // the exported file can be edited and re-imported (round-trip updates).
@@ -1487,12 +1372,30 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
     res.status(404).json({ error: `Part #${missing[0]} not found` });
     return;
   }
+  let pricedLines;
+  try {
+    pricedLines = parsed.data.lines.map(line => {
+      const part = partById.get(line.partId)!;
+      const unitCost = line.unitCost ?? part.unitCost;
+      return { ...line, unitCost, partName: part.name,
+        landedCostComponents: line.landedCostComponents ?? {},
+        landedUnitCost: calculateLandedUnitCost(unitCost, line.quantity, line.landedCostComponents) };
+    });
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+    return;
+  }
   const order = await db.transaction(async (tx) => {
+    if (parsed.data.locationId != null) await validateLocation(tx, dealerId, parsed.data.locationId);
     const [po] = await tx
       .insert(purchaseOrdersTable)
       .values({
         dealerId,
         supplierId: parsed.data.supplierId ?? null,
+        source: "manual",
+        locationId: parsed.data.locationId ?? null,
+        createdBy: res.locals.user?.id ?? null,
+        needsSupplier: parsed.data.supplierId == null,
         status: parsed.data.status ?? "draft",
         expectedDate:
           parsed.data.expectedDate instanceof Date
@@ -1503,7 +1406,7 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
       })
       .returning();
     await tx.insert(purchaseOrderLinesTable).values(
-      parsed.data.lines.map((l) => {
+      pricedLines.map((l) => {
         const part = partById.get(l.partId)!;
         return {
           dealerId,
@@ -1512,6 +1415,8 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
           partName: part.name,
           quantity: l.quantity,
           unitCost: l.unitCost ?? part.unitCost,
+          landedCostComponents: l.landedCostComponents,
+          landedUnitCost: l.landedUnitCost,
           jobCardId: l.jobCardId ?? null,
         };
       }),
@@ -1770,6 +1675,8 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
         quantity,
       })),
     );
+    await lockReceiptInventory(tx, dealerId, order.lines.flatMap(l =>
+      requested.has(l.id) && l.partId != null ? [l.partId] : []));
     for (const line of order.lines) {
       const qty = requested.get(line.id);
       if (!qty) continue;
@@ -2005,12 +1912,13 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
           }
         }
       }
-      await tx
-        .update(partsTable)
-        .set({ stock: sql`${partsTable.stock} + ${qty}`, unitCost: newCost })
-        .where(
-          and(eq(partsTable.id, part.id), eq(partsTable.dealerId, dealerId)),
-        );
+      await moveStock(tx, {
+        dealerId, partId: part.id, type: "receipt", quantityDelta: qty,
+        locationId: order.locationId ?? undefined,
+        unitCost: purchaseOrderReceiptUnitCost(lockedLine),
+        referenceType: "purchase_order_receipt", referenceId: String(receiptClaim.id),
+        idempotencyKey: `po-receipt:${dealerId}:${receiptClaim.id}:${lockedLine.id}`,
+      });
       // Fill backordered job-card lines — this is what links received parts
       // back to their originating job cards and takes them off hold.
       const release = await releaseBackorders(tx, dealerId, part.id, onHand + qty);
@@ -2029,6 +1937,7 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
         lineId: lockedLine.id,
       });
     }
+    await postPartsReceipt(tx, { dealerId, purchaseOrderId: order.id, actorId: res.locals.user?.id });
     const fresh = await tx
       .select()
       .from(purchaseOrderLinesTable)

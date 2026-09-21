@@ -13,6 +13,8 @@ import { startMetricsFlusher } from "./lib/metrics";
 import { logPendingInfraSeams } from "./lib/infra-seams";
 import { registerErpnextEntitySync } from "./lib/erpnext/entities";
 import { startMetaLeadPolling } from "./lib/meta-lead-poll";
+import { startPartsImportWorker } from "./lib/parts-imports";
+import { startPartsOperationsWorker } from "./lib/parts-operations-worker";
 
 const rawPort = process.env["PORT"];
 
@@ -47,5 +49,7 @@ app.listen(port, (err) => {
   void migrateLegacyAttachments();
   startMetricsFlusher();
   startMetaLeadPolling();
+  startPartsImportWorker();
+  startPartsOperationsWorker();
   logPendingInfraSeams();
 });

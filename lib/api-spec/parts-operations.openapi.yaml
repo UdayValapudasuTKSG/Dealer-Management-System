@@ -1,0 +1,572 @@
+paths:
+  /parts/operations/locations:
+    get:
+      operationId: listPartsLocations
+      tags: [Parts]
+      responses:
+        "200":
+          description: Dealer inventory locations
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationLocation" } }
+    post:
+      operationId: createPartsLocation
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartsOperationLocationInput" }
+      responses: &objectResponse
+        "200":
+          description: Tenant-scoped operation result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartsOperationRecord" }
+        "400": { description: Invalid request }
+        "403": { description: Required parts permission missing }
+        "404": { description: Record not found in dealer }
+        "409": { description: Conflicting stock or operation state }
+  /parts/operations/locations/{id}:
+    parameters: &idParameters
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    patch:
+      operationId: updatePartsLocation
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                type: { type: string, enum: [branch, warehouse] }
+                address: { type: string, nullable: true }
+                active: { type: boolean }
+      responses: *objectResponse
+  /parts/operations/bins:
+    get:
+      operationId: listPartsBins
+      tags: [Parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+      responses: &arrayResponse
+        "200":
+          description: Dealer-scoped records
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } }
+    post:
+      operationId: createPartsBin
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locationId, code]
+              properties:
+                locationId: { type: integer, minimum: 1 }
+                code: { type: string }
+                description: { type: string }
+      responses: *objectResponse
+  /parts/operations/bins/{id}:
+    parameters: *idParameters
+    patch:
+      operationId: updatePartsBin
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string }
+                description: { type: string, nullable: true }
+                active: { type: boolean }
+      responses: *objectResponse
+  /parts/operations/levels:
+    get:
+      operationId: listPartsInventoryLevels
+      tags: [Parts]
+      parameters: &stockFilters
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: binId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: partId, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Live inventory; available excludes reservations and non-sellable
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationLevel" } }
+  /parts/operations/ledger:
+    get:
+      operationId: listPartsInventoryLedger
+      tags: [Parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: partId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 250 } }
+      responses: *arrayResponse
+  /parts/operations/holds:
+    get:
+      operationId: listPartsInventoryHolds
+      tags: [Parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: partId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: status, in: query, schema: { type: string, enum: [active, released, consumed] } }
+      responses: *arrayResponse
+    post:
+      operationId: createPartsInventoryHold
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partId, locationId, quantity, referenceType, referenceId]
+              properties:
+                partId: { type: integer, minimum: 1 }
+                locationId: { type: integer, minimum: 1 }
+                binId: { type: integer, nullable: true }
+                quantity: { type: integer, minimum: 1 }
+                referenceType: { type: string, enum: [job, estimate, quote] }
+                referenceId: { type: integer, minimum: 1 }
+                expiresAt: { type: string, format: date-time }
+      responses: *objectResponse
+  /parts/operations/holds/{id}/release:
+    parameters: *idParameters
+    post:
+      operationId: releasePartsInventoryHold
+      tags: [Parts]
+      responses: *objectResponse
+  /parts/operations/holds/{id}/consume:
+    parameters: *idParameters
+    post:
+      operationId: consumePartsInventoryHold
+      tags: [Parts]
+      responses: *objectResponse
+  /parts/operations/holds/expire:
+    post:
+      operationId: expirePartsInventoryHolds
+      tags: [Parts]
+      responses: *objectResponse
+  /parts/operations/purchase-orders:
+    get:
+      operationId: listPartsPurchaseOrderReviewQueue
+      tags: [Parts]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: source, in: query, schema: { type: string, enum: [manual, low_stock_alert, special_order] } }
+      responses: *arrayResponse
+    post:
+      operationId: createPartsOperationalPurchaseOrder
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartsOperationPurchaseOrderInput" }
+      responses: *objectResponse
+  /parts/operations/purchase-orders/generate:
+    post:
+      operationId: generatePartsLowStockPurchaseOrders
+      tags: [Parts]
+      description: Draft only; pending quantities deducted and supplier/location grouping serialized.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                locationId: { type: integer, minimum: 1 }
+      responses: *objectResponse
+  /parts/operations/purchase-orders/special-order:
+    post:
+      operationId: createPartsSpecialOrder
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partId, locationId, quantity, referenceType, referenceId, advisorId, idempotencyKey]
+              properties:
+                partId: { type: integer, minimum: 1 }
+                locationId: { type: integer, minimum: 1 }
+                quantity: { type: integer, minimum: 1 }
+                referenceType: { type: string, enum: [job, estimate] }
+                referenceId: { type: integer, minimum: 1, description: Existing job card or job-card estimate ID }
+                advisorId: { type: integer, minimum: 1 }
+                idempotencyKey: { type: string, minLength: 1 }
+      responses: *objectResponse
+  /parts/operations/purchase-orders/{id}/supplier:
+    parameters: *idParameters
+    patch:
+      operationId: assignPartsPurchaseOrderSupplier
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplierId]
+              properties:
+                supplierId: { type: integer, minimum: 1 }
+      responses: *objectResponse
+  /parts/operations/purchase-orders/{id}/send:
+    parameters: *idParameters
+    post:
+      operationId: approvePartsSupplierEmail
+      tags: [Parts]
+      description: Requires parts approve permission. Queues durable email, does not synchronously send.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: boolean, enum: [true] }
+                resend: { type: boolean, default: false }
+      responses: *objectResponse
+  /parts/operations/notifications:
+    get:
+      operationId: listPartsNotificationDeliveries
+      tags: [Parts]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, sending, sent, failed] } }
+      responses: *arrayResponse
+  /parts/operations/notifications/{id}/retry:
+    parameters: *idParameters
+    post:
+      operationId: retryPartsNotification
+      tags: [Parts]
+      responses: *objectResponse
+  /parts/operations/notifications/sms-settings:
+    get:
+      operationId: getPartsSmsReadiness
+      tags: [Parts]
+      description: Dealer-specific SMS sender opt-in status and setup guidance; never exposes credentials.
+      responses: *objectResponse
+  /parts/operations/cycle-counts:
+    get:
+      operationId: listPartsCycleCounts
+      tags: [Parts]
+      responses: *arrayResponse
+    post:
+      operationId: startPartsCycleCount
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locationId]
+              properties:
+                locationId: { type: integer, minimum: 1 }
+                binId: { type: integer, minimum: 1 }
+                category: { type: string }
+      responses: *objectResponse
+  /parts/operations/cycle-counts/{id}:
+    parameters: *idParameters
+    get:
+      operationId: getPartsCycleCount
+      tags: [Parts]
+      responses: *objectResponse
+  /parts/operations/cycle-counts/{id}/lines:
+    parameters: *idParameters
+    put:
+      operationId: enterPartsCycleCount
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines]
+              properties:
+                lines:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [id, countedQuantity]
+                    properties:
+                      id: { type: integer, minimum: 1 }
+                      countedQuantity: { type: integer, minimum: 0 }
+      responses: *arrayResponse
+  /parts/operations/cycle-counts/{id}/approve:
+    parameters: *idParameters
+    post:
+      operationId: approvePartsCycleCount
+      tags: [Parts]
+      responses: *objectResponse
+  /parts/operations/cycle-counts/{id}/cancel:
+    parameters: *idParameters
+    post:
+      operationId: cancelPartsCycleCount
+      tags: [Parts]
+      responses: *objectResponse
+  /parts/operations/aging:
+    get:
+      operationId: getPartsAgingReport
+      tags: [Parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: thresholds, in: query, schema: { type: string, default: "30,60,90" } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json } }
+      responses:
+        "200":
+          description: Outbound movement age, explicitly labelled observation-history fallback
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartsOperationAging" }
+            text/csv:
+              schema: { type: string }
+  /parts/operations/valuation:
+    get:
+      operationId: getPartsValuationReport
+      tags: [Parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: asOf, in: query, schema: { type: string, format: date-time } }
+      responses: *objectResponse
+  /parts/operations/replenishment:
+    get:
+      operationId: getPartsReplenishmentSuggestions
+      tags: [Parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+      responses: *arrayResponse
+  /parts/operations/reconciliation:
+    get:
+      operationId: listPartsVendorReconciliations
+      tags: [Parts]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, matched, flagged, resolved] } }
+      responses: *arrayResponse
+    post:
+      operationId: comparePartsVendorInvoice
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purchaseOrderId, invoiceNumber, lines]
+              properties:
+                purchaseOrderId: { type: integer, minimum: 1 }
+                invoiceNumber: { type: string, minLength: 1 }
+                tolerancePercent: { type: number, minimum: 0, maximum: 100 }
+                lines:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [purchaseOrderLineId, quantity, unitCost]
+                    properties:
+                      purchaseOrderLineId: { type: integer, minimum: 1 }
+                      quantity: { type: integer, minimum: 0 }
+                      unitCost: { type: number, minimum: 0 }
+      responses: *arrayResponse
+  /parts/operations/reconciliation/{id}/resolve:
+    parameters: *idParameters
+    post:
+      operationId: resolvePartsVendorVariance
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, reason]
+              properties:
+                action: { type: string, enum: [accept, dispute, adjust] }
+                reason: { type: string, minLength: 1 }
+                quantity: { type: integer, minimum: 0 }
+                unitCost: { type: number, minimum: 0 }
+      responses: *objectResponse
+  /parts/operations/parts/{id}:
+    parameters: *idParameters
+    patch:
+      operationId: updatePartsInventoryMetadata
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description: { type: string, nullable: true }
+                barcode: { type: string, nullable: true }
+                costingMethod: { type: string, enum: [average, fifo, landed] }
+                reorderLevel: { type: integer, minimum: 0 }
+                reorderMax: { type: integer, minimum: 0 }
+                active: { type: boolean }
+      responses: *objectResponse
+  /parts/operations/suppliers/{id}:
+    parameters: *idParameters
+    patch:
+      operationId: updatePartsSupplierMetadata
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address: { type: string, nullable: true }
+                leadTimeDays: { type: integer, minimum: 0, maximum: 3650 }
+      responses: *objectResponse
+  /parts/operations/issues:
+    post:
+      operationId: issuePartsOverCounter
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartsOperationStockInput" }
+      responses: *objectResponse
+  /parts/operations/adjustments:
+    post:
+      operationId: approvePartsStockAdjustment
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partId, locationId, quantityDelta, referenceId, idempotencyKey, reason]
+              properties:
+                partId: { type: integer, minimum: 1 }
+                locationId: { type: integer, minimum: 1 }
+                binId: { type: integer, nullable: true }
+                quantityDelta: { type: integer }
+                unitCost: { type: number, minimum: 0 }
+                referenceId: { type: string, minLength: 1 }
+                idempotencyKey: { type: string, minLength: 1 }
+                reason: { type: string, minLength: 1 }
+                notes: { type: string }
+      responses: *objectResponse
+  /parts/operations/transfers:
+    post:
+      operationId: transferPartsStock
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/PartsOperationStockInput" }
+                - type: object
+                  required: [toLocationId]
+                  properties:
+                    toLocationId: { type: integer, minimum: 1 }
+                    toBinId: { type: integer, nullable: true }
+      responses: *objectResponse
+components:
+  schemas:
+    PartsOperationRecord:
+      type: object
+      additionalProperties: true
+      description: See docs/parts-operations-api.md for exact domain record fields.
+    PartsOperationLocationInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, minLength: 1 }
+        type: { type: string, enum: [branch, warehouse] }
+        address: { type: string }
+    PartsOperationLocation:
+      allOf:
+        - { $ref: "#/components/schemas/PartsOperationLocationInput" }
+        - type: object
+          required: [id, dealerId, active, isDefault]
+          properties:
+            id: { type: integer }
+            dealerId: { type: integer }
+            active: { type: boolean }
+            isDefault: { type: boolean }
+            createdAt: { type: string, format: date-time }
+    PartsOperationLevel:
+      type: object
+      required: [id, dealerId, partId, locationId, quantityOnHand, quantityReserved, quantityNonSellable, quantityAvailable, averageUnitCost]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        partId: { type: integer }
+        locationId: { type: integer }
+        binId: { type: integer, nullable: true }
+        quantityOnHand: { type: integer }
+        quantityReserved: { type: integer }
+        quantityNonSellable: { type: integer }
+        quantityAvailable: { type: integer }
+        averageUnitCost: { type: number }
+        updatedAt: { type: string, format: date-time }
+    PartsOperationPurchaseOrderInput:
+      type: object
+      required: [locationId, lines]
+      properties:
+        supplierId: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        expectedDate: { type: string, format: date }
+        notes: { type: string }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [partId, quantity, unitCost]
+            properties:
+              partId: { type: integer, minimum: 1 }
+              quantity: { type: integer, minimum: 1 }
+              unitCost: { type: number, minimum: 0 }
+    PartsOperationStockInput:
+      type: object
+      required: [partId, locationId, quantity, referenceId, idempotencyKey]
+      properties:
+        partId: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: integer, nullable: true }
+        quantity: { type: integer, minimum: 1 }
+        referenceId: { type: string, minLength: 1 }
+        idempotencyKey: { type: string, minLength: 1 }
+        notes: { type: string }
+    PartsOperationAging:
+      type: object
+      required: [asOf, thresholds, rows, buckets, movementPolicy]
+      properties:
+        asOf: { type: string, format: date-time }
+        thresholds: { type: array, items: { type: integer } }
+        rows: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } }
+        buckets:
+          type: array
+          items:
+            type: object
+            required: [bucket, quantity, value]
+            properties:
+              bucket: { type: string }
+              quantity: { type: integer }
+              value: { type: number }
+        movementPolicy: { type: string }

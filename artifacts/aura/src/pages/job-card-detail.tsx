@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useGetJobCard,
   getGetJobCardQueryKey,
@@ -9,7 +9,6 @@ import {
   useToggleJobCardTimer,
   useReopenJobCard,
   useCreateJobCardInvoice,
-  useAddJobCardPart,
   useCreateJobCardCreditNote,
   useListServiceInvoices,
   useListJobCardParts,
@@ -42,6 +41,7 @@ import {
   type ServiceInvoice,
   type JobCardDetail,
   type JobCardWaitingUpdateReason,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useAuthz, } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -73,6 +73,8 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { PartRequisitionForm } from "@/components/service/part-requisition-form";
+import { PartBarcodeScanner } from "@/components/parts/part-barcode-scanner";
+import { useGetBins, useGetLocations } from "@/hooks/use-parts-operations";
 import { Page } from "@/components/layout/page";
 import {
   Select,
@@ -103,6 +105,40 @@ import { DocumentsCard } from "@/components/documents-card";
 import { Label } from "@/components/ui/label";
 import { CalendarClock, Circle, PenTool, Phone, Plus } from "lucide-react";
 import { Loader2 } from "lucide-react";
+
+type StockPart = {
+  id: number;
+  sku: string;
+  name: string;
+  barcode?: string | null;
+  quantityAvailable?: number;
+  stock: number;
+};
+
+type StockJobPartLine = {
+  id: number;
+  partId: number;
+  partName: string;
+  kind: "issue" | "return";
+  quantity: number;
+  unitPrice: number;
+  backordered?: boolean;
+  inventoryHoldId?: number | null;
+  inventoryLocationId?: number | null;
+  inventoryBinId?: number | null;
+  issuedQuantity?: number | null;
+  issuedAt?: Date | string | null;
+};
+
+type InventoryLocationOption = { id: number; name: string; active?: boolean };
+type InventoryBinOption = { id: number; locationId: number; code: string; active?: boolean };
+type InventoryLevel = { quantityAvailable?: number };
+
+function issuedPartUnits(line: StockJobPartLine) {
+  // Lines created before reservations were introduced have no issued quantity.
+  // A non-backordered historical issue was already deducted from stock.
+  return line.issuedQuantity ?? (line.kind === "issue" && !line.backordered ? line.quantity : 0);
+}
 
 
 
@@ -254,7 +290,52 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   const reopen = useReopenJobCard();
   const { can, me } = useAuthz();
   const invoice = useCreateJobCardInvoice();
-  const addPart = useAddJobCardPart();
+  const [attachPartOpen, setAttachPartOpen] = useState(false);
+  const [attachPartId, setAttachPartId] = useState("");
+  const [attachQuantity, setAttachQuantity] = useState("1");
+  const [attachLocationId, setAttachLocationId] = useState("");
+  const [attachBinId, setAttachBinId] = useState("");
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const locationsQuery = useGetLocations();
+  const binsQuery = useGetBins(attachLocationId ? Number(attachLocationId) : undefined);
+  const levelsQuery = useQuery({
+    queryKey: ["parts-levels", attachPartId, attachLocationId, attachBinId],
+    enabled: Boolean(attachPartId && attachLocationId),
+    queryFn: () => {
+      const search = new URLSearchParams({
+        partId: attachPartId,
+        locationId: attachLocationId,
+      });
+      if (attachBinId) search.set("binId", attachBinId);
+      return customFetch<InventoryLevel[]>(`/api/parts/operations/levels?${search.toString()}`);
+    },
+  });
+  const attachPart = useMutation({
+    mutationFn: (data: {
+      partId: number;
+      quantity: number;
+      inventoryLocationId?: number;
+      inventoryBinId?: number;
+    }) =>
+      customFetch(`/api/job-cards/${card.id}/parts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, kind: "issue" }),
+      }),
+  });
+  const issuePart = useMutation({
+    mutationFn: (lineId: number) =>
+      customFetch(`/api/job-cards/${card.id}/parts/${lineId}/issue`, {
+        method: "POST",
+        headers: { "x-idempotency-key": crypto.randomUUID() },
+      }),
+  });
+  const cancelPartReservation = useMutation({
+    mutationFn: (lineId: number) =>
+      customFetch(`/api/job-cards/${card.id}/parts/${lineId}`, {
+        method: "DELETE",
+      }),
+  });
   const [creditNoteDialogOpen, setCreditNoteDialogOpen] = useState(false);
   const [creditNoteIdempotencyKey, setCreditNoteIdempotencyKey] = useState(() =>
     crypto.randomUUID(),
@@ -363,6 +444,10 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
       // Every job-card write can change the timer ledger or its attribution:
       // status/timer transitions, waits, reassignment, repricing and parts.
       queryClient.invalidateQueries({ queryKey: getGetDailyTechnicianTimesheetQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: ["parts-levels"] }),
+      queryClient.invalidateQueries({ queryKey: ["parts-holds"] }),
+      queryClient.invalidateQueries({ queryKey: ["parts-locations"] }),
+      queryClient.invalidateQueries({ queryKey: ["parts-bins"] }),
     ]);
   };
 
@@ -377,15 +462,60 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
   }
   const creditableLines =
     lines
-      ?.filter((line) => line.kind === "issue" && !line.backordered)
+      ?.map((line) => line as StockJobPartLine)
+      .filter((line) => line.kind === "issue" && issuedPartUnits(line) > 0)
       .map((line) => ({
         ...line,
         availableToCredit: Math.max(
           0,
-          line.quantity - (creditedByLine.get(line.id) ?? 0),
+          issuedPartUnits(line) - (creditedByLine.get(line.id) ?? 0),
         ),
       }))
       .filter((line) => line.availableToCredit > 0) ?? [];
+
+  const stockParts = (parts ?? []) as StockPart[];
+  const locations = (locationsQuery.data ?? []) as InventoryLocationOption[];
+  const bins = (binsQuery.data ?? []) as InventoryBinOption[];
+  const selectedPart = stockParts.find((part) => String(part.id) === attachPartId);
+  const selectedAvailable = ((levelsQuery.data ?? []) as InventoryLevel[]).reduce(
+    (sum, level) => sum + (level.quantityAvailable ?? 0),
+    0,
+  );
+
+  const resetAttachPart = () => {
+    setAttachPartId("");
+    setAttachQuantity("1");
+    setAttachLocationId("");
+    setAttachBinId("");
+    setAttachError(null);
+  };
+
+  const submitPartReservation = async () => {
+    const partId = Number(attachPartId);
+    const quantity = Number(attachQuantity);
+    if (!Number.isInteger(partId) || !Number.isFinite(quantity) || quantity < 1 || !attachLocationId) {
+      setAttachError("Select a part and stock location, then enter a quantity of at least one.");
+      return;
+    }
+    setAttachError(null);
+    try {
+      await attachPart.mutateAsync({
+        partId,
+        quantity,
+        inventoryLocationId: attachLocationId ? Number(attachLocationId) : undefined,
+        inventoryBinId: attachBinId ? Number(attachBinId) : undefined,
+      });
+      await invalidate();
+      setAttachPartOpen(false);
+      resetAttachPart();
+      toast({
+        title: "Part reserved",
+        description: "Stock is reserved for this job. Issue it when the part is physically picked.",
+      });
+    } catch (error) {
+      setAttachError(apiErrorMessage(error, "Could not reserve this part."));
+    }
+  };
 
   const toggleChecklist = async (idx: number) => {
     const next = card.checklist.map((c, i) => (i === idx ? { ...c, done: !c.done } : c));
@@ -695,6 +825,10 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
               Net parts {money.gyd(partsTotal)} · Labour {money.gyd(laborTotal)}
             </span>
           </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-muted-foreground">
+            Attaching a part only reserves it. Use <span className="font-medium text-foreground">Issue picked part</span> when it physically leaves stock;
+            issuing the final invoice deducts any quantity still reserved.
+          </div>
           <div className="py-2 border-b border-white/5 mb-2">
             <div className="flex justify-between items-center mb-3">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Requisitions</span>
@@ -724,29 +858,117 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                 ))}
               </div>
             )}
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mt-4 mb-2">Issued Parts</div>
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mt-4 mb-2">Job parts</div>
           </div>
           {lines?.length ? (
             <div className="space-y-0.5">
-              {lines.map((l) => (
-                <div key={l.id} className="flex items-center justify-between text-xs">
-                  <span className={cn(l.kind === "return" && "text-muted-foreground line-through")}>
-                    {l.partName} × {l.quantity}
-                    {l.kind === "return" && " (returned)"}
-                    {l.backordered && (
-                      <span className="ml-2 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
-                        Backordered
+              {lines.map((rawLine) => {
+                const l = rawLine as StockJobPartLine;
+                const issued = issuedPartUnits(l);
+                const isUnissued = l.kind === "issue" && issued === 0;
+                return (
+                  <div key={l.id} className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+                    <div className="flex items-start justify-between gap-3 text-xs">
+                      <div className="min-w-0">
+                        <div className={cn("font-medium", l.kind === "return" && "text-muted-foreground line-through")}>
+                          {l.partName} × {l.quantity}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          {l.kind === "return" ? (
+                            <Badge variant="secondary">Returned</Badge>
+                          ) : l.backordered ? (
+                            <Badge className="bg-amber-500/15 text-amber-300 hover:bg-amber-500/15">
+                              <AlertTriangle className="mr-1 h-3 w-3" /> Backorder risk
+                            </Badge>
+                          ) : issued >= l.quantity ? (
+                            <Badge className="bg-primary/15 text-primary hover:bg-primary/15">
+                              <Check className="mr-1 h-3 w-3" /> Issued {issued}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">
+                              Reserved {Math.max(0, l.quantity - issued)}
+                            </Badge>
+                          )}
+                          {issued > 0 && issued < l.quantity && (
+                            <span className="text-muted-foreground">{issued} already issued</span>
+                          )}
+                          {l.inventoryLocationId && (
+                            <span className="text-muted-foreground">
+                              Location #{l.inventoryLocationId}
+                              {l.inventoryBinId ? ` · Bin #${l.inventoryBinId}` : ""}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-muted-foreground">
+                        {money.gyd(l.unitPrice * l.quantity)}
                       </span>
+                    </div>
+                    {isUnissued && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {!l.backordered && (
+                          <Button
+                            size="sm"
+                            className="h-7 rounded-full text-xs"
+                            disabled={issuePart.isPending || cancelPartReservation.isPending}
+                            onClick={async () => {
+                              try {
+                                await issuePart.mutateAsync(l.id);
+                                await invalidate();
+                                toast({ title: "Part issued", description: "Stock was deducted when the part was physically issued." });
+                              } catch (error) {
+                                toast({ title: "Could not issue part", description: apiErrorMessage(error, "Try again."), variant: "destructive" });
+                              }
+                            }}
+                          >
+                            {issuePart.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                            Issue picked part
+                          </Button>
+                        )}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 rounded-full text-xs"
+                              disabled={issuePart.isPending || cancelPartReservation.isPending}
+                            >
+                              Cancel reservation
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Cancel this part reservation?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This removes the unissued part line and releases its stock hold. Issued parts cannot be cancelled here.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Keep reservation</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={async () => {
+                                  try {
+                                    await cancelPartReservation.mutateAsync(l.id);
+                                    await invalidate();
+                                    toast({ title: "Reservation cancelled", description: "The unissued stock hold was released." });
+                                  } catch (error) {
+                                    toast({ title: "Could not cancel reservation", description: apiErrorMessage(error, "Try again."), variant: "destructive" });
+                                  }
+                                }}
+                              >
+                                Cancel reservation
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     )}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {money.gyd(l.unitPrice * l.quantity)}
-                  </span>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            !externalLines?.length && <p className="text-xs text-muted-foreground">No parts issued.</p>
+            !externalLines?.length && <p className="text-xs text-muted-foreground">No parts reserved or issued.</p>
           )}
           {externalLines?.length ? (
             <div className="space-y-0.5">
@@ -769,66 +991,138 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
             </div>
           ) : null}
           <div className="flex gap-2 pt-0.5">
-            <CreateRecordDialog
-              title="Issue / Return Part"
-              description="Issuing decrements stock; returning restocks it."
-              pending={addPart.isPending}
-              submitLabel="Post part line"
-              trigger={
-                <Button size="sm" variant="outline" className="rounded-full border-white/15 gap-1.5 text-xs">
-                  <Plus className="w-3.5 h-3.5" /> Part
-                </Button>
-              }
-              fields={[
-                {
-                  name: "partId",
-                  label: "Part",
-                  type: "select",
-                  searchable: true,
-                  required: true,
-                  span: "full",
-                  placeholder: "Search parts by name or number...",
-                  options:
-                    parts?.map((p) => ({
-                      value: String(p.id),
-                      label: `${p.name} (${p.sku}) — ${p.stock} in stock`,
-                    })) ?? [],
-                },
-                { name: "quantity", label: "Quantity", type: "number", required: true, span: "half", defaultValue: "1" },
-                {
-                  name: "kind",
-                  label: "Action",
-                  type: "select",
-                  span: "half",
-                  defaultValue: "issue",
-                  options: [
-                    { value: "issue", label: "Issue to job" },
-                    { value: "return", label: "Return to stock" },
-                  ],
-                },
-              ]}
-              onSubmit={async (values) => {
-                const v = values as Record<string, unknown>;
-                try {
-                  await addPart.mutateAsync({
-                    id: card.id,
-                    data: {
-                      partId: Number(v.partId),
-                      quantity: Number(v.quantity),
-                      kind: (v.kind as "issue" | "return") ?? "issue",
-                    },
-                  });
-                  invalidate();
-                  toast({ title: "Part line posted", description: "Stock adjusted." });
-                } catch (e: unknown) {
-                  const msg =
-                    (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-                    "Could not post part line.";
-                  toast({ title: "Failed", description: msg, variant: "destructive" });
-                  throw e;
-                }
+            <Dialog
+              open={attachPartOpen}
+              onOpenChange={(open) => {
+                setAttachPartOpen(open);
+                if (!open) resetAttachPart();
               }}
-            />
+            >
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="rounded-full border-white/15 gap-1.5 text-xs">
+                  <Plus className="w-3.5 h-3.5" /> Reserve part
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Reserve a part for this job</DialogTitle>
+                  <DialogDescription>
+                    Attaching reserves available stock. It will not deduct stock until you explicitly issue the picked part.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor={`job-part-${card.id}`}>Part</Label>
+                      <PartBarcodeScanner
+                        disabled={attachPart.isPending}
+                        onScan={(value) => {
+                          const normalized = value.trim().toLocaleLowerCase();
+                          const match = stockParts.find(
+                            (part) =>
+                              part.sku.toLocaleLowerCase() === normalized ||
+                              part.barcode?.toLocaleLowerCase() === normalized,
+                          );
+                          if (match) {
+                            setAttachPartId(String(match.id));
+                            setAttachError(null);
+                          } else {
+                            setAttachError(`No part matches barcode or SKU “${value}”.`);
+                          }
+                        }}
+                      />
+                    </div>
+                    <Select value={attachPartId} onValueChange={setAttachPartId}>
+                      <SelectTrigger id={`job-part-${card.id}`}>
+                        <SelectValue placeholder="Select a part" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stockParts.map((part) => (
+                          <SelectItem key={part.id} value={String(part.id)}>
+                            {part.name} ({part.sku}) — {part.quantityAvailable ?? 0} available
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor={`job-location-${card.id}`}>Stock location</Label>
+                      <Select
+                        value={attachLocationId}
+                        onValueChange={(value) => {
+                          setAttachLocationId(value);
+                          setAttachBinId("");
+                        }}
+                      >
+                        <SelectTrigger id={`job-location-${card.id}`}>
+                          <SelectValue placeholder={locationsQuery.isLoading ? "Loading locations…" : "Select location"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {locations.filter((location) => location.active !== false).map((location) => (
+                            <SelectItem key={location.id} value={String(location.id)}>{location.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!locationsQuery.isLoading && !locationsQuery.isError && locations.length === 0 && (
+                        <p role="status" className="text-xs text-muted-foreground">No active stock locations are available.</p>
+                      )}
+                      {locationsQuery.isError && <p role="alert" className="text-xs text-destructive">Could not load stock locations.</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`job-bin-${card.id}`}>Bin (optional)</Label>
+                      <Select value={attachBinId} onValueChange={setAttachBinId} disabled={!attachLocationId || binsQuery.isLoading}>
+                        <SelectTrigger id={`job-bin-${card.id}`}>
+                          <SelectValue placeholder={binsQuery.isLoading ? "Loading bins…" : "Select bin"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bins.filter((bin) => bin.active !== false).map((bin) => (
+                            <SelectItem key={bin.id} value={String(bin.id)}>{bin.code}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {binsQuery.isError && <p role="alert" className="text-xs text-destructive">Could not load bins for this location.</p>}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`job-part-quantity-${card.id}`}>Quantity</Label>
+                    <Input
+                      id={`job-part-quantity-${card.id}`}
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={attachQuantity}
+                      onChange={(event) => setAttachQuantity(event.target.value)}
+                    />
+                  </div>
+                  {selectedPart && attachLocationId && (
+                    <div className={cn(
+                      "rounded-lg border px-3 py-2 text-sm",
+                      selectedAvailable < Number(attachQuantity)
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                        : "border-primary/20 bg-primary/5",
+                    )}>
+                      {levelsQuery.isLoading
+                        ? "Checking available stock…"
+                        : `${selectedAvailable} available at the selected stock location${selectedAvailable < Number(attachQuantity) ? " — this reservation has backorder risk." : "."}`}
+                    </div>
+                  )}
+                  {levelsQuery.isError && attachPartId && <p role="alert" className="text-sm text-destructive">Could not check available stock.</p>}
+                  {attachError && <p role="alert" className="text-sm text-destructive">{attachError}</p>}
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setAttachPartOpen(false)}>Cancel</Button>
+                  <Button
+                    type="button"
+                    disabled={attachPart.isPending || !attachPartId || !attachLocationId || locationsQuery.isError}
+                    onClick={() => void submitPartReservation()}
+                  >
+                    {attachPart.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Reserve part
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             {isApprover && creditableLines.length > 0 && (
               <CreateRecordDialog
                 title="Credit Note — return unused parts"
@@ -854,7 +1148,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                     span: "full",
                     options: creditableLines.map((l) => ({
                       value: String(l.id),
-                      label: `${l.partName} · ${l.availableToCredit} of ${l.quantity} available @ ${money.gyd(l.unitPrice)}`,
+                      label: `${l.partName} · ${l.availableToCredit} of ${issuedPartUnits(l)} issued available @ ${money.gyd(l.unitPrice)}`,
                     })),
                     onChange: renewCreditNoteIdempotencyKey,
                   },
@@ -865,6 +1159,20 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                     required: true,
                     span: "half",
                     defaultValue: "1",
+                    onChange: renewCreditNoteIdempotencyKey,
+                  },
+                  {
+                    name: "condition",
+                    label: "Return condition",
+                    type: "select",
+                    required: true,
+                    span: "half",
+                    defaultValue: "resalable",
+                    options: [
+                      { value: "resalable", label: "Resalable" },
+                      { value: "damaged", label: "Damaged / non-sellable" },
+                      { value: "scrap", label: "Scrap" },
+                    ],
                     onChange: renewCreditNoteIdempotencyKey,
                   },
                   {
@@ -886,7 +1194,8 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                         jobCardPartId: Number(v.jobCardPartId),
                         quantity: Number(v.quantity),
                         reason: String(v.reason ?? ""),
-                      },
+                        condition: String(v.condition ?? "resalable") as "resalable" | "damaged" | "scrap",
+                      } as Parameters<typeof createCreditNote.mutateAsync>[0]["data"],
                     });
                     // Keep this key for a failed retry, then rotate it only
                     // after the server has accepted this exact submission.

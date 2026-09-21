@@ -1,0 +1,96 @@
+paths:
+  /parts/otc-invoices:
+    post:
+      operationId: createOtcPartsInvoice
+      tags: [Parts]
+      summary: Issue a persisted finance invoice and deduct available parts atomically
+      parameters:
+        - {name: X-Idempotency-Key, in: header, required: true, schema: {type: string, maxLength: 200}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerName, lines]
+              properties:
+                customerName: {type: string, minLength: 1}
+                customerId: {type: integer}
+                lines:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [partId, quantity]
+                    properties:
+                      partId: {type: integer}
+                      quantity: {type: integer, minimum: 1}
+                      locationId: {type: integer}
+                      binId: {type: [integer, "null"]}
+      responses:
+        "201":
+          description: Persisted invoice and its immutable stock transactions
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        "409": {description: Insufficient available stock; invoice was not created}
+  /job-cards/{id}/parts/{lineId}/issue:
+    post:
+      operationId: issueJobCardPartStock
+      tags: [Service]
+      summary: Physically issue a reserved job-card part, without issuing it twice
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {name: lineId, in: path, required: true, schema: {type: integer}}
+      responses:
+        "200":
+          description: Current part line; repeated issue is stock-neutral
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JobCardPart"}
+        "409": {description: Insufficient unreserved stock or expired reservation}
+  /job-cards/{id}/parts/{lineId}:
+    patch:
+      operationId: updateReservedJobCardPart
+      tags: [Service]
+      summary: Replace an unissued reservation and invalidate the estimate
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {name: lineId, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: {type: integer, minimum: 1}
+                locationId: {type: integer}
+                binId: {type: [integer, "null"]}
+      responses:
+        "200":
+          description: Updated reservation
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JobCardPart"}
+    delete:
+      operationId: removeReservedJobCardPart
+      tags: [Service]
+      summary: Release and remove an unissued part; issued parts require a linked return
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {name: lineId, in: path, required: true, schema: {type: integer}}
+      responses:
+        "204": {description: Reservation released and estimate invalidated}
+        "422": {description: Issued or invoiced line cannot be removed}
+components:
+  schemas:
+    # Merge these properties into the existing schemas, do not replace them.
+    PartCreditNoteInput:
+      properties:
+        condition: {type: string, enum: [resalable, damaged, scrap], default: resalable}
+    PartCreditNote:
+      properties:
+        condition: {type: string, enum: [resalable, damaged, scrap]}
+        inventoryTransactionId: {type: [integer, "null"]}

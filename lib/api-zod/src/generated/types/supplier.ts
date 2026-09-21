@@ -15,5 +15,9 @@ export interface Supplier {
   email?: string | null;
   /** @nullable */
   phone?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @minimum 0 */
+  leadTimeDays?: number;
   createdAt: Date;
 }

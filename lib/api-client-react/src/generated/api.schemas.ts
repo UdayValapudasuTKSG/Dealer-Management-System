@@ -6495,6 +6495,19 @@ export interface JobCardPart {
   unitPrice: number;
   unitCost?: number;
   backordered?: boolean;
+  /** @nullable */
+  inventoryHoldId?: number | null;
+  /** @nullable */
+  inventoryLocationId?: number | null;
+  /** @nullable */
+  inventoryBinId?: number | null;
+  /**
+     * Null on legacy issued lines; zero for new reserved-only lines.
+     * @nullable
+     */
+  issuedQuantity?: number | null;
+  /** @nullable */
+  issuedAt?: string | null;
   createdAt: string;
 }
 
@@ -6506,11 +6519,40 @@ export const JobCardPartInputKind = {
   return: 'return',
 } as const;
 
+export type JobCardPartInputCondition = typeof JobCardPartInputCondition[keyof typeof JobCardPartInputCondition];
+
+
+export const JobCardPartInputCondition = {
+  resalable: 'resalable',
+  damaged: 'damaged',
+  scrap: 'scrap',
+} as const;
+
 export interface JobCardPartInput {
   partId: number;
   /** @minimum 1 */
   quantity: number;
   kind?: JobCardPartInputKind;
+  /** @minimum 1 */
+  locationId?: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  binId?: number | null;
+  condition?: JobCardPartInputCondition;
+}
+
+export interface JobCardPartReservationUpdate {
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 1 */
+  locationId?: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  binId?: number | null;
 }
 
 export interface JobCardExternalPart {
@@ -6794,6 +6836,15 @@ export const PurchaseOrderStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type PurchaseOrderSource = typeof PurchaseOrderSource[keyof typeof PurchaseOrderSource];
+
+
+export const PurchaseOrderSource = {
+  manual: 'manual',
+  low_stock_alert: 'low_stock_alert',
+  special_order: 'special_order',
+} as const;
+
 export type PurchaseOrderLineSource = typeof PurchaseOrderLineSource[keyof typeof PurchaseOrderLineSource];
 
 
@@ -6801,6 +6852,17 @@ export const PurchaseOrderLineSource = {
   INTERNAL: 'INTERNAL',
   EXTERNAL: 'EXTERNAL',
 } as const;
+
+export interface PartsOperationLandedCostComponents {
+  /** @minimum 0 */
+  freight?: number;
+  /** @minimum 0 */
+  duty?: number;
+  /** @minimum 0 */
+  handling?: number;
+  /** @minimum 0 */
+  other?: number;
+}
 
 export type PartRequisitionPurchaseOrderLinkContextSource = typeof PartRequisitionPurchaseOrderLinkContextSource[keyof typeof PartRequisitionPurchaseOrderLinkContextSource];
 
@@ -6832,6 +6894,9 @@ export interface PurchaseOrderLine {
   quantity: number;
   qtyReceived: number;
   unitCost: number;
+  landedCostComponents?: PartsOperationLandedCostComponents;
+  /** @nullable */
+  landedUnitCost?: number | null;
   /**
      * Originating job card (backorder link)
      * @nullable
@@ -6846,6 +6911,23 @@ export interface PurchaseOrder {
   /** @nullable */
   supplierId?: number | null;
   status: PurchaseOrderStatus;
+  source: PurchaseOrderSource;
+  /** @nullable */
+  locationId?: number | null;
+  /** @nullable */
+  jobCardId?: number | null;
+  /** @nullable */
+  estimateId?: number | null;
+  /** @nullable */
+  advisorId?: number | null;
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  sentAt?: string | null;
+  /** @minimum 0 */
+  sendCount: number;
+  /** True when queued for supplier assignment */
+  needsSupplier: boolean;
   /** @nullable */
   expectedDate?: string | null;
   /** @nullable */
@@ -7981,6 +8063,15 @@ export const PartStatus = {
   obsolete: 'obsolete',
 } as const;
 
+export type PartCostingMethod = typeof PartCostingMethod[keyof typeof PartCostingMethod];
+
+
+export const PartCostingMethod = {
+  average: 'average',
+  fifo: 'fifo',
+  landed: 'landed',
+} as const;
+
 export interface Part {
   id: number;
   sku: string;
@@ -7997,6 +8088,16 @@ export interface Part {
   supersededByPartId?: number | null;
   /** @nullable */
   location?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  barcode?: string | null;
+  costingMethod?: PartCostingMethod;
+  /** @minimum 0 */
+  reorderMax?: number;
+  active?: boolean;
+  quantityReserved?: number;
+  quantityAvailable?: number;
   createdAt: string;
 }
 
@@ -8007,6 +8108,15 @@ export const PartInputStatus = {
   active: 'active',
   superseded: 'superseded',
   obsolete: 'obsolete',
+} as const;
+
+export type PartInputCostingMethod = typeof PartInputCostingMethod[keyof typeof PartInputCostingMethod];
+
+
+export const PartInputCostingMethod = {
+  average: 'average',
+  fifo: 'fifo',
+  landed: 'landed',
 } as const;
 
 export interface PartInput {
@@ -8023,6 +8133,12 @@ export interface PartInput {
   status?: PartInputStatus;
   supersededByPartId?: number;
   location?: string;
+  description?: string;
+  barcode?: string;
+  costingMethod?: PartInputCostingMethod;
+  /** @minimum 0 */
+  reorderMax?: number;
+  active?: boolean;
 }
 
 export type PartUpdateStatus = typeof PartUpdateStatus[keyof typeof PartUpdateStatus];
@@ -8032,6 +8148,15 @@ export const PartUpdateStatus = {
   active: 'active',
   superseded: 'superseded',
   obsolete: 'obsolete',
+} as const;
+
+export type PartUpdateCostingMethod = typeof PartUpdateCostingMethod[keyof typeof PartUpdateCostingMethod];
+
+
+export const PartUpdateCostingMethod = {
+  average: 'average',
+  fifo: 'fifo',
+  landed: 'landed',
 } as const;
 
 export interface PartUpdate {
@@ -8047,6 +8172,14 @@ export interface PartUpdate {
   /** @nullable */
   supersededByPartId?: number | null;
   location?: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  barcode?: string | null;
+  costingMethod?: PartUpdateCostingMethod;
+  /** @minimum 0 */
+  reorderMax?: number;
+  active?: boolean;
 }
 
 export interface Supplier {
@@ -8058,6 +8191,10 @@ export interface Supplier {
   email?: string | null;
   /** @nullable */
   phone?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @minimum 0 */
+  leadTimeDays?: number;
   createdAt: string;
 }
 
@@ -8067,6 +8204,9 @@ export interface SupplierInput {
   contactName?: string;
   email?: string;
   phone?: string;
+  address?: string;
+  /** @minimum 0 */
+  leadTimeDays?: number;
 }
 
 export type SupplierDeliveryCondition = typeof SupplierDeliveryCondition[keyof typeof SupplierDeliveryCondition];
@@ -8243,12 +8383,499 @@ export interface PartsSettingsUpdate {
   markupPercent: number;
 }
 
+export type PartsImportOptionsMode = typeof PartsImportOptionsMode[keyof typeof PartsImportOptionsMode];
+
+
+export const PartsImportOptionsMode = {
+  reject: 'reject',
+  upsert: 'upsert',
+} as const;
+
+/**
+ * Canonical field to exact uploaded column heading
+ */
+export type PartsImportOptionsMapping = {[key: string]: string};
+
+export interface PartsImportOptions {
+  mode?: PartsImportOptionsMode;
+  applyStock?: boolean;
+  /** Canonical field to exact uploaded column heading */
+  mapping?: PartsImportOptionsMapping;
+}
+
+export interface OtcPartsInvoiceLineInput {
+  /** @minimum 1 */
+  partId: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 1 */
+  locationId?: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  binId?: number | null;
+}
+
+export interface OtcPartsInvoiceInput {
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  customerName: string;
+  /** @minimum 1 */
+  customerId?: number;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lines: OtcPartsInvoiceLineInput[];
+}
+
+export type PartsInventoryTransactionType = typeof PartsInventoryTransactionType[keyof typeof PartsInventoryTransactionType];
+
+
+export const PartsInventoryTransactionType = {
+  receipt: 'receipt',
+  issue: 'issue',
+  transfer: 'transfer',
+  adjustment: 'adjustment',
+  cycle_count: 'cycle_count',
+  return: 'return',
+  opening: 'opening',
+} as const;
+
+export interface PartsInventoryTransaction {
+  id: number;
+  dealerId: number;
+  partId: number;
+  locationId: number;
+  /** @nullable */
+  binId?: number | null;
+  type: PartsInventoryTransactionType;
+  quantityDelta: number;
+  nonSellableDelta: number;
+  referenceType: string;
+  referenceId: string;
+  unitCostAtTransaction: number;
+  valueDelta: number;
+  /** @nullable */
+  createdBy?: number | null;
+  createdAt: string;
+  /** @nullable */
+  idempotencyKey?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface OtcPartsInvoiceResult {
+  invoice: Invoice;
+  movements: PartsInventoryTransaction[];
+}
+
+export interface PartsImportError {
+  row: number;
+  field: string;
+  message: string;
+}
+
+export type PartsImportJobStatus = typeof PartsImportJobStatus[keyof typeof PartsImportJobStatus];
+
+
+export const PartsImportJobStatus = {
+  pending: 'pending',
+  validating: 'validating',
+  validated: 'validated',
+  invalid: 'invalid',
+  queued: 'queued',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export type PartsImportJobMode = typeof PartsImportJobMode[keyof typeof PartsImportJobMode];
+
+
+export const PartsImportJobMode = {
+  reject: 'reject',
+  upsert: 'upsert',
+} as const;
+
+export interface PartsImportJob {
+  id: number;
+  dealerId: number;
+  status: PartsImportJobStatus;
+  mode: PartsImportJobMode;
+  fileName: string;
+  totalRows: number;
+  processedRows: number;
+  errorCount: number;
+  errors: PartsImportError[];
+  /** @nullable */
+  errorMessage?: string | null;
+  createdAt: string;
+  /** @nullable */
+  startedAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  createdBy?: number | null;
+}
+
+export interface PartPricingPolicyInput {
+  /**
+     * Null selects global fallback
+     * @nullable
+     */
+  category: string | null;
+  /**
+     * @minimum 0
+     * @maximum 1000
+     */
+  markupFactor: number;
+}
+
+export interface PartPricingPolicy {
+  id: number;
+  dealerId: number;
+  /** @nullable */
+  category: string | null;
+  markupFactor: number;
+  reconciliationTolerancePercent?: number;
+  holdExpiryDays?: number;
+  updatedAt: string;
+}
+
+/**
+ * Tenant-scoped parts operation record.
+ */
+export interface PartsOperationRecord { [key: string]: unknown }
+
+export type PartsOperationLocationInputType = typeof PartsOperationLocationInputType[keyof typeof PartsOperationLocationInputType];
+
+
+export const PartsOperationLocationInputType = {
+  branch: 'branch',
+  warehouse: 'warehouse',
+} as const;
+
+export interface PartsOperationLocationInput {
+  /** @minLength 1 */
+  name: string;
+  type: PartsOperationLocationInputType;
+  address?: string;
+}
+
+export type PartsOperationLocationUpdateType = typeof PartsOperationLocationUpdateType[keyof typeof PartsOperationLocationUpdateType];
+
+
+export const PartsOperationLocationUpdateType = {
+  branch: 'branch',
+  warehouse: 'warehouse',
+} as const;
+
+export interface PartsOperationLocationUpdate {
+  name?: string;
+  type?: PartsOperationLocationUpdateType;
+  /** @nullable */
+  address?: string | null;
+  active?: boolean;
+}
+
+export type PartsOperationLocation = PartsOperationLocationInput & {
+  id: number;
+  dealerId: number;
+  active: boolean;
+  isDefault: boolean;
+  createdAt?: string;
+};
+
+export interface PartsOperationBinInput {
+  /** @minimum 1 */
+  locationId: number;
+  code: string;
+  description?: string;
+}
+
+export interface PartsOperationBinUpdate {
+  code?: string;
+  /** @nullable */
+  description?: string | null;
+  active?: boolean;
+}
+
+export interface PartsOperationLevel {
+  id: number;
+  dealerId: number;
+  partId: number;
+  locationId: number;
+  /** @nullable */
+  binId?: number | null;
+  quantityOnHand: number;
+  quantityReserved: number;
+  quantityNonSellable: number;
+  quantityAvailable: number;
+  averageUnitCost: number;
+  updatedAt?: string;
+}
+
+export type PartsOperationHoldInputReferenceType = typeof PartsOperationHoldInputReferenceType[keyof typeof PartsOperationHoldInputReferenceType];
+
+
+export const PartsOperationHoldInputReferenceType = {
+  job: 'job',
+  estimate: 'estimate',
+  quote: 'quote',
+} as const;
+
+export interface PartsOperationHoldInput {
+  /** @minimum 1 */
+  partId: number;
+  /** @minimum 1 */
+  locationId: number;
+  /** @nullable */
+  binId?: number | null;
+  /** @minimum 1 */
+  quantity: number;
+  referenceType: PartsOperationHoldInputReferenceType;
+  /** @minimum 1 */
+  referenceId: number;
+  expiresAt?: string;
+}
+
+export interface PartsOperationPurchaseOrderLineInput {
+  /** @minimum 1 */
+  partId: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 0 */
+  unitCost: number;
+  landedCostComponents?: PartsOperationLandedCostComponents;
+}
+
+export interface PartsOperationPurchaseOrderInput {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  supplierId?: number | null;
+  /** @minimum 1 */
+  locationId: number;
+  expectedDate?: string;
+  notes?: string;
+  /** @minItems 1 */
+  lines: PartsOperationPurchaseOrderLineInput[];
+}
+
+export interface PartsOperationGeneratePurchaseOrdersInput {
+  /** @minimum 1 */
+  locationId?: number;
+}
+
+export type PartsOperationSpecialOrderInputReferenceType = typeof PartsOperationSpecialOrderInputReferenceType[keyof typeof PartsOperationSpecialOrderInputReferenceType];
+
+
+export const PartsOperationSpecialOrderInputReferenceType = {
+  job: 'job',
+  estimate: 'estimate',
+} as const;
+
+export interface PartsOperationSpecialOrderInput {
+  /** @minimum 1 */
+  partId: number;
+  /** @minimum 1 */
+  locationId: number;
+  /** @minimum 1 */
+  quantity: number;
+  referenceType: PartsOperationSpecialOrderInputReferenceType;
+  /**
+     * Existing job card or job-card estimate ID
+     * @minimum 1
+     */
+  referenceId: number;
+  /** @minimum 1 */
+  advisorId: number;
+  /** @minLength 1 */
+  idempotencyKey: string;
+}
+
+export interface PartsOperationSupplierAssignmentInput {
+  /** @minimum 1 */
+  supplierId: number;
+}
+
+export interface PartsOperationPurchaseOrderSendInput {
+  confirm: true;
+  resend?: boolean;
+}
+
+export interface PartsOperationCycleCountInput {
+  /** @minimum 1 */
+  locationId: number;
+  /** @minimum 1 */
+  binId?: number;
+  category?: string;
+}
+
+export interface PartsOperationCycleCountLineInput {
+  /** @minimum 1 */
+  id: number;
+  /** @minimum 0 */
+  countedQuantity: number;
+}
+
+export interface PartsOperationCycleCountEntryInput {
+  /** @minItems 1 */
+  lines: PartsOperationCycleCountLineInput[];
+}
+
+export interface PartsOperationVendorInvoiceLineInput {
+  /** @minimum 1 */
+  purchaseOrderLineId: number;
+  /** @minimum 0 */
+  quantity: number;
+  /** @minimum 0 */
+  unitCost: number;
+}
+
+export interface PartsOperationVendorInvoiceInput {
+  /** @minimum 1 */
+  purchaseOrderId: number;
+  /** @minLength 1 */
+  invoiceNumber: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  tolerancePercent?: number;
+  /** @minItems 1 */
+  lines: PartsOperationVendorInvoiceLineInput[];
+}
+
+export type PartsOperationVarianceResolutionInputAction = typeof PartsOperationVarianceResolutionInputAction[keyof typeof PartsOperationVarianceResolutionInputAction];
+
+
+export const PartsOperationVarianceResolutionInputAction = {
+  accept: 'accept',
+  dispute: 'dispute',
+  adjust: 'adjust',
+} as const;
+
+export interface PartsOperationVarianceResolutionInput {
+  action: PartsOperationVarianceResolutionInputAction;
+  /** @minLength 1 */
+  reason: string;
+  /** @minimum 0 */
+  quantity?: number;
+  /** @minimum 0 */
+  unitCost?: number;
+}
+
+export type PartsOperationPartMetadataUpdateCostingMethod = typeof PartsOperationPartMetadataUpdateCostingMethod[keyof typeof PartsOperationPartMetadataUpdateCostingMethod];
+
+
+export const PartsOperationPartMetadataUpdateCostingMethod = {
+  average: 'average',
+  fifo: 'fifo',
+  landed: 'landed',
+} as const;
+
+export interface PartsOperationPartMetadataUpdate {
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  barcode?: string | null;
+  costingMethod?: PartsOperationPartMetadataUpdateCostingMethod;
+  /** @minimum 0 */
+  reorderLevel?: number;
+  /** @minimum 0 */
+  reorderMax?: number;
+  active?: boolean;
+}
+
+export interface PartsOperationSupplierMetadataUpdate {
+  /** @nullable */
+  address?: string | null;
+  /**
+     * @minimum 0
+     * @maximum 3650
+     */
+  leadTimeDays?: number;
+}
+
+export interface PartsOperationStockInput {
+  /** @minimum 1 */
+  partId: number;
+  /** @minimum 1 */
+  locationId: number;
+  /** @nullable */
+  binId?: number | null;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minLength 1 */
+  referenceId: string;
+  /** @minLength 1 */
+  idempotencyKey: string;
+  notes?: string;
+}
+
+export interface PartsOperationAdjustmentInput {
+  /** @minimum 1 */
+  partId: number;
+  /** @minimum 1 */
+  locationId: number;
+  /** @nullable */
+  binId?: number | null;
+  quantityDelta: number;
+  /** @minimum 0 */
+  unitCost?: number;
+  /** @minLength 1 */
+  referenceId: string;
+  /** @minLength 1 */
+  idempotencyKey: string;
+  /** @minLength 1 */
+  reason: string;
+  notes?: string;
+}
+
+export type PartsOperationTransferInput = PartsOperationStockInput & ({
+  /** @minimum 1 */
+  toLocationId: number;
+  /** @nullable */
+  toBinId?: number | null;
+});
+
+export interface PartsOperationAgingBucket {
+  bucket: string;
+  quantity: number;
+  value: number;
+}
+
+export interface PartsOperationAging {
+  asOf: string;
+  thresholds: number[];
+  rows: PartsOperationRecord[];
+  buckets: PartsOperationAgingBucket[];
+  movementPolicy: string;
+}
+
+export interface PartsSmsSettings {
+  ready: boolean;
+  enabled: boolean;
+  /** @nullable */
+  sender: string | null;
+  setupLink: string;
+  /** @nullable */
+  reason: string | null;
+}
+
 export interface PurchaseOrderLineInput {
   partId: number;
   /** @minimum 1 */
   quantity: number;
   /** @minimum 0 */
   unitCost?: number;
+  landedCostComponents?: PartsOperationLandedCostComponents;
   jobCardId?: number;
 }
 
@@ -8261,7 +8888,10 @@ export const PurchaseOrderInputStatus = {
 } as const;
 
 export interface PurchaseOrderInput {
-  supplierId?: number;
+  /** @nullable */
+  supplierId?: number | null;
+  /** @minimum 1 */
+  locationId?: number;
   status?: PurchaseOrderInputStatus;
   expectedDate?: string;
   reference?: string;
@@ -8329,6 +8959,15 @@ export interface PurchaseOrderReceiveBody {
   lines?: PurchaseOrderReceiveBodyLinesItem[];
 }
 
+export type PartCreditNoteCondition = typeof PartCreditNoteCondition[keyof typeof PartCreditNoteCondition];
+
+
+export const PartCreditNoteCondition = {
+  resalable: 'resalable',
+  damaged: 'damaged',
+  scrap: 'scrap',
+} as const;
+
 export interface PartCreditNote {
   id: number;
   jobCardId: number;
@@ -8339,10 +8978,22 @@ export interface PartCreditNote {
   unitPrice: number;
   amount: number;
   reason: string;
+  condition?: PartCreditNoteCondition;
+  /** @nullable */
+  inventoryTransactionId?: number | null;
   /** @nullable */
   createdBy?: string | null;
   createdAt: string;
 }
+
+export type PartCreditNoteInputCondition = typeof PartCreditNoteInputCondition[keyof typeof PartCreditNoteInputCondition];
+
+
+export const PartCreditNoteInputCondition = {
+  resalable: 'resalable',
+  damaged: 'damaged',
+  scrap: 'scrap',
+} as const;
 
 export interface PartCreditNoteInput {
   /** The issued part line being credited */
@@ -8351,6 +9002,7 @@ export interface PartCreditNoteInput {
   quantity: number;
   /** @minLength 3 */
   reason: string;
+  condition?: PartCreditNoteInputCondition;
 }
 
 export type ServiceOrderAdvanceBodyTargetStatus = typeof ServiceOrderAdvanceBodyTargetStatus[keyof typeof ServiceOrderAdvanceBodyTargetStatus];
@@ -10775,6 +11427,142 @@ export type ImportPartsMode = typeof ImportPartsMode[keyof typeof ImportPartsMod
 export const ImportPartsMode = {
   preview: 'preview',
   apply: 'apply',
+} as const;
+
+export type ListPartsBinsParams = {
+/**
+ * @minimum 1
+ */
+locationId?: number;
+};
+
+export type ListPartsInventoryLevelsParams = {
+/**
+ * @minimum 1
+ */
+locationId?: number;
+/**
+ * @minimum 1
+ */
+binId?: number;
+/**
+ * @minimum 1
+ */
+partId?: number;
+};
+
+export type ListPartsInventoryLedgerParams = {
+/**
+ * @minimum 1
+ */
+locationId?: number;
+/**
+ * @minimum 1
+ */
+partId?: number;
+from?: string;
+to?: string;
+/**
+ * @minimum 1
+ * @maximum 1000
+ */
+limit?: number;
+};
+
+export type ListPartsInventoryHoldsParams = {
+/**
+ * @minimum 1
+ */
+locationId?: number;
+/**
+ * @minimum 1
+ */
+partId?: number;
+status?: ListPartsInventoryHoldsStatus;
+};
+
+export type ListPartsInventoryHoldsStatus = typeof ListPartsInventoryHoldsStatus[keyof typeof ListPartsInventoryHoldsStatus];
+
+
+export const ListPartsInventoryHoldsStatus = {
+  active: 'active',
+  released: 'released',
+  consumed: 'consumed',
+} as const;
+
+export type ListPartsPurchaseOrderReviewQueueParams = {
+status?: string;
+source?: ListPartsPurchaseOrderReviewQueueSource;
+};
+
+export type ListPartsPurchaseOrderReviewQueueSource = typeof ListPartsPurchaseOrderReviewQueueSource[keyof typeof ListPartsPurchaseOrderReviewQueueSource];
+
+
+export const ListPartsPurchaseOrderReviewQueueSource = {
+  manual: 'manual',
+  low_stock_alert: 'low_stock_alert',
+  special_order: 'special_order',
+} as const;
+
+export type ListPartsNotificationDeliveriesParams = {
+status?: ListPartsNotificationDeliveriesStatus;
+};
+
+export type ListPartsNotificationDeliveriesStatus = typeof ListPartsNotificationDeliveriesStatus[keyof typeof ListPartsNotificationDeliveriesStatus];
+
+
+export const ListPartsNotificationDeliveriesStatus = {
+  pending: 'pending',
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+} as const;
+
+export type GetPartsAgingReportParams = {
+/**
+ * @minimum 1
+ */
+locationId?: number;
+category?: string;
+thresholds?: string;
+format?: GetPartsAgingReportFormat;
+};
+
+export type GetPartsAgingReportFormat = typeof GetPartsAgingReportFormat[keyof typeof GetPartsAgingReportFormat];
+
+
+export const GetPartsAgingReportFormat = {
+  json: 'json',
+  csv: 'csv',
+} as const;
+
+export type GetPartsValuationReportParams = {
+/**
+ * @minimum 1
+ */
+locationId?: number;
+asOf?: string;
+};
+
+export type GetPartsReplenishmentSuggestionsParams = {
+/**
+ * @minimum 1
+ */
+locationId?: number;
+};
+
+export type ListPartsVendorReconciliationsParams = {
+status?: ListPartsVendorReconciliationsStatus;
+};
+
+export type ListPartsVendorReconciliationsStatus = typeof ListPartsVendorReconciliationsStatus[keyof typeof ListPartsVendorReconciliationsStatus];
+
+
+export const ListPartsVendorReconciliationsStatus = {
+  pending: 'pending',
+  matched: 'matched',
+  flagged: 'flagged',
+  resolved: 'resolved',
 } as const;
 
 export type ListTestDrivesParams = {

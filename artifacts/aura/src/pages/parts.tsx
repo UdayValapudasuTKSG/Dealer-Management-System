@@ -7,6 +7,7 @@ import {
   getListPartsQueryKey,
   useListSuppliers,
   useCreateSupplier,
+  useUpdatePartsSupplierMetadata,
   useGetSupplierDeliveryHistory,
   getGetSupplierDeliveryHistoryQueryKey,
   getListSuppliersQueryKey,
@@ -18,7 +19,8 @@ import {
   useUpdatePartsSettings,
   getGetPartsSettingsQueryKey,
   useListPurchaseOrders,
-  useCreatePurchaseOrder,
+  useCreatePartsOperationalPurchaseOrder,
+  useListPartsLocations,
   useUpdatePurchaseOrder,
   useReceivePurchaseOrder,
   type PurchaseOrder,
@@ -57,9 +59,16 @@ import {
   Pencil,
   Download,
   FileText,
+  MapPin,
+  History,
+  Lock,
+  ClipboardCheck,
+  BarChart3,
+  Bell
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
+import { PartBarcodeScanner } from "@/components/parts/part-barcode-scanner";
 
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
@@ -75,10 +84,17 @@ import { CreateInventoryRequisitionButton, RequisitionsWorkspace } from "@/compo
 
 const TABS = [
   { key: "parts", label: "Parts", icon: Package },
+  { key: "locations", label: "Locations & Bins", icon: MapPin },
+  { key: "ledger", label: "Stock Ledger", icon: History },
+  { key: "holds", label: "Holds", icon: Lock },
+  { key: "cycle-counts", label: "Cycle Counts", icon: ClipboardCheck },
   { key: "requisitions", label: "Requisitions", icon: FileText },
   { key: "suppliers", label: "Suppliers", icon: Truck },
   { key: "orders", label: "Purchase Orders", icon: ClipboardList },
   { key: "purchases", label: "Quick Purchases", icon: ShoppingCart },
+  { key: "reconciliation", label: "Reconciliation", icon: FileSpreadsheet },
+  { key: "reporting", label: "Analysis", icon: BarChart3 },
+  { key: "notifications", label: "Outbox", icon: Bell },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -168,6 +184,14 @@ function ExportPartsButton() {
   );
 }
 
+import { LocationsTab } from "@/components/parts/locations-tab";
+import { LedgerTab, HoldsTab } from "@/components/parts/operations-tabs";
+import { CycleCountsTab } from "@/components/parts/cycle-counts-tab";
+import { ReconciliationTab } from "@/components/parts/reconciliation-tab";
+import { POReviewTab } from "@/components/parts/po-review-tab";
+import { NotificationsTab } from "@/components/parts/notifications-tab";
+import { ReportingWorkspace } from "@/components/parts/reporting-workspace";
+
 export default function Parts() {
   const [tab, setTab] = useState<TabKey>(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
@@ -240,10 +264,17 @@ export default function Parts() {
           transition={{ duration: 0.2 }}
         >
           {tab === "parts" && <PartsTab />}
+          {tab === "locations" && <LocationsTab />}
+          {tab === "ledger" && <LedgerTab />}
+          {tab === "holds" && <HoldsTab />}
+          {tab === "cycle-counts" && <CycleCountsTab />}
           {tab === "requisitions" && <RequisitionsWorkspace />}
           {tab === "suppliers" && <SuppliersTab />}
-          {tab === "orders" && <PurchaseOrdersTab />}
+          {tab === "orders" && <POReviewTab />}
           {tab === "purchases" && <PurchasesTab />}
+          {tab === "reconciliation" && <ReconciliationTab />}
+          {tab === "reporting" && <ReportingWorkspace />}
+          {tab === "notifications" && <NotificationsTab />}
         </motion.div>
       </AnimatePresence>
     </Page>
@@ -270,7 +301,9 @@ function CreatePartDialog() {
       }
       fields={[
         { name: "sku", label: "Part no.", type: "text", required: true, span: "half", placeholder: "13691814-00" },
+        { name: "barcode", label: "Barcode", type: "text", span: "half", placeholder: "Scan or enter..." },
         { name: "name", label: "Part name", type: "text", required: true, span: "half", placeholder: "Engine oil filter" },
+        { name: "description", label: "Description", type: "text", span: "half" },
         { name: "category", label: "Category / make", type: "text", span: "half", placeholder: "BYD" },
         {
           name: "supplierId",
@@ -279,11 +312,26 @@ function CreatePartDialog() {
           span: "half",
           options: suppliers?.map((s) => ({ value: String(s.id), label: s.name })) ?? [],
         },
+        { 
+          name: "costingMethod", 
+          label: "Costing Method", 
+          type: "select", 
+          span: "half", 
+          defaultValue: "average",
+          options: [{value: "average", label: "Average"}, {value: "fifo", label: "FIFO"}, {value: "landed", label: "Landed"}]
+        },
         { name: "unitCost", label: "Unit cost (GYD)", type: "number", span: "half", placeholder: "53908.78" },
         { name: "unitPrice", label: "Selling price (GYD)", type: "number", span: "half", placeholder: "80863.17" },
-        { name: "stock", label: "Quantity in stock", type: "number", span: "half", placeholder: "10" },
-        { name: "reorderLevel", label: "Reorder level", type: "number", span: "half", placeholder: "3" },
-        { name: "location", label: "Location", type: "text", span: "full", placeholder: "Container 1 353439" },
+        { name: "reorderLevel", label: "Reorder Min", type: "number", span: "half", placeholder: "3" },
+        { name: "reorderMax", label: "Reorder Max", type: "number", span: "half", placeholder: "10" },
+        { 
+          name: "active", 
+          label: "Status", 
+          type: "select", 
+          span: "half", 
+          defaultValue: "true",
+          options: [{value: "true", label: "Active"}, {value: "false", label: "Inactive"}]
+        },
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
@@ -291,13 +339,16 @@ function CreatePartDialog() {
           data: {
             sku: String(v.sku),
             name: String(v.name),
+            ...(v.barcode ? { barcode: String(v.barcode) } : {}),
+            ...(v.description ? { description: String(v.description) } : {}),
             ...(v.category ? { category: String(v.category) } : {}),
             ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
+            ...(v.costingMethod ? { costingMethod: v.costingMethod as any } : {}),
             ...(v.unitCost ? { unitCost: Number(v.unitCost) } : {}),
             ...(v.unitPrice ? { unitPrice: Number(v.unitPrice) } : {}),
-            ...(v.stock ? { stock: Number(v.stock) } : {}),
             ...(v.reorderLevel ? { reorderLevel: Number(v.reorderLevel) } : {}),
-            ...(v.location ? { location: String(v.location) } : {}),
+            ...(v.reorderMax ? { reorderMax: Number(v.reorderMax) } : {}),
+            ...(v.active !== undefined ? { active: v.active === "true" } : {}),
           },
         });
         queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
@@ -307,7 +358,7 @@ function CreatePartDialog() {
   );
 }
 
-function EditPartDialog({ part }: { part: Part }) {
+function EditPartDialog({ part }: { part: Part & { barcode?: string; description?: string; costingMethod?: string; reorderMax?: number; active?: boolean; quantityAvailable?: number; quantityReserved?: number } }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const update = useUpdatePart();
@@ -331,7 +382,9 @@ function EditPartDialog({ part }: { part: Part }) {
       }
       fields={[
         { name: "sku", label: "Part no.", type: "text", required: true, span: "half", defaultValue: part.sku },
+        { name: "barcode", label: "Barcode", type: "text", span: "half", defaultValue: part.barcode ?? "" },
         { name: "name", label: "Part name", type: "text", required: true, span: "half", defaultValue: part.name },
+        { name: "description", label: "Description", type: "text", span: "half", defaultValue: part.description ?? "" },
         { name: "category", label: "Category / make", type: "text", span: "half", defaultValue: part.category ?? "" },
         {
           name: "supplierId",
@@ -341,27 +394,46 @@ function EditPartDialog({ part }: { part: Part }) {
           defaultValue: part.supplierId ? String(part.supplierId) : "",
           options: suppliers?.map((s) => ({ value: String(s.id), label: s.name })) ?? [],
         },
+        { 
+          name: "costingMethod", 
+          label: "Costing Method", 
+          type: "select", 
+          span: "half", 
+          defaultValue: part.costingMethod ?? "average",
+          options: [{value: "average", label: "Average"}, {value: "fifo", label: "FIFO"}, {value: "landed", label: "Landed"}]
+        },
         { name: "unitCost", label: "Unit cost (GYD)", type: "number", span: "half", defaultValue: String(part.unitCost ?? 0) },
         { name: "unitPrice", label: "Selling price (GYD)", type: "number", span: "half", defaultValue: String(part.unitPrice ?? 0) },
-        { name: "stock", label: "Quantity in stock", type: "number", span: "half", defaultValue: String(part.stock ?? 0) },
-        { name: "reorderLevel", label: "Reorder level", type: "number", span: "half", defaultValue: String(part.reorderLevel ?? 5) },
-        { name: "location", label: "Location", type: "text", span: "full", defaultValue: part.location ?? "" },
+        { name: "reorderLevel", label: "Reorder Min", type: "number", span: "half", defaultValue: String(part.reorderLevel ?? 5) },
+        { name: "reorderMax", label: "Reorder Max", type: "number", span: "half", defaultValue: String(part.reorderMax ?? 10) },
+        { 
+          name: "active", 
+          label: "Status", 
+          type: "select", 
+          span: "half", 
+          defaultValue: part.active ? "true" : "false",
+          options: [{value: "true", label: "Active"}, {value: "false", label: "Inactive"}]
+        },
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
+        const updateData: any = {
+          sku: String(v.sku),
+          name: String(v.name),
+          ...(v.barcode !== undefined ? { barcode: String(v.barcode) } : {}),
+          ...(v.description !== undefined ? { description: String(v.description) } : {}),
+          ...(v.category !== undefined ? { category: String(v.category) } : {}),
+          ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
+          costingMethod: String(v.costingMethod),
+          unitCost: v.unitCost === "" ? 0 : Number(v.unitCost),
+          unitPrice: v.unitPrice === "" ? 0 : Number(v.unitPrice),
+          reorderLevel: v.reorderLevel === "" ? 5 : Number(v.reorderLevel),
+          reorderMax: v.reorderMax === "" ? 10 : Number(v.reorderMax),
+          active: v.active === "true",
+        };
         await update.mutateAsync({
           id: part.id,
-          data: {
-            sku: String(v.sku),
-            name: String(v.name),
-            ...(v.category !== undefined && v.category !== "" ? { category: String(v.category) } : {}),
-            ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
-            unitCost: v.unitCost === "" ? 0 : Number(v.unitCost),
-            unitPrice: v.unitPrice === "" ? 0 : Number(v.unitPrice),
-            stock: v.stock === "" ? 0 : Number(v.stock),
-            reorderLevel: v.reorderLevel === "" ? 5 : Number(v.reorderLevel),
-            ...(v.location !== undefined && v.location !== "" ? { location: String(v.location) } : {}),
-          },
+          data: updateData,
         });
         queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
         toast({ title: "Part updated" });
@@ -500,24 +572,24 @@ function PartsTab() {
             <thead>
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-3 font-semibold">Part</th>
-                <th className="px-4 py-3 font-semibold hidden md:table-cell">SKU</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">SKU / Barcode</th>
                 <th className="px-4 py-3 font-semibold hidden lg:table-cell">Category</th>
-                <th className="px-4 py-3 font-semibold text-right">Stock</th>
+                <th className="px-4 py-3 font-semibold text-right">Available</th>
                 <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Cost</th>
                 <th className="px-4 py-3 font-semibold text-right">Price</th>
                 <th className="px-4 py-3 font-semibold text-right w-12" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {parts.map((p) => {
-                const low = p.stock <= p.reorderLevel;
+              {(parts as (Part & { barcode?: string; description?: string; active?: boolean; quantityAvailable?: number; quantityReserved?: number })[]).map((p) => {
+                const low = (p.quantityAvailable ?? 0) <= (p.reorderLevel ?? 0);
                 return (
                   <tr key={p.id} className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors">
                     <td className={cn("px-4 font-medium", density === "compact" ? "py-2.5" : "py-3.5")}>
                       {p.name}
-                      {p.status && p.status !== "active" && (
+                      {p.active === false && (
                         <span className="ml-2 rounded-full bg-white/[0.08] text-muted-foreground px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
-                          {p.status}
+                          Inactive
                         </span>
                       )}
                       {low && (
@@ -526,10 +598,13 @@ function PartsTab() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">{p.sku}</td>
+                    <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
+                      {p.sku}
+                      {p.barcode && <div className="text-[10px] opacity-70">{p.barcode}</div>}
+                    </td>
                     <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">{p.category}</td>
                     <td className={cn("px-4 py-2 text-right tabular-nums font-semibold", low && "text-primary")}>
-                      {p.stock} <span className="text-muted-foreground font-normal">/ {p.reorderLevel}</span>
+                      {p.quantityAvailable ?? 0} <span className="text-muted-foreground font-normal">/ {p.reorderLevel}</span>
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums hidden md:table-cell">
                       {money.gyd(p.unitCost)}
@@ -548,8 +623,8 @@ function PartsTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {parts.map((p) => {
-            const low = p.stock <= p.reorderLevel;
+          {(parts as (Part & { barcode?: string; description?: string; active?: boolean; quantityAvailable?: number; quantityReserved?: number })[]).map((p) => {
+            const low = (p.quantityAvailable ?? 0) <= (p.reorderLevel ?? 0);
             return (
               <Card key={p.id} className="glass-panel border-none rounded-3xl relative overflow-hidden">
                 {low && (
@@ -560,14 +635,13 @@ function PartsTab() {
                     <div>
                       <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
                         {p.sku}
-                        {p.location && ` · Bin ${p.location}`}
                       </div>
                       <h3 className="font-bold leading-tight">{p.name}</h3>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {p.category}
-                        {p.status && p.status !== "active" && (
+                        {p.active === false && (
                           <span className="ml-2 rounded-full bg-white/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
-                            {p.status}
+                            Inactive
                           </span>
                         )}
                       </div>
@@ -584,7 +658,7 @@ function PartsTab() {
                   <div className="flex items-end justify-between">
                     <div>
                       <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">
-                        In stock
+                        Available
                       </div>
                       <div
                         className={cn(
@@ -592,9 +666,14 @@ function PartsTab() {
                           low && "text-primary",
                         )}
                       >
-                        {p.stock}
+                        {p.quantityAvailable ?? 0}
                         <span className="text-sm text-muted-foreground"> / min {p.reorderLevel}</span>
                       </div>
+                      {p.quantityReserved ? (
+                        <div className="text-[10px] text-amber-500 mt-1 uppercase tracking-wider font-semibold">
+                          +{p.quantityReserved} reserved
+                        </div>
+                      ) : null}
                     </div>
                     <div className="text-right text-sm">
                       <div className="text-muted-foreground">Cost {money.gyd(p.unitCost)}</div>
@@ -664,6 +743,8 @@ function CreateSupplierDialog() {
         { name: "contactName", label: "Contact", type: "text", span: "half" },
         { name: "email", label: "Email", type: "email", span: "half" },
         { name: "phone", label: "Phone", type: "phone", span: "half" },
+        { name: "address", label: "Address", type: "text", span: "full" },
+        { name: "leadTimeDays", label: "Lead Time (Days)", type: "number", span: "half" },
       ]}
       onSubmit={async (values) => {
         await create.mutateAsync({ data: values as never });
@@ -676,9 +757,16 @@ function CreateSupplierDialog() {
 
 function SuppliersTab() {
   const money = useMoney();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data: suppliers, isLoading } = useListSuppliers();
+  const updateMetadata = useUpdatePartsSupplierMetadata();
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
+  const [editingSupplierId, setEditingSupplierId] = useState<number | null>(null);
+  const [supplierAddress, setSupplierAddress] = useState("");
+  const [supplierLeadTime, setSupplierLeadTime] = useState("");
   const selectedSupplier = suppliers?.find((supplier) => supplier.id === selectedSupplierId);
+  const editingSupplier = suppliers?.find((supplier) => supplier.id === editingSupplierId);
   const { data: history, isLoading: historyLoading } = useGetSupplierDeliveryHistory(
     selectedSupplierId ?? 0,
     {
@@ -716,9 +804,25 @@ function SuppliersTab() {
               {s.contactName && <div>{s.contactName}</div>}
               {s.email && <div>{s.email}</div>}
               {s.phone && <div>{s.phone}</div>}
+              <div>{s.address || "Address not set"}</div>
+              <div>{s.leadTimeDays != null ? `${s.leadTimeDays} day lead time` : "Lead time not set"}</div>
             </div>
-            <div className="mt-4 pt-3 border-t border-white/5 text-xs font-semibold uppercase tracking-wider text-primary">
-              View delivery history
+            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary">View delivery history</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setEditingSupplierId(s.id);
+                  setSupplierAddress(s.address ?? "");
+                  setSupplierLeadTime(s.leadTimeDays != null ? String(s.leadTimeDays) : "");
+                }}
+                className="h-7 gap-1 text-xs"
+              >
+                <Pencil className="w-3 h-3" /> Settings
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -796,6 +900,58 @@ function SuppliersTab() {
               })
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={editingSupplierId != null}
+        onOpenChange={(open) => { if (!open) setEditingSupplierId(null); }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingSupplier?.name ?? "Supplier"} settings</DialogTitle>
+            <DialogDescription>Address and lead time are used for procurement planning.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Address</label>
+              <Textarea value={supplierAddress} onChange={(event) => setSupplierAddress(event.target.value)} placeholder="Supplier address" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lead time (days)</label>
+              <Input type="number" min={0} step={1} value={supplierLeadTime} onChange={(event) => setSupplierLeadTime(event.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingSupplierId(null)}>Cancel</Button>
+            <Button
+              disabled={updateMetadata.isPending}
+              onClick={async () => {
+                if (!editingSupplierId) return;
+                const leadTimeDays = Number(supplierLeadTime);
+                if (supplierLeadTime === "" || !Number.isSafeInteger(leadTimeDays) || leadTimeDays < 0) {
+                  toast({ title: "Enter a valid lead time", variant: "destructive" });
+                  return;
+                }
+                try {
+                  await updateMetadata.mutateAsync({
+                    id: editingSupplierId,
+                    data: { address: supplierAddress.trim() || null, leadTimeDays },
+                  });
+                  await queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
+                  toast({ title: "Supplier settings saved" });
+                  setEditingSupplierId(null);
+                } catch (error) {
+                  toast({
+                    title: "Could not save supplier settings",
+                    description: error instanceof Error ? error.message : "Please try again.",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              {updateMetadata.isPending && <Loader2 className="w-4 h-4 animate-spin" />} Save settings
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
@@ -913,22 +1069,31 @@ function CreatePurchaseOrderDialog() {
   const { toast } = useToast();
   const { data: parts } = useListParts();
   const { data: suppliers } = useListSuppliers();
-  const create = useCreatePurchaseOrder();
+  const { data: locations } = useListPartsLocations();
+  const create = useCreatePartsOperationalPurchaseOrder();
   const [open, setOpen] = useState(false);
   const [supplierId, setSupplierId] = useState<string>("");
+  const [locationId, setLocationId] = useState("");
   const [expectedDate, setExpectedDate] = useState("");
   const [reference, setReference] = useState("");
-  const [placeNow, setPlaceNow] = useState(true);
-  const [lines, setLines] = useState<{ partId: string; quantity: string; unitCost: string }[]>([
-    { partId: "", quantity: "1", unitCost: "" },
+  const [lines, setLines] = useState<{
+    partId: string;
+    quantity: string;
+    unitCost: string;
+    freight: string;
+    duty: string;
+    handling: string;
+    other: string;
+  }[]>([
+    { partId: "", quantity: "1", unitCost: "", freight: "", duty: "", handling: "", other: "" },
   ]);
 
   const reset = () => {
     setSupplierId("");
+    setLocationId("");
     setExpectedDate("");
     setReference("");
-    setPlaceNow(true);
-    setLines([{ partId: "", quantity: "1", unitCost: "" }]);
+    setLines([{ partId: "", quantity: "1", unitCost: "", freight: "", duty: "", handling: "", other: "" }]);
   };
 
   const setLine = (i: number, patch: Partial<(typeof lines)[number]>) =>
@@ -937,31 +1102,45 @@ function CreatePurchaseOrderDialog() {
   const submit = async () => {
     const parsedLines = lines
       .filter((l) => l.partId)
-      .map((l) => ({
-        partId: Number(l.partId),
-        quantity: Math.max(1, Math.floor(Number(l.quantity) || 1)),
-        ...(l.unitCost !== "" && Number.isFinite(Number(l.unitCost))
-          ? { unitCost: Number(l.unitCost) }
-          : {}),
-      }));
+      .map((line) => {
+        const landedCostComponents = Object.fromEntries(
+          (["freight", "duty", "handling", "other"] as const)
+            .filter((key) => line[key] !== "")
+            .map((key) => [key, Number(line[key])]),
+        );
+        return {
+          partId: Number(line.partId),
+          quantity: Math.max(1, Math.floor(Number(line.quantity) || 1)),
+          unitCost: Number(line.unitCost),
+          ...(Object.keys(landedCostComponents).length ? { landedCostComponents } : {}),
+        };
+      });
     if (parsedLines.length === 0) {
       toast({ title: "Add at least one part line", variant: "destructive" });
+      return;
+    }
+    if (!locationId) {
+      toast({ title: "Select a destination location", variant: "destructive" });
+      return;
+    }
+    if (parsedLines.some((line) => !Number.isFinite(line.unitCost) || line.unitCost < 0)) {
+      toast({ title: "Enter a valid unit cost for every line", variant: "destructive" });
       return;
     }
     try {
       await create.mutateAsync({
         data: {
           ...(supplierId ? { supplierId: Number(supplierId) } : {}),
+          locationId: Number(locationId),
           ...(expectedDate ? { expectedDate } : {}),
-          ...(reference ? { reference } : {}),
-          status: placeNow ? "ordered" : "draft",
+          ...(reference ? { notes: reference } : {}),
           lines: parsedLines,
         },
       });
       queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
       toast({
-        title: placeNow ? "Purchase order placed" : "Draft PO saved",
-        description: `${parsedLines.length} line${parsedLines.length === 1 ? "" : "s"}.`,
+        title: "Draft PO saved",
+        description: `${parsedLines.length} line${parsedLines.length === 1 ? "" : "s"} ready for review.`,
       });
       setOpen(false);
       reset();
@@ -978,7 +1157,7 @@ function CreatePurchaseOrderDialog() {
           New Purchase Order
         </Button>
       </DialogTrigger>
-      <DialogContent className="glass-panel border-white/10 sm:max-w-[640px]">
+      <DialogContent className="glass-panel border-white/10 sm:max-w-[860px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl tracking-tight">Raise a purchase order</DialogTitle>
           <DialogDescription>
@@ -997,6 +1176,21 @@ function CreatePurchaseOrderDialog() {
                 ...(suppliers?.map((s) => ({
                   value: String(s.id),
                   label: s.name,
+                })) ?? []),
+              ]}
+              className="w-full h-10 rounded-xl bg-white/[0.04] border border-white/10 px-3 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Destination location *</label>
+            <StyledSelect
+              value={locationId}
+              onValueChange={setLocationId}
+              options={[
+                { value: "", label: "Select location…" },
+                ...(locations?.filter((location) => location.active).map((location) => ({
+                  value: String(location.id),
+                  label: location.name,
                 })) ?? []),
               ]}
               className="w-full h-10 rounded-xl bg-white/[0.04] border border-white/10 px-3 text-sm"
@@ -1022,14 +1216,19 @@ function CreatePurchaseOrderDialog() {
           </div>
         </div>
         <div className="space-y-2">
-          <div className="grid grid-cols-[1fr_84px_110px_36px] gap-2 text-[11px] uppercase tracking-widest text-muted-foreground px-1">
+            <div className="grid grid-cols-[1fr_64px_92px_repeat(4,72px)_36px] gap-2 text-[10px] uppercase tracking-widest text-muted-foreground px-1">
             <span>Part</span>
             <span>Qty</span>
             <span>Unit cost</span>
+              <span>Freight</span>
+              <span>Duty</span>
+              <span>Handling</span>
+              <span>Other</span>
             <span />
           </div>
           {lines.map((line, i) => (
-            <div key={i} className="grid grid-cols-[1fr_84px_110px_36px] gap-2">
+            <div key={i} className="space-y-1">
+            <div className="grid grid-cols-[1fr_64px_92px_repeat(4,72px)_36px] gap-2">
               <StyledSelect
                 value={line.partId}
                 onValueChange={(value) => {
@@ -1055,6 +1254,19 @@ function CreatePurchaseOrderDialog() {
                 onChange={(e) => setLine(i, { quantity: e.target.value })}
                 className="h-10 rounded-xl bg-white/[0.04] border-white/10 text-right"
               />
+              {(["freight", "duty", "handling", "other"] as const).map((key) => (
+                <Input
+                  key={key}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={line[key]}
+                  onChange={(event) => setLine(i, { [key]: event.target.value })}
+                  placeholder="0"
+                  aria-label={`${key} total for line ${i + 1}`}
+                  className="h-10 rounded-xl bg-white/[0.04] border-white/10 text-right"
+                />
+              ))}
               <Input
                 type="number"
                 min={0}
@@ -1073,33 +1285,35 @@ function CreatePurchaseOrderDialog() {
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>
+            <p className="pr-10 text-right text-[11px] text-muted-foreground">
+              Line total: {(
+                Math.max(1, Number(line.quantity) || 1) * (Number(line.unitCost) || 0) +
+                Number(line.freight || 0) +
+                Number(line.duty || 0) +
+                Number(line.handling || 0) +
+                Number(line.other || 0)
+              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+            </div>
           ))}
           <Button
             variant="outline"
             className="rounded-full gap-2 border-white/15 h-9"
-            onClick={() => setLines((prev) => [...prev, { partId: "", quantity: "1", unitCost: "" }])}
+            onClick={() => setLines((prev) => [...prev, { partId: "", quantity: "1", unitCost: "", freight: "", duty: "", handling: "", other: "" }])}
           >
             <Plus className="w-4 h-4" />
             Add line
           </Button>
         </div>
         <DialogFooter className="items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground mr-auto cursor-pointer">
-            <input
-              type="checkbox"
-              checked={placeNow}
-              onChange={(e) => setPlaceNow(e.target.checked)}
-              className="accent-primary"
-            />
-            Place order now (uncheck to save as draft)
-          </label>
+          <p className="mr-auto text-xs text-muted-foreground">The order remains a draft until supplier review and approval.</p>
           <Button
             onClick={submit}
             disabled={create.isPending}
             className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
           >
             {create.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-            {placeNow ? "Place order" : "Save draft"}
+            Save draft
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1282,6 +1496,7 @@ function ReceivePurchaseOrderDialog({
 }) {
   const { toast } = useToast();
   const receive = useReceivePurchaseOrder();
+  const { data: parts } = useListParts();
   const { uploadFile } = useUpload();
   const [receivedAt, setReceivedAt] = useState(() => new Date().toISOString().slice(0, 16));
   const [deliveryNoteNumber, setDeliveryNoteNumber] = useState("");
@@ -1301,11 +1516,32 @@ function ReceivePurchaseOrderDialog({
     setCondition("accepted");
     setNotes("");
     setFiles([]);
-    setQuantities(Object.fromEntries(order.lines.map((line) => [
-      line.id,
-      Math.max(0, line.quantity - line.qtyReceived),
-    ])));
+    setQuantities(Object.fromEntries(order.lines.map((line) => [line.id, 0])));
   }, [order]);
+
+  const handleBarcode = (barcode: string) => {
+    if (!order) return;
+    const part = parts?.find((candidate) => candidate.barcode?.trim() === barcode.trim());
+    const line = part ? order.lines.find((candidate) => candidate.partId === part.id) : undefined;
+    if (!part || !line) {
+      toast({
+        title: "Barcode is not on this purchase order",
+        description: "No outstanding line on this PO matches the scanned part.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const outstanding = Math.max(0, line.quantity - line.qtyReceived);
+    if (outstanding === 0) {
+      toast({ title: "Line already fully received", description: part.name });
+      return;
+    }
+    setQuantities((current) => ({ ...current, [line.id]: outstanding }));
+    toast({
+      title: "Receipt line prefilled",
+      description: `${part.name}: ${outstanding} outstanding. Review the quantity and documents before posting.`,
+    });
+  };
 
   const submit = async () => {
     if (!order) return;
@@ -1367,6 +1603,13 @@ function ReceivePurchaseOrderDialog({
         </DialogHeader>
         {order && (
           <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-3">
+              <div>
+                <div className="text-sm font-medium">Scan a received part</div>
+                <div className="text-xs text-muted-foreground">Scanning only prefills its outstanding quantity; it never posts a receipt.</div>
+              </div>
+              <PartBarcodeScanner onScan={handleBarcode} disabled={receive.isPending} />
+            </div>
             <div className="space-y-2">
               {order.lines.map((line) => {
                 const outstanding = Math.max(0, line.quantity - line.qtyReceived);

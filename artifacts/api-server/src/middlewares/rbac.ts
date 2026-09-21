@@ -830,6 +830,14 @@ const PATH_MODULES: Record<string, RouteRule> = {
   "job-cards": {
     module: "service",
     category: (req) => {
+      if (
+        (req.method === "POST" && /^\/job-cards\/\d+\/parts\/\d+\/issue\/?$/.test(req.path)) ||
+        (req.method === "DELETE" && /^\/job-cards\/\d+\/parts\/\d+\/?$/.test(req.path))
+      ) {
+        // Picking or cancelling an unissued reservation edits the job,
+        // rather than creating/deleting a job card.
+        return "edit";
+      }
       // Rollover sign-off must be reachable by the assigned Technician, whose
       // role has service:edit but not service:create; the route itself
       // enforces manager-or-assigned-technician identity.
@@ -909,7 +917,17 @@ const PATH_MODULES: Record<string, RouteRule> = {
     },
   },
   coverage: { module: "service" },
-  parts: { module: "parts" },
+  parts: {
+    module: "parts",
+    category: (req) => {
+      // Operational actions edit existing inventory. The operations router
+      // separately enforces approve on counts, supplier sends and resolutions.
+      if (req.path.startsWith("/parts/operations") || req.path.startsWith("/parts/imports") || req.path.startsWith("/parts/pricing-policies")) {
+        return req.method === "GET" ? "view" : "edit";
+      }
+      return METHOD_CATEGORY[req.method] ?? "view";
+    },
+  },
   suppliers: { module: "parts" },
   "part-purchases": { module: "parts" },
   "purchase-orders": { module: "parts" },

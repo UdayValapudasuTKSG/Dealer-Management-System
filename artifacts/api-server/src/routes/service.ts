@@ -1,4 +1,6 @@
 import { getDealerPdfBranding } from "../lib/dealer-branding";
+import { moveStock, releaseHold } from "../lib/parts-inventory";
+import { issuedUnits, issueJobParts, reserveJobPart, releaseJobPartHolds } from "../lib/job-part-stock";
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import {
@@ -2050,7 +2052,20 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
   };
 
   const [before] = [order];
-  const [updated] = await db
+  const [updated] = await db.transaction(async tx => {
+    if (target === "cancelled") {
+      const cards = await tx.select().from(jobCardsTable).where(and(
+        eq(jobCardsTable.serviceOrderId, order.id), eq(jobCardsTable.dealerId, dealerId),
+      )).orderBy(jobCardsTable.id).for("update");
+      for (const card of cards) {
+        await releaseJobPartHolds(tx, dealerId, card.id);
+        if (!["completed", "closed"].includes(card.status)) await tx.update(jobCardsTable)
+          .set({ status: "cancelled", timerStartedAt: null }).where(and(
+            eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId),
+          ));
+      }
+    }
+    return tx
     .update(serviceOrdersTable)
     .set({
       status: target,
@@ -2063,6 +2078,7 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
       ),
     )
     .returning();
+  });
 
   if (updated && before) onServiceOrderStatusChanged(before, updated);
 
@@ -2126,7 +2142,7 @@ router.delete("/service-orders/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  await db.transaction(async (tx) => {
+  const deleted = await db.transaction(async (tx) => {
     const cards = await tx
       .select({ id: jobCardsTable.id })
       .from(jobCardsTable)
@@ -2135,7 +2151,20 @@ router.delete("/service-orders/:id", async (req, res): Promise<void> => {
           eq(jobCardsTable.dealerId, dealerId),
           eq(jobCardsTable.serviceOrderId, order.id),
         ),
-      );
+      ).orderBy(jobCardsTable.id).for("update");
+    const [lockedInvoice] = await tx.select({ id: serviceInvoicesTable.id }).from(serviceInvoicesTable).where(and(
+      eq(serviceInvoicesTable.dealerId, dealerId), eq(serviceInvoicesTable.serviceOrderId, order.id),
+    ));
+    if (lockedInvoice) throw Object.assign(new Error("Invoiced work cannot be deleted"), { status: 409 });
+    for (const card of cards) {
+      const lines = await tx.select().from(jobCardPartsTable).where(and(
+        eq(jobCardPartsTable.jobCardId, card.id), eq(jobCardPartsTable.dealerId, dealerId),
+      ));
+      if (lines.some(line => issuedUnits(line) > 0 || line.kind === "return")) {
+        throw Object.assign(new Error("Issued part history cannot be deleted; cancel the booking instead"), { status: 409 });
+      }
+      await releaseJobPartHolds(tx, dealerId, card.id);
+    }
     // The FK below intentionally nulls the live card link. Backstop the
     // immutable association in this same delete transaction so a manual
     // correction continues to visibly supersede ledger evidence for a card
@@ -2179,7 +2208,14 @@ router.delete("/service-orders/:id", async (req, res): Promise<void> => {
     await tx
       .delete(serviceOrdersTable)
       .where(eq(serviceOrdersTable.id, order.id));
+    return true;
+  }).catch(error => {
+    const failure = error as Error & { status?: number };
+    if (!failure.status) throw error;
+    res.status(failure.status).json({ error: failure.message });
+    return false;
   });
+  if (!deleted) return;
   res.status(204).end();
 });
 
@@ -3231,6 +3267,9 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
         ),
       )
       .returning();
+    if (updatedCard?.status === "cancelled") {
+      await releaseJobPartHolds(tx, existing.dealerId, updatedCard.id);
+    }
     if (
       updatedCard &&
       (parsed.data.technicianUserId !== undefined ||
@@ -4089,7 +4128,129 @@ router.get("/job-cards/:id/parts", async (req, res): Promise<void> => {
       ),
     )
     .orderBy(desc(jobCardPartsTable.createdAt));
-  res.json(ListJobCardPartsResponse.parse(rows));
+  const parsedRows = ListJobCardPartsResponse.parse(rows);
+  res.json(parsedRows.map((row, index) => ({
+    ...row, inventoryHoldId: rows[index].inventoryHoldId,
+    inventoryLocationId: rows[index].inventoryLocationId, inventoryBinId: rows[index].inventoryBinId,
+    issuedQuantity: rows[index].issuedQuantity, issuedAt: rows[index].issuedAt,
+  })));
+});
+
+router.post("/job-cards/:id/parts/:lineId/issue", idempotent("service.part.issue"), async (req, res): Promise<void> => {
+  const ids = z.object({ id: z.coerce.number().int().positive(), lineId: z.coerce.number().int().positive() }).safeParse(req.params);
+  if (!ids.success) { res.status(400).json({ error: "Invalid job card or line id" }); return; }
+  const dealerId = activeDealerId(res);
+  try {
+    const issued = await db.transaction(async tx => {
+      const [card] = await tx.select().from(jobCardsTable).where(and(
+        eq(jobCardsTable.id, ids.data.id), eq(jobCardsTable.dealerId, dealerId),
+      )).for("update");
+      if (!card) throw Object.assign(new Error("Job card not found"), { status: 404 });
+      if (["cancelled", "closed"].includes(card.status)) throw Object.assign(new Error("Cannot issue parts to a terminal job"), { status: 422 });
+      return issueJobParts(tx, dealerId, card.id, ids.data.lineId);
+    });
+    for (const line of issued) {
+      checkLowStockCrossing(line.part, line.part.stock, line.part.stock - line.quantity);
+      enqueueStockEntrySync({
+      dealerId, partId: line.partId, qty: line.quantity, direction: "out",
+      entityType: "job_card_part", entityId: line.id,
+      remark: `AURA job card #${ids.data.id} — explicit part issue`,
+      dedupeKey: `erp:se:jcp:${dealerId}:${line.id}`,
+    });
+    }
+    const [line] = await db.select().from(jobCardPartsTable).where(and(
+      eq(jobCardPartsTable.id, ids.data.lineId), eq(jobCardPartsTable.dealerId, dealerId),
+    ));
+    res.json(line);
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    res.status(failure.status ?? 409).json({ error: failure.message });
+  }
+});
+
+router.patch("/job-cards/:id/parts/:lineId", async (req, res): Promise<void> => {
+  const ids = z.object({ id: z.coerce.number().int().positive(), lineId: z.coerce.number().int().positive() }).safeParse(req.params);
+  const body = z.object({ quantity: z.number().int().positive(),
+    locationId: z.number().int().positive().optional(), binId: z.number().int().positive().nullable().optional(),
+  }).safeParse(req.body);
+  if (!ids.success || !body.success) { res.status(400).json({ error: "Invalid part update" }); return; }
+  const dealerId = activeDealerId(res);
+  try {
+    const result = await db.transaction(async tx => {
+      const [card] = await tx.select().from(jobCardsTable).where(and(
+        eq(jobCardsTable.id, ids.data.id), eq(jobCardsTable.dealerId, dealerId),
+      )).for("update");
+      if (!card) throw Object.assign(new Error("Job card not found"), { status: 404 });
+      if (["cancelled", "closed"].includes(card.status)) throw Object.assign(new Error("Terminal job cannot reserve parts"), { status: 422 });
+      const [invoice] = await tx.select({ id: serviceInvoicesTable.id }).from(serviceInvoicesTable).where(and(
+        eq(serviceInvoicesTable.jobCardId, card.id), eq(serviceInvoicesTable.dealerId, dealerId),
+      ));
+      if (invoice) throw Object.assign(new Error("Invoiced lines cannot be changed"), { status: 422 });
+      const [line] = await tx.select().from(jobCardPartsTable).where(and(
+        eq(jobCardPartsTable.id, ids.data.lineId), eq(jobCardPartsTable.jobCardId, card.id),
+        eq(jobCardPartsTable.dealerId, dealerId),
+      )).for("update");
+      if (!line) throw Object.assign(new Error("Part line not found"), { status: 404 });
+      if (line.kind !== "issue" || issuedUnits(line) > 0) throw Object.assign(new Error("Issued parts require a linked return"), { status: 422 });
+      if (line.inventoryHoldId) await releaseHold(tx, dealerId, line.inventoryHoldId);
+      const [changed] = await tx.update(jobCardPartsTable).set({
+        quantity: body.data.quantity, issuedQuantity: 0,
+        inventoryLocationId: body.data.locationId ?? line.inventoryLocationId,
+        inventoryBinId: body.data.binId === undefined ? line.inventoryBinId : body.data.binId,
+      }).where(and(eq(jobCardPartsTable.id, line.id), eq(jobCardPartsTable.dealerId, dealerId))).returning();
+      const hold = await reserveJobPart(tx, changed);
+      const breakdown = await buildServiceEstimateBreakdown(tx, card);
+      await tx.update(jobCardsTable).set({
+        quoteTotal: breakdown.total, estimateVersion: sql`${jobCardsTable.estimateVersion} + 1`,
+        estimateApprovedVersion: null, estimateApprovalAt: null, estimateApprovalEvidence: null,
+        quoteApprovedAt: null, ...clearEstimateStaffAcknowledgement,
+      }).where(and(eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId)));
+      await invalidateServiceEstimate(tx, dealerId, card.id);
+      return { ...changed, inventoryHoldId: hold.id, inventoryLocationId: hold.locationId,
+        inventoryBinId: hold.binId, backordered: hold.backorderRisk };
+    });
+    res.json(result);
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    res.status(failure.status ?? 409).json({ error: failure.message });
+  }
+});
+
+router.delete("/job-cards/:id/parts/:lineId", async (req, res): Promise<void> => {
+  const ids = z.object({ id: z.coerce.number().int().positive(), lineId: z.coerce.number().int().positive() }).safeParse(req.params);
+  if (!ids.success) { res.status(400).json({ error: "Invalid job card or line id" }); return; }
+  const dealerId = activeDealerId(res);
+  try {
+    await db.transaction(async tx => {
+      const [card] = await tx.select().from(jobCardsTable).where(and(
+        eq(jobCardsTable.id, ids.data.id), eq(jobCardsTable.dealerId, dealerId),
+      )).for("update");
+      if (!card) throw Object.assign(new Error("Job card not found"), { status: 404 });
+      const [invoice] = await tx.select({ id: serviceInvoicesTable.id }).from(serviceInvoicesTable).where(and(
+        eq(serviceInvoicesTable.jobCardId, card.id), eq(serviceInvoicesTable.dealerId, dealerId),
+      ));
+      if (invoice) throw Object.assign(new Error("Invoiced lines cannot be removed"), { status: 422 });
+      const [line] = await tx.select().from(jobCardPartsTable).where(and(
+        eq(jobCardPartsTable.id, ids.data.lineId), eq(jobCardPartsTable.jobCardId, card.id),
+        eq(jobCardPartsTable.dealerId, dealerId),
+      )).for("update");
+      if (!line) throw Object.assign(new Error("Part line not found"), { status: 404 });
+      if (line.kind !== "issue" || issuedUnits(line) > 0) throw Object.assign(new Error("Issued parts require a linked return, not deletion"), { status: 422 });
+      if (line.inventoryHoldId) await releaseHold(tx, dealerId, line.inventoryHoldId);
+      await tx.delete(jobCardPartsTable).where(and(eq(jobCardPartsTable.id, line.id), eq(jobCardPartsTable.dealerId, dealerId)));
+      const breakdown = await buildServiceEstimateBreakdown(tx, card);
+      await tx.update(jobCardsTable).set({
+        quoteTotal: breakdown.total, estimateVersion: sql`${jobCardsTable.estimateVersion} + 1`,
+        estimateApprovedVersion: null, estimateApprovalAt: null, estimateApprovalEvidence: null,
+        quoteApprovedAt: null, ...clearEstimateStaffAcknowledgement,
+      }).where(and(eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId)));
+      await invalidateServiceEstimate(tx, dealerId, card.id);
+    });
+    res.status(204).end();
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    res.status(failure.status ?? 409).json({ error: failure.message });
+  }
 });
 
 router.get("/job-cards/:id/external-parts", async (req, res): Promise<void> => {
@@ -4113,7 +4274,10 @@ router.get("/job-cards/:id/external-parts", async (req, res): Promise<void> => {
 
 router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
   const params = AddJobCardPartParams.safeParse(req.params);
-  const parsed = AddJobCardPartBody.safeParse(req.body);
+  const parsed = AddJobCardPartBody.extend({
+    locationId: z.number().int().positive().optional(),
+    binId: z.number().int().positive().nullable().optional(),
+  }).safeParse(req.body);
   if (!params.success || !parsed.success) {
     res.status(400).json({
       error: (params.success ? parsed : params).error?.message ?? "Invalid",
@@ -4198,6 +4362,9 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     if (!lockedCard || lockedCard.estimateVersion !== card.estimateVersion) {
       throw new Error("job_card_changed");
     }
+    if (["cancelled", "closed"].includes(lockedCard.status)) {
+      throw Object.assign(new Error("Terminal job cannot reserve parts"), { status: 422 });
+    }
     const [invoice] = await tx.select({ id: serviceInvoicesTable.id })
       .from(serviceInvoicesTable)
       .where(and(eq(serviceInvoicesTable.jobCardId, card.id), eq(serviceInvoicesTable.dealerId, card.dealerId)))
@@ -4221,9 +4388,16 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
         quantity: parsed.data.quantity,
         unitPrice: currentPart.unitPrice,
         unitCost: currentPart.unitCost,
+        issuedQuantity: 0,
+        inventoryLocationId: parsed.data.locationId,
+        inventoryBinId: parsed.data.binId,
         backordered,
       })
       .returning();
+    const hold = await reserveJobPart(tx, inserted[0]);
+    backordered = hold.backorderRisk;
+    inserted[0] = { ...inserted[0], inventoryHoldId: hold.id,
+      inventoryLocationId: hold.locationId, inventoryBinId: hold.binId, backordered };
     if (backordered) {
       const shortfall = parsed.data.quantity - currentPart.stock;
       await tx
@@ -4262,19 +4436,6 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
         jobCardId: card.id,
       });
       backorderPoId = po.id;
-    } else {
-      const delta =
-        kind === "issue" ? -parsed.data.quantity : parsed.data.quantity;
-      await tx
-        .update(partsTable)
-        .set({ stock: sql`${partsTable.stock} + ${delta}` })
-        .where(
-          and(
-            eq(partsTable.id, currentPart.id),
-            eq(partsTable.dealerId, card.dealerId),
-            kind === "issue" ? gte(partsTable.stock, parsed.data.quantity) : undefined,
-          ),
-        );
     }
     // Every operational part change creates a new customer-cost version. The
     // old approval is invalidated in the same transaction as stock/line state,
@@ -4336,7 +4497,7 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
   }
 
   // MRQ alert: fire only when this issuance CROSSES the reorder threshold.
-  if (!backordered && kind === "issue") {
+  if (!backordered && kind === "issue" && issuedUnits(line) > 0) {
     checkLowStockCrossing(
       currentPart,
       currentPart.stock,
@@ -4348,17 +4509,6 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
   // stock but raised a PO that must sync instead.
   if (backorderPoId != null) {
     enqueuePurchaseOrderSync(card.dealerId, backorderPoId, "insert");
-  } else {
-    enqueueStockEntrySync({
-      dealerId: card.dealerId,
-      partId: currentPart.id,
-      qty: parsed.data.quantity,
-      direction: kind === "issue" ? "out" : "in",
-      entityType: "job_card_part",
-      entityId: line.id,
-      remark: `AURA job card #${card.id} — part ${kind} (${currentPart.sku})`,
-      dedupeKey: `erp:se:jcp:${card.dealerId}:${line.id}`,
-    });
   }
 
   res.status(201).json(AddJobCardPartResponse.parse(line));
@@ -4390,7 +4540,9 @@ router.get("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
 
 router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.create"), async (req, res): Promise<void> => {
   const params = CreateJobCardCreditNoteParams.safeParse(req.params);
-  const parsed = CreateJobCardCreditNoteBody.safeParse(req.body);
+  const parsed = CreateJobCardCreditNoteBody.extend({
+    condition: z.enum(["resalable", "damaged", "scrap"]).default("resalable"),
+  }).safeParse(req.body);
   if (!params.success || !parsed.success) {
     res.status(400).json({
       error: (params.success ? parsed : params).error?.message ?? "Invalid",
@@ -4446,7 +4598,7 @@ router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.creat
         eq(partCreditNotesTable.dealerId, dealerId),
       ),
     );
-  const remaining = line.quantity - credited;
+  const remaining = issuedUnits(line) - credited;
   if (parsed.data.quantity > remaining) {
     res.status(422).json({
       error: `Only ${remaining} unit(s) of ${line.partName} left to credit on this line`,
@@ -4488,7 +4640,7 @@ router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.creat
       eq(partCreditNotesTable.jobCardPartId, line.id),
       eq(partCreditNotesTable.dealerId, dealerId),
     ));
-    if (parsed.data.quantity > line.quantity - currentCredited) {
+    if (parsed.data.quantity > issuedUnits(lockedLine) - currentCredited) {
       throw new Error("part_credit_quantity_conflict");
     }
     const [inserted] = await tx
@@ -4504,6 +4656,7 @@ router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.creat
         amount:
           Math.round(line.unitPrice * parsed.data.quantity * 100) / 100,
         reason: parsed.data.reason,
+        condition: parsed.data.condition,
         createdBy: res.locals.user?.name ?? null,
       })
       .returning();
@@ -4520,12 +4673,16 @@ router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.creat
       unitCost: line.unitCost,
       backordered: false,
     });
-    await tx
-      .update(partsTable)
-      .set({ stock: sql`${partsTable.stock} + ${parsed.data.quantity}` })
-      .where(
-        and(eq(partsTable.id, line.partId), eq(partsTable.dealerId, dealerId)),
-      );
+    const movement = await moveStock(tx, {
+      dealerId, partId: line.partId, locationId: line.inventoryLocationId ?? undefined,
+      binId: line.inventoryBinId, type: "return", quantityDelta: parsed.data.quantity,
+      nonSellableDelta: parsed.data.condition === "resalable" ? 0 : parsed.data.quantity,
+      unitCost: line.unitCost, referenceType: "part_credit_note", referenceId: String(inserted.id),
+      idempotencyKey: `part-return:${dealerId}:${inserted.id}`,
+    });
+    await tx.update(partCreditNotesTable).set({ inventoryTransactionId: movement.id })
+      .where(and(eq(partCreditNotesTable.id, inserted.id), eq(partCreditNotesTable.dealerId, dealerId)));
+    inserted.inventoryTransactionId = movement.id;
     const creditAmount = Math.round(line.unitPrice * parsed.data.quantity * 100) / 100;
     // The operational return and the financial credit are intentionally
     // separate. An issued document remains immutable in its line totals; its
@@ -4635,7 +4792,7 @@ router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.creat
     direction: "in",
     entityType: "part_credit_note",
     entityId: note.id,
-    remark: `AURA job card #${card.id} — credit note return (${line.partName})`,
+    remark: `AURA job card #${card.id} — ${parsed.data.condition} credit note return (${line.partName}); financial credit is stock-neutral`,
     dedupeKey: `erp:se:credit:${dealerId}:${note.id}`,
   });
   const syncedCredit = creditInvoice as { id: number; taxAmount: number; grossAmount: number } | null;
@@ -4818,6 +4975,7 @@ async function issueServiceInvoice(
   // race to a concurrent claim transition — if the stamp cannot apply, the
   // whole issue rolls back.
   let issued: ServiceInvoice | undefined;
+  let stockIssues: Awaited<ReturnType<typeof issueJobParts>> = [];
   try {
     issued = await db.transaction(async (tx) => {
       // This is the serialization point shared with all billable-part and
@@ -4922,6 +5080,13 @@ async function issueServiceInvoice(
       if (dupe) {
         throw Object.assign(new Error("invoice-exists"), { issueCode: 409 });
       }
+      // The invoice and all previously unissued physical parts commit together.
+      // Historical null issuedQuantity lines are already issued, not new demand.
+      try {
+        stockIssues = await issueJobParts(tx, card.dealerId, card.id);
+      } catch (error) {
+        throw Object.assign(new Error(`Parts issue failed: ${(error as Error).message}`), { stockIssue: true });
+      }
       const [created] = await tx
         .insert(serviceInvoicesTable)
         .values({
@@ -5000,6 +5165,9 @@ async function issueServiceInvoice(
       return created;
     });
   } catch (err) {
+    if ((err as { stockIssue?: boolean }).stockIssue) {
+      return { ok: false, status: 409, error: (err as Error).message };
+    }
     const code = (err as { issueCode?: number }).issueCode;
     if (code === 404) {
       return { ok: false, status: 404, error: "Service order not found" };
@@ -5037,6 +5205,15 @@ async function issueServiceInvoice(
     throw err;
   }
   const invoice = issued;
+  for (const line of stockIssues) {
+    checkLowStockCrossing(line.part, line.part.stock, line.part.stock - line.quantity);
+    enqueueStockEntrySync({
+    dealerId: card.dealerId, partId: line.partId, qty: line.quantity, direction: "out",
+    entityType: "job_card_part", entityId: line.id,
+    remark: `AURA job card #${card.id} — invoice part issue`,
+    dedupeKey: `erp:se:jcp:${card.dealerId}:${line.id}`,
+  });
+  }
 
   // Snapshot the issued financial document, never its subsequently mutable
   // job card. ERPNext uses this original mapping as the only return-against

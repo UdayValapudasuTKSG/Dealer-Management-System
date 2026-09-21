@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PartRequisitionPurchaseOrderLinkContext } from './partRequisitionPurchaseOrderLinkContext';
+import type { PartsOperationLandedCostComponents } from './partsOperationLandedCostComponents';
 import type { PurchaseOrderLineSource } from './purchaseOrderLineSource';
 
 export interface PurchaseOrderLine {
@@ -18,6 +19,9 @@ export interface PurchaseOrderLine {
   quantity: number;
   qtyReceived: number;
   unitCost: number;
+  landedCostComponents?: PartsOperationLandedCostComponents;
+  /** @nullable */
+  landedUnitCost?: number | null;
   /**
      * Originating job card (backorder link)
      * @nullable

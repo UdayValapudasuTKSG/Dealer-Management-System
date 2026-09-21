@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartsOperationLandedCostComponents } from './partsOperationLandedCostComponents';
 
 export interface PurchaseOrderLineInput {
   partId: number;
@@ -12,5 +13,6 @@ export interface PurchaseOrderLineInput {
   quantity: number;
   /** @minimum 0 */
   unitCost?: number;
+  landedCostComponents?: PartsOperationLandedCostComponents;
   jobCardId?: number;
 }

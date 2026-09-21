@@ -1,0 +1,164 @@
+paths:
+  /parts/imports:
+    post:
+      operationId: createPartsImport
+      tags: [Parts]
+      summary: Upload CSV/XLSX and queue durable validation
+      description: Use raw fetch with FormData file and optional options JSON string. No generated multipart serializer.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: {}
+      responses:
+        "202":
+          description: Validation queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsImportJob"
+        "400":
+          description: Invalid file or options
+        "413":
+          description: File exceeds 10MB
+  /parts/imports/{id}:
+    get:
+      operationId: getPartsImport
+      tags: [Parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Durable progress and validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsImportJob"
+        "404":
+          description: Import not found in active dealer
+  /parts/imports/{id}/validate:
+    post:
+      operationId: validatePartsImport
+      tags: [Parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "202":
+          description: Revalidation queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsImportJob"
+        "409":
+          description: Import cannot be revalidated in current state
+  /parts/imports/{id}/commit:
+    post:
+      operationId: commitPartsImport
+      tags: [Parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "202":
+          description: Explicit atomic commit queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsImportJob"
+        "409":
+          description: Only validated imports can be committed
+  /parts/pricing-policies:
+    get:
+      operationId: listPartPricingPolicies
+      tags: [Parts]
+      responses:
+        "200":
+          description: Dealer global and category markup policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartPricingPolicy"
+    put:
+      operationId: savePartPricingPolicy
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartPricingPolicyInput"
+      responses:
+        "200":
+          description: Persisted markup policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartPricingPolicy"
+  /parts/pricing-policies/{id}:
+    delete:
+      operationId: deletePartPricingPolicy
+      tags: [Parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Policy deleted
+        "404":
+          description: Policy not found in active dealer
+components:
+  schemas:
+    PartsImportOptions:
+      type: object
+      properties:
+        mode: { type: string, enum: [reject, upsert], default: reject }
+        applyStock: { type: boolean, default: false }
+        mapping:
+          type: object
+          description: Canonical field to exact uploaded column heading
+          additionalProperties: { type: string }
+    PartsImportError:
+      type: object
+      required: [row, field, message]
+      properties:
+        row: { type: integer }
+        field: { type: string }
+        message: { type: string }
+    PartsImportJob:
+      type: object
+      required: [id, dealerId, status, mode, fileName, totalRows, processedRows, errorCount, errors, createdAt]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        status: { type: string, enum: [pending, validating, validated, invalid, queued, processing, completed, failed] }
+        mode: { type: string, enum: [reject, upsert] }
+        fileName: { type: string }
+        totalRows: { type: integer }
+        processedRows: { type: integer }
+        errorCount: { type: integer }
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartsImportError"
+        errorMessage: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        createdBy: { type: [integer, "null"] }
+    PartPricingPolicyInput:
+      type: object
+      required: [category, markupFactor]
+      properties:
+        category: { type: [string, "null"], description: Null selects global fallback }
+        markupFactor: { type: number, minimum: 0, maximum: 1000 }
+    PartPricingPolicy:
+      type: object
+      required: [id, dealerId, category, markupFactor, updatedAt]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        category: { type: [string, "null"] }
+        markupFactor: { type: number }
+        reconciliationTolerancePercent: { type: number }
+        holdExpiryDays: { type: integer }
+        updatedAt: { type: string, format: date-time }

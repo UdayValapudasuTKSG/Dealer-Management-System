@@ -9,7 +9,10 @@ import type { PurchaseOrderInputStatus } from './purchaseOrderInputStatus';
 import type { PurchaseOrderLineInput } from './purchaseOrderLineInput';
 
 export interface PurchaseOrderInput {
-  supplierId?: number;
+  /** @nullable */
+  supplierId?: number | null;
+  /** @minimum 1 */
+  locationId?: number;
   status?: PurchaseOrderInputStatus;
   expectedDate?: Date;
   reference?: string;

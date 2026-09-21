@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PurchaseOrderLine } from './purchaseOrderLine';
+import type { PurchaseOrderSource } from './purchaseOrderSource';
 import type { PurchaseOrderStatus } from './purchaseOrderStatus';
 
 export interface PurchaseOrder {
@@ -13,6 +14,23 @@ export interface PurchaseOrder {
   /** @nullable */
   supplierId?: number | null;
   status: PurchaseOrderStatus;
+  source: PurchaseOrderSource;
+  /** @nullable */
+  locationId?: number | null;
+  /** @nullable */
+  jobCardId?: number | null;
+  /** @nullable */
+  estimateId?: number | null;
+  /** @nullable */
+  advisorId?: number | null;
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  sentAt?: Date | null;
+  /** @minimum 0 */
+  sendCount: number;
+  /** True when queued for supplier assignment */
+  needsSupplier: boolean;
   /** @nullable */
   expectedDate?: Date | null;
   /** @nullable */

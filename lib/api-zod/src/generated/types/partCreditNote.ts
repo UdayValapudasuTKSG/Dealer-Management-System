@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartCreditNoteCondition } from './partCreditNoteCondition';
 
 export interface PartCreditNote {
   id: number;
@@ -16,6 +17,9 @@ export interface PartCreditNote {
   unitPrice: number;
   amount: number;
   reason: string;
+  condition?: PartCreditNoteCondition;
+  /** @nullable */
+  inventoryTransactionId?: number | null;
   /** @nullable */
   createdBy?: string | null;
   createdAt: Date;

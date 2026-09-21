@@ -75,3 +75,4 @@
 - [Workshop cost confirmation](workshop-cost-confirmation.md) — authorization optional for work/hours, exact consent retained for invoicing; financial credits must never restore stock twice.
 - [Timesheet history boundaries](timesheet-history-boundaries.md) — historical timer remainder has no verified technician/day; manual corrections remain authoritative over same-job/day capture.
 - [Historical delivery settlement](historical-delivery-settlement.md) — user confirmed the approved ten-vehicle GT history batch was paid and handed over externally; never fabricate local receipts or dates.
+- [Parts stock timing](parts-stock-timing.md) — reserve on attachment, deduct at physical issue, bill only unissued quantities; never deduct historical issues twice.

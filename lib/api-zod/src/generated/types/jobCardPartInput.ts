@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { JobCardPartInputCondition } from './jobCardPartInputCondition';
 import type { JobCardPartInputKind } from './jobCardPartInputKind';
 
 export interface JobCardPartInput {
@@ -12,4 +13,12 @@ export interface JobCardPartInput {
   /** @minimum 1 */
   quantity: number;
   kind?: JobCardPartInputKind;
+  /** @minimum 1 */
+  locationId?: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  binId?: number | null;
+  condition?: JobCardPartInputCondition;
 }

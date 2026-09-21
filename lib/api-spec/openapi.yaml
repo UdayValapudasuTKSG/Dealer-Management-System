@@ -4396,6 +4396,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /job-cards/{id}/parts/{lineId}/issue:
+    post:
+      operationId: issueJobCardPartStock
+      tags: [service]
+      summary: Physically issue a reserved job-card part, without issuing it twice
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: lineId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Current part line; repeated issue is stock-neutral
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCardPart"
+        "409":
+          description: Insufficient unreserved stock or expired reservation
+  /job-cards/{id}/parts/{lineId}:
+    patch:
+      operationId: updateReservedJobCardPart
+      tags: [service]
+      summary: Replace an unissued reservation and invalidate the estimate
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: lineId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardPartReservationUpdate"
+      responses:
+        "200":
+          description: Updated reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCardPart"
+    delete:
+      operationId: removeReservedJobCardPart
+      tags: [service]
+      summary: Release and remove an unissued part; issued parts require a linked return
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: lineId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Reservation released and estimate invalidated
+        "422":
+          description: Issued or invoiced line cannot be removed
   /job-cards/{id}/external-parts:
     get:
       operationId: listJobCardExternalParts
@@ -5761,6 +5811,435 @@ paths:
               schema:
                 type: string
                 format: binary
+  /parts/imports:
+    post:
+      operationId: createPartsImport
+      tags: [parts]
+      summary: Upload CSV/XLSX and queue durable validation
+      description: Use raw fetch with FormData file and optional options JSON string. No generated multipart serializer.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data: {}
+      responses:
+        "202":
+          description: Validation queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsImportJob"
+        "400":
+          description: Invalid file or options
+        "413":
+          description: File exceeds 10MB
+  /parts/otc-invoices:
+    post:
+      operationId: createOtcPartsInvoice
+      tags: [parts]
+      summary: Issue a persisted finance invoice and deduct available parts atomically
+      parameters:
+        - { name: X-Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 200 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtcPartsInvoiceInput"
+      responses:
+        "201":
+          description: Persisted invoice and its immutable stock transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtcPartsInvoiceResult"
+        "409":
+          description: Insufficient available stock; invoice was not created
+  /parts/imports/{id}:
+    get:
+      operationId: getPartsImport
+      tags: [parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Durable progress and validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsImportJob"
+        "404":
+          description: Import not found in active dealer
+  /parts/imports/{id}/validate:
+    post:
+      operationId: validatePartsImport
+      tags: [parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "202":
+          description: Revalidation queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsImportJob"
+        "409":
+          description: Import cannot be revalidated in current state
+  /parts/imports/{id}/commit:
+    post:
+      operationId: commitPartsImport
+      tags: [parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "202":
+          description: Explicit atomic commit queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsImportJob"
+        "409":
+          description: Only validated imports can be committed
+  /parts/pricing-policies:
+    get:
+      operationId: listPartPricingPolicies
+      tags: [parts]
+      responses:
+        "200":
+          description: Dealer global and category markup policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartPricingPolicy"
+    put:
+      operationId: savePartPricingPolicy
+      tags: [parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartPricingPolicyInput"
+      responses:
+        "200":
+          description: Persisted markup policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartPricingPolicy"
+  /parts/pricing-policies/{id}:
+    delete:
+      operationId: deletePartPricingPolicy
+      tags: [parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Policy deleted
+        "404":
+          description: Policy not found in active dealer
+  /parts/operations/locations:
+    get:
+      operationId: listPartsLocations
+      tags: [parts]
+      responses:
+        "200": { description: Dealer inventory locations, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationLocation" } } } } }
+    post:
+      operationId: createPartsLocation
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationLocationInput" } } } }
+      responses:
+        "200": { description: Tenant-scoped operation result, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/locations/{id}:
+    patch:
+      operationId: updatePartsLocation
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationLocationUpdate" } } } }
+      responses:
+        "200": { description: Updated location, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/bins:
+    get:
+      operationId: listPartsBins
+      tags: [parts]
+      parameters: [{ name: locationId, in: query, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Dealer-scoped bins, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+    post:
+      operationId: createPartsBin
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationBinInput" } } } }
+      responses:
+        "200": { description: Created bin, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/bins/{id}:
+    patch:
+      operationId: updatePartsBin
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationBinUpdate" } } } }
+      responses:
+        "200": { description: Updated bin, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/levels:
+    get:
+      operationId: listPartsInventoryLevels
+      tags: [parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: binId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: partId, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200": { description: Live inventory with reservations excluded from availability, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationLevel" } } } } }
+  /parts/operations/ledger:
+    get:
+      operationId: listPartsInventoryLedger
+      tags: [parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: partId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 250 } }
+      responses:
+        "200": { description: Inventory ledger, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+  /parts/operations/holds:
+    get:
+      operationId: listPartsInventoryHolds
+      tags: [parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: partId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: status, in: query, schema: { type: string, enum: [active, released, consumed] } }
+      responses:
+        "200": { description: Inventory holds, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+    post:
+      operationId: createPartsInventoryHold
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationHoldInput" } } } }
+      responses:
+        "200": { description: Created hold, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/holds/{id}/release:
+    post:
+      operationId: releasePartsInventoryHold
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Released hold, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/holds/{id}/consume:
+    post:
+      operationId: consumePartsInventoryHold
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Consumed hold, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/holds/expire:
+    post:
+      operationId: expirePartsInventoryHolds
+      tags: [parts]
+      responses:
+        "200": { description: Expired holds, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/purchase-orders:
+    get:
+      operationId: listPartsPurchaseOrderReviewQueue
+      tags: [parts]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: source, in: query, schema: { type: string, enum: [manual, low_stock_alert, special_order] } }
+      responses:
+        "200": { description: Purchase-order review queue, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PurchaseOrder" } } } } }
+    post:
+      operationId: createPartsOperationalPurchaseOrder
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationPurchaseOrderInput" } } } }
+      responses:
+        "200": { description: Created purchase order, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+  /parts/operations/purchase-orders/generate:
+    post:
+      operationId: generatePartsLowStockPurchaseOrders
+      tags: [parts]
+      description: Draft only; pending quantities are deducted and supplier/location grouping is serialized.
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationGeneratePurchaseOrdersInput" } } } }
+      responses:
+        "200": { description: Generated draft purchase orders, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/purchase-orders/special-order:
+    post:
+      operationId: createPartsSpecialOrder
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationSpecialOrderInput" } } } }
+      responses:
+        "200": { description: Created special-order draft, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+  /parts/operations/purchase-orders/{id}/supplier:
+    patch:
+      operationId: assignPartsPurchaseOrderSupplier
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationSupplierAssignmentInput" } } } }
+      responses:
+        "200": { description: Supplier assigned, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+  /parts/operations/purchase-orders/{id}/send:
+    post:
+      operationId: approvePartsSupplierEmail
+      tags: [parts]
+      description: Requires parts approve permission and queues durable email without synchronously sending.
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationPurchaseOrderSendInput" } } } }
+      responses:
+        "200": { description: Supplier email queued, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+  /parts/operations/notifications:
+    get:
+      operationId: listPartsNotificationDeliveries
+      tags: [parts]
+      parameters: [{ name: status, in: query, schema: { type: string, enum: [pending, sending, sent, failed] } }]
+      responses:
+        "200": { description: Notification deliveries, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+  /parts/operations/notifications/sms-settings:
+    get:
+      operationId: getPartsSmsSettings
+      tags: [parts]
+      responses:
+        "200":
+          description: Dealer-specific SMS readiness without exposing credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsSmsSettings"
+  /parts/operations/notifications/{id}/retry:
+    post:
+      operationId: retryPartsNotification
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Notification retry queued, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/cycle-counts:
+    get:
+      operationId: listPartsCycleCounts
+      tags: [parts]
+      responses:
+        "200": { description: Cycle counts, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+    post:
+      operationId: startPartsCycleCount
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationCycleCountInput" } } } }
+      responses:
+        "200": { description: Started cycle count, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/cycle-counts/{id}:
+    get:
+      operationId: getPartsCycleCount
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Cycle count detail, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/cycle-counts/{id}/lines:
+    put:
+      operationId: enterPartsCycleCount
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationCycleCountEntryInput" } } } }
+      responses:
+        "200": { description: Updated count lines, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+  /parts/operations/cycle-counts/{id}/approve:
+    post:
+      operationId: approvePartsCycleCount
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Approved cycle count, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/cycle-counts/{id}/cancel:
+    post:
+      operationId: cancelPartsCycleCount
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Cancelled cycle count, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/aging:
+    get:
+      operationId: getPartsAgingReport
+      tags: [parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: thresholds, in: query, schema: { type: string, default: "30,60,90" } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json } }
+      responses:
+        "200":
+          description: Outbound movement age with observation-history fallback
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/PartsOperationAging" } }
+            text/csv: { schema: { type: string } }
+  /parts/operations/valuation:
+    get:
+      operationId: getPartsValuationReport
+      tags: [parts]
+      parameters:
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: asOf, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200": { description: Inventory valuation, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/replenishment:
+    get:
+      operationId: getPartsReplenishmentSuggestions
+      tags: [parts]
+      parameters: [{ name: locationId, in: query, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Replenishment suggestions, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+  /parts/operations/reconciliation:
+    get:
+      operationId: listPartsVendorReconciliations
+      tags: [parts]
+      parameters: [{ name: status, in: query, schema: { type: string, enum: [pending, matched, flagged, resolved] } }]
+      responses:
+        "200": { description: Vendor reconciliations, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+    post:
+      operationId: comparePartsVendorInvoice
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationVendorInvoiceInput" } } } }
+      responses:
+        "200": { description: Reconciliation lines, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+  /parts/operations/reconciliation/{id}/resolve:
+    post:
+      operationId: resolvePartsVendorVariance
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationVarianceResolutionInput" } } } }
+      responses:
+        "200": { description: Resolved variance, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/parts/{id}:
+    patch:
+      operationId: updatePartsInventoryMetadata
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationPartMetadataUpdate" } } } }
+      responses:
+        "200": { description: Updated part metadata, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/suppliers/{id}:
+    patch:
+      operationId: updatePartsSupplierMetadata
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationSupplierMetadataUpdate" } } } }
+      responses:
+        "200": { description: Updated supplier metadata, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/issues:
+    post:
+      operationId: issuePartsOverCounter
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationStockInput" } } } }
+      responses:
+        "200": { description: Stock issue result, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/adjustments:
+    post:
+      operationId: approvePartsStockAdjustment
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationAdjustmentInput" } } } }
+      responses:
+        "200": { description: Stock adjustment result, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/transfers:
+    post:
+      operationId: transferPartsStock
+      tags: [parts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationTransferInput" } } } }
+      responses:
+        "200": { description: Stock transfer result, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
   /parts-settings:
     get:
       operationId: getPartsSettings
@@ -14021,6 +14500,11 @@ components:
         unitPrice: { type: number }
         unitCost: { type: number }
         backordered: { type: boolean }
+        inventoryHoldId: { type: ["integer", "null"] }
+        inventoryLocationId: { type: ["integer", "null"] }
+        inventoryBinId: { type: ["integer", "null"] }
+        issuedQuantity: { type: ["integer", "null"], description: "Null on legacy issued lines; zero for new reserved-only lines." }
+        issuedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     JobCardPartInput:
       type: object
@@ -14029,6 +14513,16 @@ components:
         partId: { type: integer }
         quantity: { type: integer, minimum: 1 }
         kind: { type: string, enum: [issue, return] }
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: ["integer", "null"], minimum: 1 }
+        condition: { type: string, enum: [resalable, damaged, scrap] }
+    JobCardPartReservationUpdate:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: [integer, "null"], minimum: 1 }
     JobCardExternalPart:
       type: object
       required: [id, jobCardId, requisitionLineId, description, quantity, unitCost, unitPrice, taxCost, freightCost, createdAt]
@@ -14853,6 +15347,13 @@ components:
         status: { type: string, enum: [active, superseded, obsolete] }
         supersededByPartId: { type: ["integer", "null"] }
         location: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        barcode: { type: ["string", "null"] }
+        costingMethod: { type: string, enum: [average, fifo, landed] }
+        reorderMax: { type: integer, minimum: 0 }
+        active: { type: boolean }
+        quantityReserved: { type: integer }
+        quantityAvailable: { type: integer }
         createdAt: { type: string, format: date-time }
     PartInput:
       type: object
@@ -14869,6 +15370,11 @@ components:
         status: { type: string, enum: [active, superseded, obsolete] }
         supersededByPartId: { type: integer }
         location: { type: string }
+        description: { type: string }
+        barcode: { type: string }
+        costingMethod: { type: string, enum: [average, fifo, landed] }
+        reorderMax: { type: integer, minimum: 0 }
+        active: { type: boolean }
     PartUpdate:
       type: object
       properties:
@@ -14883,6 +15389,11 @@ components:
         status: { type: string, enum: [active, superseded, obsolete] }
         supersededByPartId: { type: ["integer", "null"] }
         location: { type: string }
+        description: { type: ["string", "null"] }
+        barcode: { type: ["string", "null"] }
+        costingMethod: { type: string, enum: [average, fifo, landed] }
+        reorderMax: { type: integer, minimum: 0 }
+        active: { type: boolean }
 
     Supplier:
       type: object
@@ -14893,6 +15404,8 @@ components:
         contactName: { type: ["string", "null"] }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        leadTimeDays: { type: integer, minimum: 0 }
         createdAt: { type: string, format: date-time }
     SupplierInput:
       type: object
@@ -14902,6 +15415,8 @@ components:
         contactName: { type: string }
         email: { type: string }
         phone: { type: string }
+        address: { type: string }
+        leadTimeDays: { type: integer, minimum: 0 }
     SupplierDeliveryHistory:
       type: object
       required: [supplier, deliveries]
@@ -15019,6 +15534,348 @@ components:
       required: [markupPercent]
       properties:
         markupPercent: { type: number, minimum: 0, maximum: 500 }
+    PartsImportOptions:
+      type: object
+      properties:
+        mode: { type: string, enum: [reject, upsert], default: reject }
+        applyStock: { type: boolean, default: false }
+        mapping:
+          type: object
+          description: Canonical field to exact uploaded column heading
+          additionalProperties: { type: string }
+    OtcPartsInvoiceLineInput:
+      type: object
+      required: [partId, quantity]
+      properties:
+        partId: { type: integer, minimum: 1 }
+        quantity: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: [integer, "null"], minimum: 1 }
+    OtcPartsInvoiceInput:
+      type: object
+      required: [customerName, lines]
+      properties:
+        customerName: { type: string, minLength: 1, maxLength: 300 }
+        customerId: { type: integer, minimum: 1 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/OtcPartsInvoiceLineInput" }
+    PartsInventoryTransaction:
+      type: object
+      required: [id, dealerId, partId, locationId, type, quantityDelta, nonSellableDelta, referenceType, referenceId, unitCostAtTransaction, valueDelta, createdAt]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        partId: { type: integer }
+        locationId: { type: integer }
+        binId: { type: [integer, "null"] }
+        type: { type: string, enum: [receipt, issue, transfer, adjustment, cycle_count, return, opening] }
+        quantityDelta: { type: integer }
+        nonSellableDelta: { type: integer }
+        referenceType: { type: string }
+        referenceId: { type: string }
+        unitCostAtTransaction: { type: number }
+        valueDelta: { type: number }
+        createdBy: { type: [integer, "null"] }
+        createdAt: { type: string, format: date-time }
+        idempotencyKey: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+    OtcPartsInvoiceResult:
+      type: object
+      required: [invoice, movements]
+      properties:
+        invoice: { $ref: "#/components/schemas/Invoice" }
+        movements:
+          type: array
+          items: { $ref: "#/components/schemas/PartsInventoryTransaction" }
+    PartsImportError:
+      type: object
+      required: [row, field, message]
+      properties:
+        row: { type: integer }
+        field: { type: string }
+        message: { type: string }
+    PartsImportJob:
+      type: object
+      required: [id, dealerId, status, mode, fileName, totalRows, processedRows, errorCount, errors, createdAt]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        status: { type: string, enum: [pending, validating, validated, invalid, queued, processing, completed, failed] }
+        mode: { type: string, enum: [reject, upsert] }
+        fileName: { type: string }
+        totalRows: { type: integer }
+        processedRows: { type: integer }
+        errorCount: { type: integer }
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartsImportError"
+        errorMessage: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        createdBy: { type: [integer, "null"] }
+    PartPricingPolicyInput:
+      type: object
+      required: [category, markupFactor]
+      properties:
+        category: { type: [string, "null"], description: Null selects global fallback }
+        markupFactor: { type: number, minimum: 0, maximum: 1000 }
+    PartPricingPolicy:
+      type: object
+      required: [id, dealerId, category, markupFactor, updatedAt]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        category: { type: [string, "null"] }
+        markupFactor: { type: number }
+        reconciliationTolerancePercent: { type: number }
+        holdExpiryDays: { type: integer }
+        updatedAt: { type: string, format: date-time }
+    PartsOperationRecord:
+      type: object
+      additionalProperties: true
+      description: Tenant-scoped parts operation record.
+    PartsOperationLocationInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, minLength: 1 }
+        type: { type: string, enum: [branch, warehouse] }
+        address: { type: string }
+    PartsOperationLocationUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [branch, warehouse] }
+        address: { type: [string, "null"] }
+        active: { type: boolean }
+    PartsOperationLocation:
+      allOf:
+        - { $ref: "#/components/schemas/PartsOperationLocationInput" }
+        - type: object
+          required: [id, dealerId, active, isDefault]
+          properties:
+            id: { type: integer }
+            dealerId: { type: integer }
+            active: { type: boolean }
+            isDefault: { type: boolean }
+            createdAt: { type: string, format: date-time }
+    PartsOperationBinInput:
+      type: object
+      required: [locationId, code]
+      properties:
+        locationId: { type: integer, minimum: 1 }
+        code: { type: string }
+        description: { type: string }
+    PartsOperationBinUpdate:
+      type: object
+      properties:
+        code: { type: string }
+        description: { type: [string, "null"] }
+        active: { type: boolean }
+    PartsOperationLevel:
+      type: object
+      required: [id, dealerId, partId, locationId, quantityOnHand, quantityReserved, quantityNonSellable, quantityAvailable, averageUnitCost]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        partId: { type: integer }
+        locationId: { type: integer }
+        binId: { type: [integer, "null"] }
+        quantityOnHand: { type: integer }
+        quantityReserved: { type: integer }
+        quantityNonSellable: { type: integer }
+        quantityAvailable: { type: integer }
+        averageUnitCost: { type: number }
+        updatedAt: { type: string, format: date-time }
+    PartsOperationHoldInput:
+      type: object
+      required: [partId, locationId, quantity, referenceType, referenceId]
+      properties:
+        partId: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: [integer, "null"] }
+        quantity: { type: integer, minimum: 1 }
+        referenceType: { type: string, enum: [job, estimate, quote] }
+        referenceId: { type: integer, minimum: 1 }
+        expiresAt: { type: string, format: date-time }
+    PartsOperationLandedCostComponents:
+      type: object
+      properties:
+        freight: { type: number, minimum: 0 }
+        duty: { type: number, minimum: 0 }
+        handling: { type: number, minimum: 0 }
+        other: { type: number, minimum: 0 }
+    PartsOperationPurchaseOrderLineInput:
+      type: object
+      required: [partId, quantity, unitCost]
+      properties:
+        partId: { type: integer, minimum: 1 }
+        quantity: { type: integer, minimum: 1 }
+        unitCost: { type: number, minimum: 0 }
+        landedCostComponents: { $ref: "#/components/schemas/PartsOperationLandedCostComponents" }
+    PartsOperationPurchaseOrderInput:
+      type: object
+      required: [locationId, lines]
+      properties:
+        supplierId: { type: [integer, "null"], minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        expectedDate: { type: string, format: date }
+        notes: { type: string }
+        lines:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/PartsOperationPurchaseOrderLineInput" }
+    PartsOperationGeneratePurchaseOrdersInput:
+      type: object
+      properties:
+        locationId: { type: integer, minimum: 1 }
+    PartsOperationSpecialOrderInput:
+      type: object
+      required: [partId, locationId, quantity, referenceType, referenceId, advisorId, idempotencyKey]
+      properties:
+        partId: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        quantity: { type: integer, minimum: 1 }
+        referenceType: { type: string, enum: [job, estimate] }
+        referenceId: { type: integer, minimum: 1, description: Existing job card or job-card estimate ID }
+        advisorId: { type: integer, minimum: 1 }
+        idempotencyKey: { type: string, minLength: 1 }
+    PartsOperationSupplierAssignmentInput:
+      type: object
+      required: [supplierId]
+      properties:
+        supplierId: { type: integer, minimum: 1 }
+    PartsOperationPurchaseOrderSendInput:
+      type: object
+      required: [confirm]
+      properties:
+        confirm: { type: boolean, enum: [true] }
+        resend: { type: boolean, default: false }
+    PartsOperationCycleCountInput:
+      type: object
+      required: [locationId]
+      properties:
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: integer, minimum: 1 }
+        category: { type: string }
+    PartsOperationCycleCountLineInput:
+      type: object
+      required: [id, countedQuantity]
+      properties:
+        id: { type: integer, minimum: 1 }
+        countedQuantity: { type: integer, minimum: 0 }
+    PartsOperationCycleCountEntryInput:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/PartsOperationCycleCountLineInput" }
+    PartsOperationVendorInvoiceLineInput:
+      type: object
+      required: [purchaseOrderLineId, quantity, unitCost]
+      properties:
+        purchaseOrderLineId: { type: integer, minimum: 1 }
+        quantity: { type: integer, minimum: 0 }
+        unitCost: { type: number, minimum: 0 }
+    PartsOperationVendorInvoiceInput:
+      type: object
+      required: [purchaseOrderId, invoiceNumber, lines]
+      properties:
+        purchaseOrderId: { type: integer, minimum: 1 }
+        invoiceNumber: { type: string, minLength: 1 }
+        tolerancePercent: { type: number, minimum: 0, maximum: 100 }
+        lines:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/PartsOperationVendorInvoiceLineInput" }
+    PartsOperationVarianceResolutionInput:
+      type: object
+      required: [action, reason]
+      properties:
+        action: { type: string, enum: [accept, dispute, adjust] }
+        reason: { type: string, minLength: 1 }
+        quantity: { type: integer, minimum: 0 }
+        unitCost: { type: number, minimum: 0 }
+    PartsOperationPartMetadataUpdate:
+      type: object
+      properties:
+        description: { type: [string, "null"] }
+        barcode: { type: [string, "null"] }
+        costingMethod: { type: string, enum: [average, fifo, landed] }
+        reorderLevel: { type: integer, minimum: 0 }
+        reorderMax: { type: integer, minimum: 0 }
+        active: { type: boolean }
+    PartsOperationSupplierMetadataUpdate:
+      type: object
+      properties:
+        address: { type: [string, "null"] }
+        leadTimeDays: { type: integer, minimum: 0, maximum: 3650 }
+    PartsOperationStockInput:
+      type: object
+      required: [partId, locationId, quantity, referenceId, idempotencyKey]
+      properties:
+        partId: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: [integer, "null"] }
+        quantity: { type: integer, minimum: 1 }
+        referenceId: { type: string, minLength: 1 }
+        idempotencyKey: { type: string, minLength: 1 }
+        notes: { type: string }
+    PartsOperationAdjustmentInput:
+      type: object
+      required: [partId, locationId, quantityDelta, referenceId, idempotencyKey, reason]
+      properties:
+        partId: { type: integer, minimum: 1 }
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: [integer, "null"] }
+        quantityDelta: { type: integer }
+        unitCost: { type: number, minimum: 0 }
+        referenceId: { type: string, minLength: 1 }
+        idempotencyKey: { type: string, minLength: 1 }
+        reason: { type: string, minLength: 1 }
+        notes: { type: string }
+    PartsOperationTransferInput:
+      allOf:
+        - { $ref: "#/components/schemas/PartsOperationStockInput" }
+        - type: object
+          required: [toLocationId]
+          properties:
+            toLocationId: { type: integer, minimum: 1 }
+            toBinId: { type: [integer, "null"] }
+    PartsOperationAging:
+      type: object
+      required: [asOf, thresholds, rows, buckets, movementPolicy]
+      properties:
+        asOf: { type: string, format: date-time }
+        thresholds: { type: array, items: { type: integer } }
+        rows: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } }
+        buckets:
+          type: array
+          items: { $ref: "#/components/schemas/PartsOperationAgingBucket" }
+        movementPolicy: { type: string }
+    PartsOperationAgingBucket:
+      type: object
+      required: [bucket, quantity, value]
+      properties:
+        bucket: { type: string }
+        quantity: { type: integer }
+        value: { type: number }
+    PartsSmsSettings:
+      type: object
+      required: [ready, enabled, sender, setupLink, reason]
+      properties:
+        ready: { type: boolean }
+        enabled: { type: boolean }
+        sender: { type: [string, "null"] }
+        setupLink: { type: string }
+        reason: { type: [string, "null"] }
     PurchaseOrderLine:
       type: object
       required: [id, purchaseOrderId, partName, source, quantity, qtyReceived, unitCost, createdAt]
@@ -15031,6 +15888,8 @@ components:
         quantity: { type: integer }
         qtyReceived: { type: integer }
         unitCost: { type: number }
+        landedCostComponents: { $ref: "#/components/schemas/PartsOperationLandedCostComponents" }
+        landedUnitCost: { type: [number, "null"] }
         jobCardId: { type: ["integer", "null"], description: "Originating job card (backorder link)" }
         requisitionContext:
           oneOf:
@@ -15039,11 +15898,20 @@ components:
         createdAt: { type: string, format: date-time }
     PurchaseOrder:
       type: object
-      required: [id, status, lines, createdAt]
+      required: [id, status, source, sendCount, needsSupplier, lines, createdAt]
       properties:
         id: { type: integer }
         supplierId: { type: ["integer", "null"] }
         status: { type: string, enum: [draft, ordered, partially_received, received, cancelled] }
+        source: { type: string, enum: [manual, low_stock_alert, special_order] }
+        locationId: { type: ["integer", "null"] }
+        jobCardId: { type: ["integer", "null"] }
+        estimateId: { type: ["integer", "null"] }
+        advisorId: { type: ["integer", "null"] }
+        createdBy: { type: ["integer", "null"] }
+        sentAt: { type: ["string", "null"], format: date-time }
+        sendCount: { type: integer, minimum: 0 }
+        needsSupplier: { type: boolean, description: True when queued for supplier assignment }
         expectedDate: { type: ["string", "null"], format: date }
         reference: { type: ["string", "null"] }
         notes: { type: ["string", "null"] }
@@ -15059,12 +15927,14 @@ components:
         partId: { type: integer }
         quantity: { type: integer, minimum: 1 }
         unitCost: { type: number, minimum: 0 }
+        landedCostComponents: { $ref: "#/components/schemas/PartsOperationLandedCostComponents" }
         jobCardId: { type: integer }
     PurchaseOrderInput:
       type: object
       required: [lines]
       properties:
-        supplierId: { type: integer }
+        supplierId: { type: [integer, "null"] }
+        locationId: { type: integer, minimum: 1 }
         status: { type: string, enum: [draft, ordered] }
         expectedDate: { type: string, format: date }
         reference: { type: string }
@@ -15137,6 +16007,8 @@ components:
         unitPrice: { type: number }
         amount: { type: number }
         reason: { type: string }
+        condition: { type: string, enum: [resalable, damaged, scrap] }
+        inventoryTransactionId: { type: [integer, "null"] }
         createdBy: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     PartCreditNoteInput:
@@ -15146,6 +16018,7 @@ components:
         jobCardPartId: { type: integer, description: "The issued part line being credited" }
         quantity: { type: integer, minimum: 1 }
         reason: { type: string, minLength: 3 }
+        condition: { type: string, enum: [resalable, damaged, scrap], default: resalable }
     ServiceOrderAdvanceBody:
       type: object
       required: [targetStatus, justification]

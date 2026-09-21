@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartCreditNoteInputCondition } from './partCreditNoteInputCondition';
 
 export interface PartCreditNoteInput {
   /** The issued part line being credited */
@@ -13,4 +14,5 @@ export interface PartCreditNoteInput {
   quantity: number;
   /** @minLength 3 */
   reason: string;
+  condition?: PartCreditNoteInputCondition;
 }

@@ -10,6 +10,7 @@ import {
   boolean,
   index,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -24,13 +25,18 @@ export const suppliersTable = pgTable("suppliers", {
   dealerId: integer("dealer_id").notNull(),
   name: text("name").notNull(),
   contactName: text("contact_name"),
+  address: text("address"),
+  leadTimeDays: integer("lead_time_days").notNull().default(7),
   email: text("email"),
   phone: text("phone"),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  index("suppliers_dealer_idx").on(t.dealerId),
+  check("suppliers_lead_time_ck", sql`${t.leadTimeDays} >= 0`),
+]);
 
 export const insertSupplierSchema = createInsertSchema(suppliersTable).omit({ dealerId: true,
   id: true,
@@ -50,8 +56,15 @@ export type PartStatus = (typeof PART_STATUSES)[number];
 export const partsTable = pgTable("parts", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
-  sku: text("sku").notNull().unique(),
+  sku: text("sku").notNull(),
   name: text("name").notNull(),
+  description: text("description"),
+  barcode: text("barcode"),
+  costingMethod: text("costing_method").notNull().default("average"),
+  reorderMax: integer("reorder_max").notNull().default(10),
+  active: boolean("active").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  inventoryInitializedAt: timestamp("inventory_initialized_at", { withTimezone: true }),
   category: text("category").notNull().default("general"),
   supplierId: integer("supplier_id").references(() => suppliersTable.id),
   unitCost: doublePrecision("unit_cost").notNull().default(0),
@@ -66,7 +79,11 @@ export const partsTable = pgTable("parts", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  uniqueIndex("parts_dealer_sku_unique").on(t.dealerId, t.sku),
+  index("parts_dealer_barcode_idx").on(t.dealerId, t.barcode),
+  check("parts_inventory_config_ck", sql`${t.costingMethod} in ('average','fifo','landed') and ${t.reorderMax} >= 0`),
+]);
 
 export const insertPartSchema = createInsertSchema(partsTable).omit({ dealerId: true,
   id: true,
@@ -360,6 +377,11 @@ export const jobCardPartsTable = pgTable("job_card_parts", {
   unitPrice: doublePrecision("unit_price").notNull().default(0),
   unitCost: doublePrecision("unit_cost").notNull().default(0),
   backordered: boolean("backordered").notNull().default(false),
+  inventoryHoldId: integer("inventory_hold_id"),
+  inventoryLocationId: integer("inventory_location_id"),
+  inventoryBinId: integer("inventory_bin_id"),
+  issuedQuantity: integer("issued_quantity"),
+  issuedAt: timestamp("issued_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -389,6 +411,8 @@ export const partCreditNotesTable = pgTable("part_credit_notes", {
   unitPrice: doublePrecision("unit_price").notNull().default(0),
   amount: doublePrecision("amount").notNull().default(0),
   reason: text("reason").notNull(),
+  condition: text("condition").notNull().default("resalable"),
+  inventoryTransactionId: integer("inventory_transaction_id"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -590,13 +614,25 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   dealerId: integer("dealer_id").notNull(),
   supplierId: integer("supplier_id").references(() => suppliersTable.id),
   status: text("status").notNull().default("draft"),
+  source: text("source").notNull().default("manual"),
+  locationId: integer("location_id"),
+  jobCardId: integer("job_card_id"),
+  estimateId: integer("estimate_id"),
+  advisorId: integer("advisor_id"),
+  createdBy: integer("created_by"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  sendCount: integer("send_count").notNull().default(0),
+  needsSupplier: boolean("needs_supplier").notNull().default(false),
   expectedDate: date("expected_date", { mode: "string" }),
   reference: text("reference"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  index("purchase_orders_dealer_review_idx").on(t.dealerId, t.status, t.locationId),
+  check("purchase_orders_inventory_source_ck", sql`${t.source} in ('manual','low_stock_alert','special_order') and ${t.sendCount} >= 0`),
+]);
 
 export type PurchaseOrder = typeof purchaseOrdersTable.$inferSelect;
 
@@ -614,6 +650,8 @@ export const purchaseOrderLinesTable = pgTable("purchase_order_lines", {
   quantity: integer("quantity").notNull(),
   qtyReceived: integer("qty_received").notNull().default(0),
   unitCost: doublePrecision("unit_cost").notNull().default(0),
+  landedCostComponents: jsonb("landed_cost_components").$type<{ freight?: number; duty?: number; handling?: number; other?: number }>().notNull().default({}),
+  landedUnitCost: doublePrecision("landed_unit_cost"),
   /** Originating job card (backorder link) — received parts trace back here. */
   jobCardId: integer("job_card_id"),
   createdAt: timestamp("created_at", { withTimezone: true })

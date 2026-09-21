@@ -12,4 +12,7 @@ export interface SupplierInput {
   contactName?: string;
   email?: string;
   phone?: string;
+  address?: string;
+  /** @minimum 0 */
+  leadTimeDays?: number;
 }

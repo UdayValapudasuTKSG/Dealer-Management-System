@@ -85,6 +85,8 @@
   "dependencies": {
     "@clerk/react": "^6.12.2",
     "@clerk/themes": "^2.4.57",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   }

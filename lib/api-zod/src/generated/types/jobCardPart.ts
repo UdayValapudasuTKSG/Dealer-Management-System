@@ -17,5 +17,18 @@ export interface JobCardPart {
   unitPrice: number;
   unitCost?: number;
   backordered?: boolean;
+  /** @nullable */
+  inventoryHoldId?: number | null;
+  /** @nullable */
+  inventoryLocationId?: number | null;
+  /** @nullable */
+  inventoryBinId?: number | null;
+  /**
+     * Null on legacy issued lines; zero for new reserved-only lines.
+     * @nullable
+     */
+  issuedQuantity?: number | null;
+  /** @nullable */
+  issuedAt?: Date | null;
   createdAt: Date;
 }

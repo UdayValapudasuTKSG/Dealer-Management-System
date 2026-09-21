@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { reserveJobPart } from "../lib/job-part-stock";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
@@ -48,13 +49,11 @@ import {
 import { activeDealerId, hasPermission, type AuthedUser } from "../middlewares/rbac";
 import {
   enqueuePurchaseOrderSync,
-  enqueueStockEntrySync,
 } from "../lib/erpnext/parts-sync";
 import { notifyPartsRequisitionSubmitted } from "../lib/notify-triggers";
 import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
 import { clearEstimateStaffAcknowledgement } from "../lib/service-estimate-gate";
 import { invalidateServiceEstimate } from "../lib/service-estimate-invalidation";
-import { checkLowStockCrossing } from "./parts";
 
 const router: IRouter = Router();
 
@@ -866,14 +865,6 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
   }
   const dealerId = activeDealerId(res);
   const user = res.locals.user;
-  const issuedInternal: Array<{
-    partId: number;
-    quantity: number;
-    jobCardId: number;
-    jobCardPartId: number;
-    part: typeof partsTable.$inferSelect;
-    previousStock: number;
-  }> = [];
   try {
     await db.transaction(async (tx) => {
       const [header] = await tx
@@ -894,6 +885,9 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
         eq(jobCardsTable.dealerId, dealerId),
       )).for("update");
       if (!jobCard) throw Object.assign(new Error("Linked job card was not found"), { status: 409 });
+      if (["cancelled", "closed"].includes(jobCard.status)) {
+        throw Object.assign(new Error("Cannot reserve parts for a terminal job card"), { status: 422 });
+      }
       if (header.status === "fulfilled") {
         const prior = await tx
           .select({ lineId: partRequisitionFulfillmentsTable.lineId })
@@ -921,6 +915,16 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
       // Even a zero-price fulfillment changes the customer-visible lines and
       // must therefore revoke any prior decision/acknowledgement.
       let quoteChanged = false;
+      const internalLines = await tx.select({ partId: partRequisitionLinesTable.partId })
+        .from(partRequisitionLinesTable).where(and(
+          eq(partRequisitionLinesTable.requisitionId, header.id),
+          eq(partRequisitionLinesTable.dealerId, dealerId),
+        ));
+      for (const partId of [...new Set(internalLines.flatMap(l => l.partId == null ? [] : [l.partId]))].sort((a, b) => a - b)) {
+        await tx.select({ id: partsTable.id }).from(partsTable).where(and(
+          eq(partsTable.id, partId), eq(partsTable.dealerId, dealerId),
+        )).for("update");
+      }
       for (const requestLine of parsed.data.lines) {
         const [prior] = await tx
           .select({ id: partRequisitionFulfillmentsTable.id })
@@ -973,20 +977,7 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
           if (!beforePart) {
             throw Object.assign(new Error(`Part not found for ${line.descriptionSnapshot}`), { status: 404 });
           }
-          const [part] = await tx
-            .update(partsTable)
-            .set({ stock: sql`${partsTable.stock} - ${requestLine.quantity}` })
-            .where(
-              and(
-                eq(partsTable.id, line.partId!),
-                eq(partsTable.dealerId, dealerId),
-                sql`${partsTable.stock} >= ${requestLine.quantity}`,
-              ),
-            )
-            .returning();
-          if (!part) {
-            throw Object.assign(new Error(`Insufficient current stock for ${line.descriptionSnapshot}`), { status: 409 });
-          }
+          const part = beforePart;
           const [jobLine] = await tx
             .insert(jobCardPartsTable)
             .values({
@@ -998,21 +989,15 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
               quantity: requestLine.quantity,
               unitPrice: line.unitPrice,
               unitCost: line.unitCost,
+              issuedQuantity: 0,
               backordered: false,
             })
-            .returning({ id: jobCardPartsTable.id });
+            .returning();
+          await reserveJobPart(tx, jobLine);
           await tx
             .update(partRequisitionFulfillmentsTable)
             .set({ jobCardPartId: jobLine.id })
             .where(eq(partRequisitionFulfillmentsTable.id, fulfillment.id));
-          issuedInternal.push({
-            partId: part.id,
-            quantity: requestLine.quantity,
-            jobCardId,
-            jobCardPartId: jobLine.id,
-            part,
-            previousStock: beforePart.stock,
-          });
         } else {
           const [externalLine] = await tx
             .insert(externalJobCardPartsTable)
@@ -1085,19 +1070,6 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
       return;
     }
     throw error;
-  }
-  for (const issue of issuedInternal) {
-    checkLowStockCrossing(issue.part, issue.previousStock, issue.part.stock);
-    enqueueStockEntrySync({
-      dealerId,
-      partId: issue.partId,
-      qty: issue.quantity,
-      direction: "out",
-      entityType: "job_card_part",
-      entityId: issue.jobCardPartId,
-      remark: `AURA job card #${issue.jobCardId} — requisition issue`,
-      dedupeKey: `erp:se:jcp:${dealerId}:${issue.jobCardPartId}`,
-    });
   }
   res.json(FulfillPartRequisitionResponse.parse(await loadDetail(dealerId, params.data.id)));
 });

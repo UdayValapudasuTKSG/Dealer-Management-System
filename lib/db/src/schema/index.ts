@@ -1,3 +1,4 @@
+export * from "./parts-inventory";
 export * from "./vehicles";
 export * from "./vehicleModelGlCodes";
 export * from "./leads";

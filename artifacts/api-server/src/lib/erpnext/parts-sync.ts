@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { moveStock } from "../parts-inventory";
 import {
   db,
   erpnextRefsTable,
@@ -89,6 +90,7 @@ export function enqueueStockEntrySync(opts: {
   partId: number;
   qty: number;
   direction: "in" | "out";
+  unitCost?: number;
   entityType: string;
   entityId: number;
   remark: string;
@@ -105,6 +107,7 @@ export function enqueueStockEntrySync(opts: {
       partId: opts.partId,
       qty: opts.qty,
       direction: opts.direction,
+      ...(opts.unitCost !== undefined ? { unitCost: opts.unitCost } : {}),
       remark: opts.remark,
     },
     dedupeKey: opts.dedupeKey,
@@ -301,10 +304,14 @@ async function stockEntryHandler(job: ErpnextSyncJob): Promise<{ docName: string
     partId?: number;
     qty?: number;
     direction?: string;
+    unitCost?: number;
     remark?: string;
   };
   if (!p.partId || !p.qty || (p.direction !== "in" && p.direction !== "out")) {
     throw new ErpnextError("Malformed Stock Entry payload", 0, "auth"); // non-retryable
+  }
+  if (p.unitCost !== undefined && (!Number.isFinite(p.unitCost) || p.unitCost < 0)) {
+    throw new ErpnextError("Malformed Stock Entry cost snapshot", 0, "auth");
   }
   const part = await loadPart(job.dealerId, p.partId);
   if (!part) return { docName: null };
@@ -328,7 +335,7 @@ async function stockEntryHandler(job: ErpnextSyncJob): Promise<{ docName: string
         item_code: itemCode,
         qty: p.qty,
         ...(receipt
-          ? { t_warehouse: warehouse, basic_rate: part.unitCost, allow_zero_valuation_rate: 1 }
+          ? { t_warehouse: warehouse, basic_rate: p.unitCost ?? part.unitCost, allow_zero_valuation_rate: 1 }
           : { s_warehouse: warehouse }),
       },
     ],
@@ -553,8 +560,9 @@ async function claimInboundDoc(
   dealerId: number,
   doctype: string,
   docName: string,
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
 ): Promise<number | null> {
-  const [row] = await db
+  const [row] = await tx
     .insert(erpnextSyncJobsTable)
     .values({
       dealerId,
@@ -578,18 +586,28 @@ async function claimInboundDoc(
 async function applyInboundStockChange(opts: {
   dealerId: number;
   part: Part;
-  newStock: number;
+  newStock?: number;
+  delta?: number;
+  referenceId: string;
+  alerts: Parameters<typeof notifyPartLowStock>[0][];
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0];
 }): Promise<Record<string, unknown> | null> {
-  const { part, newStock } = opts;
+  const { tx } = opts;
+  const [part] = await tx.select().from(partsTable).where(and(
+    eq(partsTable.id, opts.part.id), eq(partsTable.dealerId, opts.dealerId),
+  )).for("update");
+  if (!part) throw new Error("Inbound ERP part no longer belongs to dealership");
+  const newStock = opts.newStock ?? part.stock + (opts.delta ?? 0);
   if (newStock === part.stock) return null;
-  await db
-    .update(partsTable)
-    .set({ stock: newStock })
-    .where(
-      and(eq(partsTable.id, part.id), eq(partsTable.dealerId, opts.dealerId)),
-    );
+  if (!Number.isInteger(newStock) || newStock < 0) throw new Error("ERP movement would produce invalid or negative stock");
+  await moveStock(tx, {
+    dealerId: opts.dealerId, partId: part.id, type: "adjustment",
+    quantityDelta: newStock - part.stock, unitCost: part.unitCost,
+    referenceType: "erpnext_inbound", referenceId: opts.referenceId,
+    idempotencyKey: `erp-stock:${opts.dealerId}:${opts.referenceId}`,
+  });
   if (newStock > part.reorderLevel) {
-    await db
+    await tx
       .update(partsTable)
       .set({ lowStockAlertActive: false })
       .where(
@@ -600,7 +618,7 @@ async function applyInboundStockChange(opts: {
         ),
       );
   } else if (part.stock > part.reorderLevel) {
-    const [claimed] = await db
+    const [claimed] = await tx
       .update(partsTable)
       .set({
         lowStockAlertActive: true,
@@ -615,17 +633,10 @@ async function applyInboundStockChange(opts: {
         ),
       )
       .returning({ alertCycle: partsTable.lowStockAlertCycle });
-    if (claimed) {
-      notifyPartLowStock({
-        id: part.id,
-        dealerId: part.dealerId,
-        sku: part.sku,
-        name: part.name,
-        stock: newStock,
-        reorderLevel: part.reorderLevel,
-        alertCycle: claimed.alertCycle,
-      });
-    }
+    if (claimed) opts.alerts.push({
+      id: part.id, dealerId: part.dealerId, sku: part.sku, name: part.name,
+      stock: newStock, reorderLevel: part.reorderLevel, alertCycle: claimed.alertCycle,
+    });
   }
   return {
     partId: part.id,
@@ -640,8 +651,9 @@ async function finishInboundDoc(
   logId: number,
   changes: Record<string, unknown>[],
   extra: Record<string, unknown>,
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
 ): Promise<void> {
-  await db
+  await tx
     .update(erpnextSyncJobsTable)
     .set({
       status: "succeeded",
@@ -687,31 +699,39 @@ async function inboundStockReconciliation(event: InboundEvent): Promise<void> {
     ? (event.payload["items"] as (InboundItemRow & { warehouse?: string })[])
     : [];
   if (items.length === 0) return;
-  const logId = await claimInboundDoc(
-    event.dealerId,
-    "Stock Reconciliation",
-    event.docName,
-  );
-  if (logId === null) return; // already applied — duplicate delivery
   const conn = await getErpnextConnection(event.dealerId);
   const wh = conn?.defaultWarehouse ?? null;
+  const alerts: Parameters<typeof notifyPartLowStock>[0][] = [];
+  await db.transaction(async tx => {
+  const logId = await claimInboundDoc(event.dealerId, "Stock Reconciliation", event.docName!, tx);
+  if (logId === null) return;
+  const resolved = await Promise.all(items.map(row => row.item_code
+    ? partForItemCode(event.dealerId, row.item_code) : Promise.resolve(null)));
+  for (const partId of [...new Set(resolved.flatMap(part => part ? [part.id] : []))].sort((a, b) => a - b)) {
+    await tx.select({ id: partsTable.id }).from(partsTable).where(and(
+      eq(partsTable.id, partId), eq(partsTable.dealerId, event.dealerId),
+    )).for("update");
+  }
   const changes: Record<string, unknown>[] = [];
-  for (const row of items) {
+  for (const [index, row] of items.entries()) {
     if (!row.item_code || typeof row.qty !== "number") continue;
     if (!warehouseMatches(wh, row.warehouse)) continue;
-    const part = await partForItemCode(event.dealerId, row.item_code);
+    const part = resolved[index];
     if (!part) continue;
     const change = await applyInboundStockChange({
       dealerId: event.dealerId,
       part,
-      newStock: Math.max(0, Math.round(row.qty)),
+      newStock: row.qty,
+      referenceId: `Stock Reconciliation:${event.docName}:${index}`, tx, alerts,
     });
     if (change) changes.push(change);
   }
   await finishInboundDoc(logId, changes, {
     reason: "Stock reconciliation in ERPNext",
     warehouseScope: wh,
+  }, tx);
   });
+  for (const alert of alerts) notifyPartLowStock(alert);
 }
 
 async function inboundStockEntry(event: InboundEvent): Promise<void> {
@@ -741,14 +761,23 @@ async function inboundStockEntry(event: InboundEvent): Promise<void> {
     ? (event.payload["items"] as InboundItemRow[])
     : [];
   if (items.length === 0) return;
-  const logId = await claimInboundDoc(event.dealerId, "Stock Entry", event.docName);
-  if (logId === null) return; // already applied — duplicate delivery
   const conn = await getErpnextConnection(event.dealerId);
   const wh = conn?.defaultWarehouse ?? null;
+  const alerts: Parameters<typeof notifyPartLowStock>[0][] = [];
+  await db.transaction(async tx => {
+  const logId = await claimInboundDoc(event.dealerId, "Stock Entry", event.docName!, tx);
+  if (logId === null) return;
+  const resolved = await Promise.all(items.map(row => row.item_code
+    ? partForItemCode(event.dealerId, row.item_code) : Promise.resolve(null)));
+  for (const partId of [...new Set(resolved.flatMap(part => part ? [part.id] : []))].sort((a, b) => a - b)) {
+    await tx.select({ id: partsTable.id }).from(partsTable).where(and(
+      eq(partsTable.id, partId), eq(partsTable.dealerId, event.dealerId),
+    )).for("update");
+  }
   const changes: Record<string, unknown>[] = [];
-  for (const row of items) {
+  for (const [index, row] of items.entries()) {
     if (!row.item_code || typeof row.qty !== "number") continue;
-    const part = await partForItemCode(event.dealerId, row.item_code);
+    const part = resolved[index];
     if (!part) continue;
     // Row-level direction, scoped to the AURA-modelled warehouse: target
     // warehouse = into stock, source = out; transfers between foreign
@@ -760,14 +789,17 @@ async function inboundStockEntry(event: InboundEvent): Promise<void> {
     const change = await applyInboundStockChange({
       dealerId: event.dealerId,
       part,
-      newStock: Math.max(0, part.stock + Math.round(delta)),
+      delta,
+      referenceId: `Stock Entry:${event.docName}:${index}`, tx, alerts,
     });
     if (change) changes.push(change);
   }
   await finishInboundDoc(logId, changes, {
     reason: "Stock Entry created in ERPNext",
     warehouseScope: wh,
+  }, tx);
   });
+  for (const alert of alerts) notifyPartLowStock(alert);
 }
 
 // ————————————————————————— backfill —————————————————————————
