@@ -76,3 +76,4 @@
 - [Timesheet history boundaries](timesheet-history-boundaries.md) — historical timer remainder has no verified technician/day; manual corrections remain authoritative over same-job/day capture.
 - [Historical delivery settlement](historical-delivery-settlement.md) — user confirmed the approved ten-vehicle GT history batch was paid and handed over externally; never fabricate local receipts or dates.
 - [Parts stock timing](parts-stock-timing.md) — reserve on attachment, deduct at physical issue, bill only unissued quantities; never deduct historical issues twice.
+- [Parts import compatibility](parts-import-compatibility.md) — supplied pricing layouts extend the catalog template; they must not replace or drop broader parts fields.

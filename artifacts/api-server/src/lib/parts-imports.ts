@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, or, lt, sql } from "drizzle-orm";
-import { db, partImportJobsTable as jobs, partPricingPoliciesTable as policies, partsTable } from "@workspace/db";
+import { db, partImportJobsTable as jobs, partPricingPoliciesTable as policies, partsTable, suppliersTable } from "@workspace/db";
 import { ensureInventory, moveStock } from "./parts-inventory";
 import { enqueuePartItemSync, enqueueStockEntrySync } from "./erpnext/parts-sync";
 import { validateImportRows, type ImportOptions, type ImportError, type ImportRow } from "./parts-import-validation";
@@ -33,7 +33,8 @@ async function context(tx: Tx, dealerId: number, source: Record<string, string>[
   const skuList = [...new Set(source.map(r => r.sku).filter(Boolean))];
   const existing = skuList.length ? await tx.select().from(partsTable).where(and(eq(partsTable.dealerId, dealerId), inArray(partsTable.sku, skuList))).orderBy(asc(partsTable.id)).for("update") : [];
   const pricing = await tx.select().from(policies).where(eq(policies.dealerId, dealerId));
-  return { existing, pricing, map: new Map(existing.map(p => [p.sku, { category: p.category, reorderMin: p.reorderLevel, reorderMax: p.reorderMax }])) };
+  const suppliers = await tx.select({ id: suppliersTable.id, name: suppliersTable.name, status: suppliersTable.status }).from(suppliersTable).where(eq(suppliersTable.dealerId, dealerId)).orderBy(asc(suppliersTable.id)).for("share");
+  return { existing, pricing, suppliers, map: new Map(existing.map(p => [p.sku, { category: p.category, reorderMin: p.reorderLevel, reorderMax: p.reorderMax }])) };
 }
 
 /** One bounded worker; durable queue claims serialized across server instances. */
@@ -60,7 +61,7 @@ export async function processNextPartsImport(): Promise<boolean> {
       const ctx = await db.transaction(tx => context(tx, validationJob.dealerId, source));
       const errors: ImportError[] = [], seen = new Map<string, number>();
       for (let offset = 0; offset < source.length; offset += 500) {
-        const checked = validateImportRows(source.slice(offset, offset + 500), options, ctx.pricing, ctx.map, { offset, seen });
+        const checked = validateImportRows(source.slice(offset, offset + 500), options, ctx.pricing, ctx.map, { offset, seen }, ctx.suppliers);
         errors.push(...checked.errors);
         // Heartbeat + token prevents a stale worker overwriting a reclaimed job.
         const updated = await db.update(jobs).set({ processedRows: Math.min(offset + 500, source.length), errors, startedAt: new Date() })
@@ -89,7 +90,7 @@ export async function processNextPartsImport(): Promise<boolean> {
       await tx.execute(sql`select pg_advisory_xact_lock(${job.dealerId}, 13014)`);
       await tx.update(jobs).set({ startedAt: new Date(), processedRows: 0 }).where(eq(jobs.id, job.id));
       const ctx = await context(tx, job.dealerId, payload.source);
-      const checked = validateImportRows(payload.source, payload.options, ctx.pricing, ctx.map);
+      const checked = validateImportRows(payload.source, payload.options, ctx.pricing, ctx.map, undefined, ctx.suppliers);
       if (checked.errors.length) {
         await tx.update(jobs).set({ status: "invalid", errors: checked.errors, processedRows: job.totalRows, completedAt: new Date() }).where(eq(jobs.id, job.id));
         return { changes: [] };

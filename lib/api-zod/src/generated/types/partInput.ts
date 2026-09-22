@@ -14,6 +14,8 @@ export interface PartInput {
   sku: string;
   /** @minLength 1 */
   name: string;
+  /** @nullable */
+  make?: string | null;
   category?: string;
   supplierId?: number;
   unitCost?: number;

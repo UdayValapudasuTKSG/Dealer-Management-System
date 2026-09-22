@@ -8111,6 +8111,11 @@ export interface Part {
   id: number;
   sku: string;
   name: string;
+  /**
+     * Descriptive vehicle make only; not a compatibility or fitment declaration.
+     * @nullable
+     */
+  make?: string | null;
   category: string;
   /** @nullable */
   supplierId?: number | null;
@@ -8160,6 +8165,8 @@ export interface PartInput {
   sku: string;
   /** @minLength 1 */
   name: string;
+  /** @nullable */
+  make?: string | null;
   category?: string;
   supplierId?: number;
   unitCost?: number;
@@ -8199,6 +8206,8 @@ export const PartUpdateCostingMethod = {
 export interface PartUpdate {
   sku?: string;
   name?: string;
+  /** @nullable */
+  make?: string | null;
   category?: string;
   supplierId?: number;
   unitCost?: number;
@@ -11451,21 +11460,6 @@ export type ListPartsParams = {
 search?: string;
 lowStock?: string;
 };
-
-export type ImportPartsParams = {
-/**
- * preview classifies rows without writing; apply (default) persists
- */
-mode?: ImportPartsMode;
-};
-
-export type ImportPartsMode = typeof ImportPartsMode[keyof typeof ImportPartsMode];
-
-
-export const ImportPartsMode = {
-  preview: 'preview',
-  apply: 'apply',
-} as const;
 
 export type ListPartsBinsParams = {
 /**

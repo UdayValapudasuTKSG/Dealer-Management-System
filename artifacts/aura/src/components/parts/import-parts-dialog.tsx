@@ -42,6 +42,7 @@ type ImportMode = "upsert" | "reject";
 type ImportField =
   | "sku"
   | "name"
+  | "make"
   | "description"
   | "category"
   | "unitCost"
@@ -52,6 +53,10 @@ type ImportField =
   | "barcode"
   | "location"
   | "stock"
+  | "pricingQuantity"
+  | "supplier"
+  | "supplierId"
+  | "active"
   | "unitCostUsd"
   | "totalUsd"
   | "cifUsd"
@@ -108,6 +113,7 @@ interface FieldDefinition {
 const FIELDS: FieldDefinition[] = [
   { key: "sku", label: "SKU / part number", required: true },
   { key: "name", label: "Name", required: true },
+  { key: "make", label: "Vehicle make" },
   { key: "description", label: "Description" },
   { key: "category", label: "Category" },
   { key: "unitCost", label: "Unit cost", required: true },
@@ -118,6 +124,10 @@ const FIELDS: FieldDefinition[] = [
   { key: "barcode", label: "Barcode" },
   { key: "location", label: "Location / bin" },
   { key: "stock", label: "Stock balance" },
+  { key: "pricingQuantity", label: "Source pricing quantity" },
+  { key: "supplier", label: "Supplier name" },
+  { key: "supplierId", label: "Supplier ID" },
+  { key: "active", label: "Active" },
   { key: "unitCostUsd", label: "Unit cost (USD)" },
   { key: "totalUsd", label: "Total (USD)" },
   { key: "cifUsd", label: "CIF (USD)" },
@@ -136,6 +146,7 @@ const successStatuses = new Set<ImportStatus>(["completed", "committed"]);
 const aliases: Record<ImportField, string[]> = {
   sku: ["sku", "partnumber", "partno"],
   name: ["name", "partname"],
+  make: ["make", "vehiclemake"],
   description: ["description", "desc"],
   category: ["category"],
   unitCost: ["unitcost", "unitcostgyd", "costgyd"],
@@ -146,6 +157,10 @@ const aliases: Record<ImportField, string[]> = {
   barcode: ["barcode"],
   location: ["location", "bin", "binlocation"],
   stock: ["stock", "quantity", "qty"],
+  pricingQuantity: ["pricingquantity", "sourcequantity"],
+  supplier: ["supplier", "vendor", "suppliername"],
+  supplierId: ["supplierid"],
+  active: ["active"],
   unitCostUsd: ["unitcostusd"],
   totalUsd: ["totalusd"],
   cifUsd: ["cifusd"],
@@ -176,6 +191,18 @@ const WORKBOOK_HEADERS = [
   "UNIT SP 10% (GYD)",
   "14%VAT",
   "FINAL SP",
+  "Make",
+  "Barcode",
+  "Costing Method",
+  "Supplier",
+  "Supplier ID",
+  "Description",
+  "Category",
+  "Reorder Min",
+  "Reorder Max",
+  "Location",
+  "Active",
+  "Pricing Quantity",
 ] as const;
 
 function downloadTemplate() {
@@ -195,6 +222,18 @@ function downloadTemplate() {
     62700,
     8778,
     71478,
+    "Toyota",
+    "SAMPLE001",
+    "average",
+    "",
+    "",
+    "Example catalog row",
+    "Service parts",
+    3,
+    10,
+    "A-01",
+    true,
+    "",
   ];
   const csv = `${WORKBOOK_HEADERS.join(",")}\r\n${sample.join(",")}\r\n`;
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -532,7 +571,14 @@ export function ImportPartsDialog({
               <p>
                 USD figures are retained as reference amounts; the GYD unit cost and selling price are
                 posted exactly as supplied. “UNIT SP 10% (GYD)” is treated as the pre-VAT selling price,
-                so VAT is not added twice. QTY is retained as source quantity even when stock import is off.
+                so VAT is not added twice. QTY maps to current stock only when stock import is enabled,
+                but is always retained as the source pricing quantity. Use the optional Pricing Quantity
+                column only when that source snapshot differs from QTY.
+              </p>
+              <p>
+                Supplier names match existing suppliers for the current dealer by exact trimmed,
+                case-insensitive name. Missing or ambiguous names are rejected and suppliers are never
+                created automatically. Leave both supplier columns blank when not assigning one.
               </p>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={downloadTemplate} className="shrink-0">

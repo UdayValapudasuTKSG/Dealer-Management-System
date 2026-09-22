@@ -12,6 +12,8 @@ import type { PartUpdateStatus } from './partUpdateStatus';
 export interface PartUpdate {
   sku?: string;
   name?: string;
+  /** @nullable */
+  make?: string | null;
   category?: string;
   supplierId?: number;
   unitCost?: number;

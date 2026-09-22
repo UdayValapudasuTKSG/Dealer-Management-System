@@ -5,8 +5,32 @@ import ExcelJS from "exceljs";
 import { parsePartsXlsx } from "./parts-import-xlsx";
 import { mapImportRows, validateImportRows } from "./parts-import-validation";
 import { CreatePartBody, UpdatePartBody, CreatePartResponse } from "@workspace/api-zod";
+import { partTemplateColumns } from "./parts-import-format";
 
 const options = { mode: "upsert" as const, applyStock: false };
+test("complete template maps catalogue fields without requiring suppliers; identifiers remain text", () => {
+  const source = mapImportRows([partTemplateColumns.map(c => c.header), partTemplateColumns.map(c => String(c.example))], options);
+  const result = validateImportRows(source, options, []);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.rows[0].barcode, "001234567890");
+  assert.equal(result.rows[0].active, true);
+  assert.equal(result.rows[0].supplierId, undefined);
+});
+test("supplier exact trimmed case-insensitive lookup, ambiguity, foreign/missing ID and agreement", () => {
+  const base = { sku: "00123", name: "Part", unitCost: "1", unitPrice: "2", make: "Example", active: "no", barcode: "000009" };
+  const suppliers = [{ id: 1, name: " Acme ", status: "active" }, { id: 2, name: "Duplicate" }, { id: 3, name: "DUPLICATE" }, { id: 4, name: "Inactive", status: "inactive" }];
+  const validate = (fields: Record<string, string>) => validateImportRows([{ ...base, ...fields }], options, [], new Map(), undefined, suppliers);
+  const valid = validate({ supplier: "ACME", supplierId: "1" });
+  assert.deepEqual(valid.errors, []);
+  assert.equal(valid.rows[0].supplierId, 1);
+  assert.equal(valid.rows[0].active, false);
+  assert.equal(valid.rows[0].sku, "00123");
+  assert.equal(valid.rows[0].barcode, "000009");
+  assert.ok(validateImportRows([{ ...base, supplier: "ACME" }], options, [], new Map(), undefined, []).errors.length > 0, "commit revalidation rejects a supplier removed since preview");
+  const invalid: Record<string, string>[] = [{ supplier: "Unknown" }, { supplier: "Duplicate" }, { supplierId: "999" }, { supplier: "Acme", supplierId: "2" }, { supplier: "Inactive" }, { active: "maybe" }];
+  for (const fields of invalid) assert.ok(validate(fields).errors.length > 0);
+  assert.equal(validate({}).rows[0].supplierId, undefined);
+});
 async function sample() {
   const matrix = await parsePartsXlsx(await readFile(new URL("../../../../attached_assets/pricing_format_1790108663981.xlsx", import.meta.url)));
   return mapImportRows(matrix, options);
@@ -55,6 +79,8 @@ test("API schemas retain metadata, accept explicit clear, reject invalid values;
   assert.deepEqual(CreatePartBody.parse(input).pricingDetails, input.pricingDetails);
   assert.equal(UpdatePartBody.parse({ pricingDetails: null }).pricingDetails, null);
   assert.equal(UpdatePartBody.parse({ name: "Changed" }).pricingDetails, undefined);
+  assert.equal(CreatePartBody.parse({ sku: "A", name: "A", make: "Descriptive make" }).make, "Descriptive make");
+  assert.equal(UpdatePartBody.parse({ make: null }).make, null);
   assert.equal(CreatePartBody.safeParse({ ...input, pricingDetails: { vatRate: 14 } }).success, false);
   assert.equal(CreatePartBody.safeParse({ ...input, pricingDetails: { quantity: 0.5 } }).success, false);
   assert.deepEqual(CreatePartResponse.parse({ ...input, id: 1, category: "general", unitCost: 1, unitPrice: 2, stock: 0, reorderLevel: 5, createdAt: new Date() }).pricingDetails, input.pricingDetails);

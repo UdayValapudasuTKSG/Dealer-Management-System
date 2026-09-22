@@ -1,10 +1,11 @@
 import type { PartPricingDetails } from "@workspace/db";
 export const pricingFields = ["unitCostUsd", "totalUsd", "cifUsd", "dutyRate", "vatRate", "dutyGyd", "vatGyd", "landedCostGyd", "sellingVatGyd", "finalSellingPriceGyd", "pricingQuantity"] as const;
-export const importFields = ["sku", "name", "description", "category", "unitCost", "unitPrice", "costingMethod", "reorderMin", "reorderMax", "barcode", "location", "stock", ...pricingFields] as const;
+export const importFields = ["sku", "name", "description", "category", "make", "supplier", "supplierId", "active", "unitCost", "unitPrice", "costingMethod", "reorderMin", "reorderMax", "barcode", "location", "stock", ...pricingFields] as const;
 export type ImportField = typeof importFields[number];
 export type ImportOptions = { mode: "upsert" | "reject"; mapping?: Partial<Record<ImportField, string>>; applyStock?: boolean };
 export type ImportError = { row: number; field: string; message: string };
-export type ImportRow = Partial<Record<ImportField, string | number>> & { sku: string; name: string; unitCost: number; unitPrice: number; pricingDetails?: PartPricingDetails };
+export type ImportRow = Partial<Record<ImportField, string | number | boolean>> & { sku: string; name: string; unitCost: number; unitPrice: number; pricingDetails?: PartPricingDetails };
+export type ImportSupplier = { id: number; name: string; status?: string };
 export type PricingPolicy = { category: string | null; markupFactor: number };
 const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -35,6 +36,7 @@ export function mapImportRows(matrix: string[][], options: ImportOptions): Recor
   if (new Set(headers.map(normalize)).size !== headers.length) throw new Error("Duplicate or ambiguous column headers");
   const aliases: Record<string, string> = { partnumber: "sku", partno: "sku", partname: "name", cost: "unitCost", price: "unitPrice", reorderlevel: "reorderMin", quantity: "stock", qty: "stock", bin: "location", unitcostgyd: "unitCost", unitsp10gyd: "unitPrice", duty: "dutyRate", vat: "vatRate", lancostgyd: "landedCostGyd", "14vat": "sellingVatGyd", finalsp: "finalSellingPriceGyd" };
   const indexes = new Map<string, number>();
+  Object.assign(aliases, { suppliername: "supplier", vendor: "supplier", sellprice: "unitPrice", sellingprice: "unitPrice", binlocation: "location", onhand: "stock" });
   headers.forEach((h, i) => {
     const field = importFields.find(f => normalize(f) === normalize(h)) ?? aliases[normalize(h)];
     if (field) indexes.set(field, i);
@@ -53,19 +55,42 @@ export function validateImportRows(
   source: Record<string, string>[], options: ImportOptions, policies: PricingPolicy[],
   existing: Map<string, { category: string; reorderMin?: number; reorderMax?: number | null }> = new Map(),
   progress: { offset: number; seen: Map<string, number> } = { offset: 0, seen: new Map() },
+  suppliers: ImportSupplier[] = [],
 ): { rows: ImportRow[]; errors: ImportError[] } {
   const errors: ImportError[] = [], rows: ImportRow[] = [];
   const seen = progress.seen;
   source.forEach((input, index) => {
     const row = index + progress.offset + 2;
     const error = (field: string, message: string) => errors.push({ row, field, message });
-    const result: Record<string, string | number> = {};
+    const result: Record<string, string | number | boolean> = {};
     for (const field of importFields) if (input[field] !== undefined && input[field] !== "") result[field] = input[field];
     for (const field of ["sku", "name", "unitCost"]) if (!input[field]?.trim()) error(field, "Required value is missing");
     const sku = input.sku?.trim() ?? "";
     if (seen.has(sku)) error("sku", `Duplicate SKU in file (first seen on row ${seen.get(sku)})`);
     else seen.set(sku, row);
     const old = existing.get(sku);
+    if (result.active !== undefined) {
+      const active = String(result.active).trim().toLowerCase();
+      if (!["true", "false", "1", "0", "yes", "no"].includes(active)) error("active", "Use true/false, yes/no or 1/0");
+      else result.active = ["true", "1", "yes"].includes(active);
+    }
+    if (result.supplierId !== undefined) {
+      const id = Number(result.supplierId);
+      if (!/^\d+$/.test(String(result.supplierId)) || !Number.isSafeInteger(id) || id <= 0) error("supplierId", "Use a positive integer supplier ID");
+      else if (!suppliers.some(supplier => supplier.id === id)) error("supplierId", "Supplier ID not found in this dealership; choose an existing supplier");
+      result.supplierId = id;
+    }
+    if (result.supplier !== undefined) {
+      const name = String(result.supplier).trim().toLowerCase();
+      const matches = suppliers.filter(supplier => supplier.name.trim().toLowerCase() === name);
+      if (!matches.length) error("supplier", "Supplier name not found in this dealership; create it in Suppliers first or use an existing name");
+      else if (matches.length > 1) error("supplier", "Supplier name is ambiguous; leave name blank and map Supplier ID instead");
+      else if (result.supplierId !== undefined && result.supplierId !== matches[0].id) error("supplierId", "Supplier ID and name must identify the same supplier");
+      else result.supplierId = matches[0].id;
+    }
+    delete result.supplier;
+    const resolvedSupplier = suppliers.find(supplier => supplier.id === result.supplierId);
+    if (resolvedSupplier?.status !== undefined && resolvedSupplier.status !== "active") error("supplierId", "Supplier is inactive; choose an active supplier or reactivate it in Suppliers first");
     if (old && options.mode === "reject") error("sku", "SKU already exists; select upsert to update");
     for (const field of ["unitCost", "unitPrice", "reorderMin", "reorderMax", "stock", ...pricingFields]) {
       if (result[field] === undefined) continue;
@@ -103,11 +128,11 @@ export function validateImportRows(
       const d = pricingDetails;
       // Absolute two-cent tolerance plus floating point noise; do not assume
       // any markup, exchange rate, freight factor or selling tax rate.
-      const check = (field: string, actual: number | undefined, expected: number | undefined) => {
-        if (actual !== undefined && expected !== undefined && (!Number.isFinite(expected) || Math.abs(actual - expected) > 0.02 + Math.abs(expected) * 1e-10)) error(field, "Inconsistent pricing arithmetic");
+      const check = (field: string, actual: number | undefined, expected: number | undefined, tolerance = 0.02) => {
+        if (actual !== undefined && expected !== undefined && (!Number.isFinite(expected) || Math.abs(actual - expected) > tolerance + Math.abs(expected) * 1e-10)) error(field, "Inconsistent pricing arithmetic");
       };
       if (d.quantity !== undefined && d.unitCostUsd !== undefined) check("totalUsd", d.totalUsd, d.quantity * d.unitCostUsd);
-      if (d.quantity !== undefined) check("landedCostGyd", d.landedCostGyd, d.quantity * Number(result.unitCost));
+      if (d.quantity !== undefined) check("landedCostGyd", d.landedCostGyd, d.quantity * Number(result.unitCost), Math.max(0.02, d.quantity * 0.005));
       if (d.landedCostGyd !== undefined && d.dutyGyd !== undefined && d.vatGyd !== undefined) {
         const baseGyd = d.landedCostGyd - d.dutyGyd - d.vatGyd;
         if (baseGyd < -0.02) error("landedCostGyd", "Landed cost cannot be less than duty plus VAT");

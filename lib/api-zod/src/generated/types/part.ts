@@ -13,6 +13,11 @@ export interface Part {
   id: number;
   sku: string;
   name: string;
+  /**
+     * Descriptive vehicle make only; not a compatibility or fitment declaration.
+     * @nullable
+     */
+  make?: string | null;
   category: string;
   /** @nullable */
   supplierId?: number | null;

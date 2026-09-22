@@ -1,0 +1,1 @@
+ALTER TABLE parts ADD COLUMN IF NOT EXISTS make text;

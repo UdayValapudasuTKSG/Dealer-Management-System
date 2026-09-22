@@ -312,8 +312,9 @@ function CreatePartDialog() {
         { name: "sku", label: "Part no.", type: "text", required: true, span: "half", placeholder: "13691814-00" },
         { name: "barcode", label: "Barcode", type: "text", span: "half", placeholder: "Scan or enter..." },
         { name: "name", label: "Part name", type: "text", required: true, span: "half", placeholder: "Engine oil filter" },
+        { name: "make", label: "Vehicle make", type: "text", span: "half", placeholder: "Toyota" },
         { name: "description", label: "Description", type: "text", span: "half" },
-        { name: "category", label: "Category / make", type: "text", span: "half", placeholder: "BYD" },
+        { name: "category", label: "Category", type: "text", span: "half", placeholder: "Service parts" },
         {
           name: "supplierId",
           label: "Supplier",
@@ -363,6 +364,7 @@ function CreatePartDialog() {
           name: String(v.name),
           ...(v.barcode ? { barcode: String(v.barcode) } : {}),
           ...(v.description ? { description: String(v.description) } : {}),
+          ...(v.make ? { make: String(v.make) } : {}),
           ...(v.category ? { category: String(v.category) } : {}),
           ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
           costingMethod,
@@ -410,8 +412,9 @@ function EditPartDialog({ part }: { part: Part & { barcode?: string; description
         { name: "sku", label: "Part no.", type: "text", required: true, span: "half", defaultValue: part.sku },
         { name: "barcode", label: "Barcode", type: "text", span: "half", defaultValue: part.barcode ?? "" },
         { name: "name", label: "Part name", type: "text", required: true, span: "half", defaultValue: part.name },
+        { name: "make", label: "Vehicle make", type: "text", span: "half", defaultValue: part.make ?? "" },
         { name: "description", label: "Description", type: "text", span: "half", defaultValue: part.description ?? "" },
-        { name: "category", label: "Category / make", type: "text", span: "half", defaultValue: part.category ?? "" },
+        { name: "category", label: "Category", type: "text", span: "half", defaultValue: part.category ?? "" },
         {
           name: "supplierId",
           label: "Supplier",
@@ -462,6 +465,7 @@ function EditPartDialog({ part }: { part: Part & { barcode?: string; description
           name: String(v.name),
           ...(v.barcode !== undefined ? { barcode: String(v.barcode) } : {}),
           ...(v.description !== undefined ? { description: String(v.description) } : {}),
+          make: v.make !== undefined ? String(v.make) : null,
           ...(v.category !== undefined ? { category: String(v.category) } : {}),
           ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
           costingMethod,
@@ -644,7 +648,10 @@ function PartsTab() {
                       {p.sku}
                       {p.barcode && <div className="text-[10px] opacity-70">{p.barcode}</div>}
                     </td>
-                    <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">{p.category}</td>
+                    <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                      {p.make && <div className="text-foreground/80">{p.make}</div>}
+                      {p.category}
+                    </td>
                     <td className={cn("px-4 py-2 text-right tabular-nums font-semibold", low && "text-primary")}>
                       {p.quantityAvailable ?? 0} <span className="text-muted-foreground font-normal">/ {p.reorderLevel}</span>
                     </td>
@@ -681,7 +688,7 @@ function PartsTab() {
                       </div>
                       <h3 className="font-bold leading-tight">{p.name}</h3>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {p.category}
+                        {[p.make, p.category].filter(Boolean).join(" · ")}
                         {p.active === false && (
                           <span className="ml-2 rounded-full bg-white/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
                             Inactive

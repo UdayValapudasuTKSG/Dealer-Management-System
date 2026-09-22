@@ -72,6 +72,7 @@ export const partsTable = pgTable("parts", {
   dealerId: integer("dealer_id").notNull(),
   sku: text("sku").notNull(),
   name: text("name").notNull(),
+  make: text("make"),
   description: text("description"),
   barcode: text("barcode"),
   costingMethod: text("costing_method").notNull().default("average"),

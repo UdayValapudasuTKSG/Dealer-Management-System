@@ -440,8 +440,6 @@ export * from './impersonationGrant';
 export * from './impersonationGrantMode';
 export * from './impersonationRequest';
 export * from './impersonationRequestMode';
-export * from './importPartsMode';
-export * from './importPartsParams';
 export * from './importVehiclesMode';
 export * from './importVehiclesParams';
 export * from './inventoryAgingBucket';

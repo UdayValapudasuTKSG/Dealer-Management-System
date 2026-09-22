@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { ensureInventory, moveStock } from "../lib/parts-inventory";
 import { reserveJobPart } from "../lib/job-part-stock";
 import { createPartsImport } from "./parts-imports";
+import { partExportHeaders, partExportValues, partTemplateColumns } from "../lib/parts-import-format";
 import { postPartsReceipt, validateLocation } from "../lib/parts-operations";
 import { calculateLandedUnitCost, purchaseOrderReceiptUnitCost } from "../lib/parts-landed-cost";
 import { z } from "zod";
@@ -1079,16 +1080,8 @@ router.get("/parts/export", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
   const rows = await db
     .select({
-      sku: partsTable.sku,
-      name: partsTable.name,
-      category: partsTable.category,
+      part: partsTable,
       supplier: suppliersTable.name,
-      unitCost: partsTable.unitCost,
-      unitPrice: partsTable.unitPrice,
-      stock: partsTable.stock,
-      reorderLevel: partsTable.reorderLevel,
-      location: partsTable.location,
-      status: partsTable.status,
     })
     .from(partsTable)
     .leftJoin(
@@ -1103,40 +1096,19 @@ router.get("/parts/export", async (_req, res): Promise<void> => {
     .orderBy(partsTable.sku);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Parts");
-  const headers = [
-    "Part Number",
-    "Description",
-    "Category",
-    "Supplier",
-    "Unit Cost",
-    "Sell Price",
-    "Quantity",
-    "Reorder Level",
-    "Bin Location",
-    "Status",
-  ];
+  const headers = partExportHeaders;
   sheet.addRow(headers);
   sheet.getRow(1).font = { bold: true };
   for (const r of rows) {
-    sheet.addRow([
-      r.sku,
-      r.name,
-      r.category,
-      r.supplier ?? "",
-      r.unitCost,
-      r.unitPrice,
-      r.stock,
-      r.reorderLevel,
-      r.location ?? "",
-      r.status,
-    ]);
+    sheet.addRow(partExportValues(r.part, r.supplier));
   }
   sheet.columns.forEach((col, i) => {
     col.width = Math.max(14, headers[i].length + 4);
   });
   const notes = workbook.addWorksheet("Notes");
   notes.addRow(["Edit and re-import this file to bulk-update parts."]);
-  notes.addRow(["Existing parts are matched by Part Number; the Status column is ignored on import."]);
+  notes.addRow(["Match existing parts by SKU using upsert. Stock is current inventory; Pricing Quantity is original source quantity. Apply Stock must be explicitly enabled to adjust inventory."]);
+  notes.addRow(["Supplier names/IDs must match existing suppliers in this dealership; no suppliers are created. Leave ambiguous names blank and use Supplier ID. Active is true/false; stock availability is derived, not imported as status."]);
   const buffer = await workbook.xlsx.writeBuffer();
   res
     .setHeader(
@@ -1150,19 +1122,9 @@ router.get("/parts/export", async (_req, res): Promise<void> => {
     .send(Buffer.from(buffer));
 });
 
-const PART_TEMPLATE_COLUMNS: { header: string; example: string | number }[] = [
-  { header: "Part Number", example: "BRK-PAD-BMW-X5" },
-  { header: "Description", example: "Front brake pad set" },
-  { header: "Category", example: "Brakes" },
-  { header: "Supplier", example: "Bosch Guyana Ltd" },
-  { header: "Unit Cost", example: 8500 },
-  { header: "Sell Price", example: "" },
-  { header: "Quantity", example: 10 },
-  { header: "Reorder Level", example: 3 },
-  { header: "Bin Location", example: "A-04" },
-];
+const PART_TEMPLATE_COLUMNS = partTemplateColumns;
 
-router.get("/parts/import/template", async (_req, res): Promise<void> => {
+router.get(["/parts/import/template", "/parts/import-template"], async (_req, res): Promise<void> => {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Parts");
   sheet.addRow(PART_TEMPLATE_COLUMNS.map((c) => c.header));
@@ -1173,12 +1135,14 @@ router.get("/parts/import/template", async (_req, res): Promise<void> => {
   });
   const notes = workbook.addWorksheet("Notes");
   notes.addRow(["Parts import notes"]);
-  notes.addRow(["Required columns: Part Number, Description."]);
+  notes.addRow(["Required columns: PART NO, PART NAME, UNIT COST (GYD). Make is descriptive only, not fitment. Keep SKU and Barcode as text to retain leading zeros."]);
   notes.addRow([
     "Sell Price is optional — when blank it is derived from Unit Cost using your dealership's markup percentage.",
   ]);
   notes.addRow(["Existing parts are updated by Part Number; new ones are created."]);
-  notes.addRow(["Unknown suppliers are created automatically by name."]);
+  notes.addRow(["Supplier name is matched exactly after trimming, case-insensitive, within this dealership. Unknown/ambiguous names are rejected, never created. Supplier ID must belong to this dealership; if both supplied they must match."]);
+  notes.addRow(["QTY only changes inventory when Apply Stock is explicitly enabled; otherwise it is retained as source Pricing Quantity when breakdown is supplied. Active accepts true/false, yes/no, 1/0; omission preserves existing values."]);
+  notes.addRow(["UNIT SP is pre-VAT GYD. FINAL SP and USD amounts are reference metadata only. Example markup and conversion are illustrative, not dealership policy."]);
   notes.addRow(["CSV files with the same headers are accepted too."]);
   const buffer = await workbook.xlsx.writeBuffer();
   res

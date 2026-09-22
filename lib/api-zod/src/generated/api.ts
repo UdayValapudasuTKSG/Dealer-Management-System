@@ -10595,6 +10595,7 @@ export const ListPartsResponseItem = zod.object({
   "id": zod.number(),
   "sku": zod.string(),
   "name": zod.string(),
+  "make": zod.string().nullish().describe('Descriptive vehicle make only; not a compatibility or fitment declaration.'),
   "category": zod.string(),
   "supplierId": zod.number().nullish(),
   "unitCost": zod.number(),
@@ -10663,6 +10664,7 @@ export const createPartBodyReorderMaxMin = 0;
 export const CreatePartBody = zod.object({
   "sku": zod.string().min(1),
   "name": zod.string().min(1),
+  "make": zod.string().nullish(),
   "category": zod.string().optional(),
   "supplierId": zod.number().optional(),
   "unitCost": zod.number().optional(),
@@ -10725,6 +10727,7 @@ export const CreatePartResponse = zod.object({
   "id": zod.number(),
   "sku": zod.string(),
   "name": zod.string(),
+  "make": zod.string().nullish().describe('Descriptive vehicle make only; not a compatibility or fitment declaration.'),
   "category": zod.string(),
   "supplierId": zod.number().nullish(),
   "unitCost": zod.number(),
@@ -10794,6 +10797,7 @@ export const updatePartBodyReorderMaxMin = 0;
 export const UpdatePartBody = zod.object({
   "sku": zod.string().optional(),
   "name": zod.string().optional(),
+  "make": zod.string().nullish(),
   "category": zod.string().optional(),
   "supplierId": zod.number().optional(),
   "unitCost": zod.number().optional(),
@@ -10856,6 +10860,7 @@ export const UpdatePartResponse = zod.object({
   "id": zod.number(),
   "sku": zod.string(),
   "name": zod.string(),
+  "make": zod.string().nullish().describe('Descriptive vehicle make only; not a compatibility or fitment declaration.'),
   "category": zod.string(),
   "supplierId": zod.number().nullish(),
   "unitCost": zod.number(),
@@ -10896,31 +10901,27 @@ export const DownloadPartsInventoryResponse = zod.unknown()
 
 
 /**
- * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
+ * @summary Legacy alias for asynchronous parts import validation
  */
-export const ImportPartsQueryParams = zod.object({
-  "mode": zod.enum(['preview', 'apply']).optional().describe('preview classifies rows without writing; apply (default) persists')
-})
-
 export const ImportPartsResponse = zod.object({
-  "total": zod.number().describe('Data rows found in the file'),
-  "inserted": zod.number().describe('New parts created (preview: would be created)'),
-  "updated": zod.number().describe('Existing parts updated (upsert by dealer + part number; preview: would be updated)'),
-  "skipped": zod.number().describe('Rows not applied (validation errors, duplicates, row cap)'),
-  "mode": zod.enum(['preview', 'apply']),
-  "rows": zod.array(zod.object({
-  "row": zod.number(),
-  "sku": zod.string(),
-  "name": zod.string(),
-  "action": zod.enum(['create', 'update']),
-  "supplier": zod.string().nullish(),
-  "newSupplier": zod.boolean().optional().describe('Supplier name not found — it would be created')
-})).optional().describe('Preview only: per-row classification'),
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "status": zod.enum(['pending', 'validating', 'validated', 'invalid', 'queued', 'processing', 'completed', 'failed']),
+  "mode": zod.enum(['reject', 'upsert']),
+  "fileName": zod.string(),
+  "totalRows": zod.number(),
+  "processedRows": zod.number(),
+  "errorCount": zod.number(),
   "errors": zod.array(zod.object({
-  "row": zod.number().describe('File row number (1-based, including header)'),
-  "field": zod.string().nullish().describe('Offending field, when attributable'),
+  "row": zod.number(),
+  "field": zod.string(),
   "message": zod.string()
-}))
+})),
+  "errorMessage": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.number().nullish()
 })
 
 
@@ -10928,6 +10929,12 @@ export const ImportPartsResponse = zod.object({
  * @summary Download the parts import Excel template
  */
 export const DownloadPartImportTemplateResponse = zod.unknown()
+
+
+/**
+ * @summary Alias for the complete catalogue and pricing import template
+ */
+export const DownloadPartImportTemplateAliasResponse = zod.unknown()
 
 
 /**

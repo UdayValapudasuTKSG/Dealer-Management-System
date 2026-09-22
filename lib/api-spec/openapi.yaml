@@ -5767,25 +5767,19 @@ paths:
     post:
       operationId: importParts
       tags: [parts]
-      summary: Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
-      parameters:
-        - name: mode
-          in: query
-          required: false
-          description: "preview classifies rows without writing; apply (default) persists"
-          schema: { type: string, enum: [preview, apply] }
+      summary: Legacy alias for asynchronous parts import validation
       requestBody:
         required: true
-        description: "multipart/form-data with a single `file` field containing the .xlsx or .csv"
+        description: "multipart/form-data with file and optional options JSON; same validation/explicit commit flow as /parts/imports"
         content:
           multipart/form-data: {}
       responses:
-        "200":
-          description: Import summary (per-row results)
+        "202":
+          description: Durable validation queued; poll and explicitly commit the job
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PartImportResult"
+                $ref: "#/components/schemas/PartsImportJob"
         "400":
           description: Missing or unreadable file
           content:
@@ -5811,6 +5805,17 @@ paths:
               schema:
                 type: string
                 format: binary
+  /parts/import-template:
+    get:
+      operationId: downloadPartImportTemplateAlias
+      tags: [parts]
+      summary: Alias for the complete catalogue and pricing import template
+      responses:
+        "200":
+          description: XLSX template file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
   /parts/imports:
     post:
       operationId: createPartsImport
@@ -15353,6 +15358,7 @@ components:
         id: { type: integer }
         sku: { type: string }
         name: { type: string }
+        make: { type: ["string", "null"], description: Descriptive vehicle make only; not a compatibility or fitment declaration. }
         category: { type: string }
         supplierId: { type: ["integer", "null"] }
         unitCost: { type: number }
@@ -15377,6 +15383,7 @@ components:
       properties:
         sku: { type: string, minLength: 1 }
         name: { type: string, minLength: 1 }
+        make: { type: ["string", "null"] }
         category: { type: string }
         supplierId: { type: integer }
         unitCost: { type: number }
@@ -15397,6 +15404,7 @@ components:
       properties:
         sku: { type: string }
         name: { type: string }
+        make: { type: ["string", "null"] }
         category: { type: string }
         supplierId: { type: integer }
         unitCost: { type: number }

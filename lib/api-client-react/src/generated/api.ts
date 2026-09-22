@@ -210,7 +210,6 @@ import type {
   HealthStatus,
   ImpersonationGrant,
   ImpersonationRequest,
-  ImportPartsParams,
   ImportVehiclesParams,
   InventoryBreakdown,
   InventoryPartRequisitionInput,
@@ -315,7 +314,6 @@ import type {
   Part,
   PartCreditNote,
   PartCreditNoteInput,
-  PartImportResult,
   PartInput,
   PartPricingPolicy,
   PartPricingPolicyInput,
@@ -17267,27 +17265,20 @@ export function useDownloadPartsInventory<TData = Awaited<ReturnType<typeof down
 
 
 
-export const getImportPartsUrl = (params?: ImportPartsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getImportPartsUrl = () => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/parts/import?${stringifiedParams}` : `/api/parts/import`
+  return `/api/parts/import`
 }
 
 /**
- * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
+ * @summary Legacy alias for asynchronous parts import validation
  */
-export const importParts = async (params?: ImportPartsParams, options?: RequestInit): Promise<PartImportResult> => {
+export const importParts = async ( options?: RequestInit): Promise<PartsImportJob> => {
 
-  return customFetch<PartImportResult>(getImportPartsUrl(params),
+  return customFetch<PartsImportJob>(getImportPartsUrl(),
   {
     ...options,
     method: 'POST'
@@ -17301,8 +17292,8 @@ export const importParts = async (params?: ImportPartsParams, options?: RequestI
 
 
 export const getImportPartsMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,{params?: ImportPartsParams}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,{params?: ImportPartsParams}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext> => {
 
 const mutationKey = ['importParts'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -17314,10 +17305,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importParts>>, {params?: ImportPartsParams}> = (props) => {
-          const {params} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importParts>>, void> = () => {
 
-          return  importParts(params,requestOptions)
+
+          return  importParts(requestOptions)
         }
 
 
@@ -17332,14 +17323,14 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ImportPartsMutationError = ErrorType<Error>
 
     /**
- * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
+ * @summary Legacy alias for asynchronous parts import validation
  */
 export const useImportParts = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,{params?: ImportPartsParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof importParts>>,
         TError,
-        {params?: ImportPartsParams},
+        void,
         TContext
       > => {
       return useMutation(getImportPartsMutationOptions(options));
@@ -17410,6 +17401,83 @@ export function useDownloadPartImportTemplate<TData = Awaited<ReturnType<typeof 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getDownloadPartImportTemplateQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDownloadPartImportTemplateAliasUrl = () => {
+
+
+
+
+  return `/api/parts/import-template`
+}
+
+/**
+ * @summary Alias for the complete catalogue and pricing import template
+ */
+export const downloadPartImportTemplateAlias = async ( options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadPartImportTemplateAliasUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadPartImportTemplateAliasQueryKey = () => {
+    return [
+    `/api/parts/import-template`
+    ] as const;
+    }
+
+
+export const getDownloadPartImportTemplateAliasQueryOptions = <TData = Awaited<ReturnType<typeof downloadPartImportTemplateAlias>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPartImportTemplateAlias>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadPartImportTemplateAliasQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadPartImportTemplateAlias>>> = ({ signal }) => downloadPartImportTemplateAlias({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadPartImportTemplateAlias>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadPartImportTemplateAliasQueryResult = NonNullable<Awaited<ReturnType<typeof downloadPartImportTemplateAlias>>>
+export type DownloadPartImportTemplateAliasQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Alias for the complete catalogue and pricing import template
+ */
+
+export function useDownloadPartImportTemplateAlias<TData = Awaited<ReturnType<typeof downloadPartImportTemplateAlias>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPartImportTemplateAlias>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadPartImportTemplateAliasQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
