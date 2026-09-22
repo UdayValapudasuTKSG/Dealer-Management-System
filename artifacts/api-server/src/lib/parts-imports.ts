@@ -2,10 +2,30 @@ import { and, asc, eq, inArray, or, lt, sql } from "drizzle-orm";
 import { db, partImportJobsTable as jobs, partPricingPoliciesTable as policies, partsTable } from "@workspace/db";
 import { ensureInventory, moveStock } from "./parts-inventory";
 import { enqueuePartItemSync, enqueueStockEntrySync } from "./erpnext/parts-sync";
-import { validateImportRows, type ImportOptions, type ImportError } from "./parts-import-validation";
+import { validateImportRows, type ImportOptions, type ImportError, type ImportRow } from "./parts-import-validation";
 import { logger } from "./logger";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+/** Transaction-only write path, shared by the worker and isolated regression. No external sends. */
+export async function persistImportedPart(tx: Tx, dealerId: number, jobId: number, row: ImportRow, options: ImportOptions, old?: typeof partsTable.$inferSelect, createdBy: number | null = null) {
+  const { stock, reorderMin, ...fields } = row;
+  if (old) await ensureInventory(tx, dealerId, old.id);
+  const values = { ...fields, ...(fields.pricingDetails ? { pricingDetails: { ...old?.pricingDetails, ...fields.pricingDetails } } : {}), ...(reorderMin !== undefined ? { reorderLevel: Number(reorderMin) } : {}), updatedAt: new Date() } as Partial<typeof partsTable.$inferInsert>;
+  const [part] = old
+    ? await tx.update(partsTable).set(values).where(and(eq(partsTable.id, old.id), eq(partsTable.dealerId, dealerId))).returning()
+    : await tx.insert(partsTable).values({ ...values, dealerId, sku: row.sku, name: row.name, unitCost: row.unitCost, unitPrice: row.unitPrice, stock: 0 }).returning();
+  let delta = 0;
+  if (options.applyStock && stock !== undefined) {
+    await ensureInventory(tx, dealerId, part.id);
+    delta = Number(stock) - part.stock;
+    if (delta) await moveStock(tx, {
+      dealerId, partId: part.id, type: "adjustment", quantityDelta: delta,
+      referenceType: "parts_import", referenceId: String(jobId), unitCost: row.unitCost,
+      idempotencyKey: `parts-import:${jobId}:${part.id}`, notes: "Explicit imported stock adjustment", createdBy,
+    });
+  }
+  return { part, delta };
+}
 let timer: ReturnType<typeof setInterval> | undefined;
 let busy = false;
 
@@ -78,24 +98,8 @@ export async function processNextPartsImport(): Promise<boolean> {
       // Existing parts are locked in ascending id above, avoiding cross-job deadlocks.
       for (let i = 0; i < checked.rows.length; i++) {
         const row = checked.rows[i];
-        const { stock, reorderMin, ...fields } = row;
         const old = ctx.existing.find(p => p.sku === row.sku);
-        // Adopt legacy opening value before an imported cost changes the master.
-        if (old) await ensureInventory(tx, job.dealerId, old.id);
-        const values = { ...fields, ...(reorderMin !== undefined ? { reorderLevel: Number(reorderMin) } : {}), updatedAt: new Date() } as Partial<typeof partsTable.$inferInsert>;
-        const [part] = old
-          ? await tx.update(partsTable).set(values).where(and(eq(partsTable.id, old.id), eq(partsTable.dealerId, job.dealerId))).returning()
-          : await tx.insert(partsTable).values({ ...values, dealerId: job.dealerId, sku: row.sku, name: row.name, unitCost: row.unitCost, unitPrice: row.unitPrice, stock: 0 }).returning();
-        let delta = 0;
-        if (stock !== undefined) {
-          await ensureInventory(tx, job.dealerId, part.id);
-          delta = Number(stock) - part.stock;
-          if (delta) await moveStock(tx, {
-            dealerId: job.dealerId, partId: part.id, type: "adjustment", quantityDelta: delta,
-            referenceType: "parts_import", referenceId: String(job.id), unitCost: row.unitCost,
-            idempotencyKey: `parts-import:${job.id}:${part.id}`, notes: "Explicit imported stock adjustment", createdBy: job.createdBy,
-          });
-        }
+        const { part, delta } = await persistImportedPart(tx, job.dealerId, job.id, row, payload.options, old, job.createdBy);
         changes.push({ dealerId: job.dealerId, partId: part.id, operation: old ? "update" : "insert", delta, unitCost: row.unitCost });
       }
       await tx.update(jobs).set({ status: "completed", processedRows: job.totalRows, errors: [], completedAt: new Date(), errorMessage: null }).where(eq(jobs.id, job.id));

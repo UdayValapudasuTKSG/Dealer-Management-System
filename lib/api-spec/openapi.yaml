@@ -15331,6 +15331,21 @@ components:
         endDate: { type: string, format: date }
         notes: { type: string }
 
+    PartPricingDetails:
+      type: ["object", "null"]
+      description: Reference pricing worksheet values. USD does not change document currency. Quantity is original worksheet quantity, not current stock. Selling VAT and final price are informational; unitPrice remains pre-VAT GYD.
+      properties:
+        quantity: { type: integer, minimum: 0, multipleOf: 1 }
+        unitCostUsd: { type: number, minimum: 0 }
+        totalUsd: { type: number, minimum: 0 }
+        cifUsd: { type: number, minimum: 0 }
+        dutyRate: { type: number, minimum: 0, maximum: 1 }
+        vatRate: { type: number, minimum: 0, maximum: 1 }
+        dutyGyd: { type: number, minimum: 0 }
+        vatGyd: { type: number, minimum: 0 }
+        landedCostGyd: { type: number, minimum: 0 }
+        sellingVatGyd: { type: number, minimum: 0 }
+        finalSellingPriceGyd: { type: number, minimum: 0 }
     Part:
       type: object
       required: [id, sku, name, category, unitCost, unitPrice, stock, reorderLevel, createdAt]
@@ -15342,6 +15357,7 @@ components:
         supplierId: { type: ["integer", "null"] }
         unitCost: { type: number }
         unitPrice: { type: number }
+        pricingDetails: { $ref: "#/components/schemas/PartPricingDetails" }
         stock: { type: integer }
         reorderLevel: { type: integer }
         status: { type: string, enum: [active, superseded, obsolete] }
@@ -15365,6 +15381,7 @@ components:
         supplierId: { type: integer }
         unitCost: { type: number }
         unitPrice: { type: number }
+        pricingDetails: { $ref: "#/components/schemas/PartPricingDetails" }
         stock: { type: integer }
         reorderLevel: { type: integer }
         status: { type: string, enum: [active, superseded, obsolete] }
@@ -15384,6 +15401,7 @@ components:
         supplierId: { type: integer }
         unitCost: { type: number }
         unitPrice: { type: number }
+        pricingDetails: { $ref: "#/components/schemas/PartPricingDetails" }
         stock: { type: integer }
         reorderLevel: { type: integer }
         status: { type: string, enum: [active, superseded, obsolete] }

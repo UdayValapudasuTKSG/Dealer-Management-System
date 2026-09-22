@@ -115,7 +115,7 @@ components:
         applyStock: { type: boolean, default: false }
         mapping:
           type: object
-          description: Canonical field to exact uploaded column heading
+          description: "Canonical field to exact uploaded heading. Supports sku, name, unitCost (GYD), unitPrice (pre-VAT GYD), stock, pricingQuantity, unitCostUsd, totalUsd, cifUsd, dutyRate, vatRate, dutyGyd, vatGyd, landedCostGyd, sellingVatGyd, finalSellingPriceGyd and existing catalogue fields. QTY maps to stock and is also retained as pricingDetails.quantity when pricing breakdown fields are supplied, even with applyStock false. pricingQuantity optionally specifies a separate original quantity. Rates are fractions. Formula cells require numeric cached results; formulas are never evaluated."
           additionalProperties: { type: string }
     PartsImportError:
       type: object

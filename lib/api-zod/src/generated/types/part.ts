@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PartCostingMethod } from './partCostingMethod';
+import type { PartPricingDetails } from './partPricingDetails';
 import type { PartStatus } from './partStatus';
 
 export interface Part {
@@ -17,6 +18,7 @@ export interface Part {
   supplierId?: number | null;
   unitCost: number;
   unitPrice: number;
+  pricingDetails?: PartPricingDetails | null;
   stock: number;
   reorderLevel: number;
   status?: PartStatus;

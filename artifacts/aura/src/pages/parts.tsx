@@ -4,6 +4,8 @@ import {
   useCreatePart,
   useUpdatePart,
   type Part,
+  type PartInput,
+  type PartUpdate,
   getListPartsQueryKey,
   useListSuppliers,
   useCreateSupplier,
@@ -69,6 +71,13 @@ import {
 import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
 import { PartBarcodeScanner } from "@/components/parts/part-barcode-scanner";
+import {
+  PricingBreakdownDialog,
+  PricingDetailsEditor,
+  pricingDetailsDraftError,
+  pricingDetailsFromDraft,
+  pricingDetailsToDraft,
+} from "@/components/parts/pricing-details";
 
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
@@ -321,7 +330,8 @@ function CreatePartDialog() {
           options: [{value: "average", label: "Average"}, {value: "fifo", label: "FIFO"}, {value: "landed", label: "Landed"}]
         },
         { name: "unitCost", label: "Unit cost (GYD)", type: "number", span: "half", placeholder: "53908.78" },
-        { name: "unitPrice", label: "Selling price (GYD)", type: "number", span: "half", placeholder: "80863.17" },
+        { name: "unitPrice", label: "Selling price pre-VAT (GYD)", type: "number", span: "half", placeholder: "80863.17" },
+        { name: "stock", label: "Current stock", type: "number", span: "half", min: 0, placeholder: "0" },
         { name: "reorderLevel", label: "Reorder Min", type: "number", span: "half", placeholder: "3" },
         { name: "reorderMax", label: "Reorder Max", type: "number", span: "half", placeholder: "10" },
         { 
@@ -332,24 +342,40 @@ function CreatePartDialog() {
           defaultValue: "true",
           options: [{value: "true", label: "Active"}, {value: "false", label: "Inactive"}]
         },
+        {
+          name: "pricingDetailsDraft",
+          label: "Worksheet pricing details",
+          type: "custom",
+          span: "full",
+          section: "Reference pricing",
+          defaultValue: "{}",
+          validate: pricingDetailsDraftError,
+          render: (value, set) => <PricingDetailsEditor value={value} onChange={set} />,
+        },
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
+        const pricingDetails = pricingDetailsFromDraft(v.pricingDetailsDraft);
+        const costingMethod =
+          v.costingMethod === "fifo" ? "fifo" : v.costingMethod === "landed" ? "landed" : "average";
+        const data: PartInput = {
+          sku: String(v.sku),
+          name: String(v.name),
+          ...(v.barcode ? { barcode: String(v.barcode) } : {}),
+          ...(v.description ? { description: String(v.description) } : {}),
+          ...(v.category ? { category: String(v.category) } : {}),
+          ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
+          costingMethod,
+          ...(v.unitCost !== undefined ? { unitCost: Number(v.unitCost) } : {}),
+          ...(v.unitPrice !== undefined ? { unitPrice: Number(v.unitPrice) } : {}),
+          ...(v.stock !== undefined ? { stock: Number(v.stock) } : {}),
+          ...(v.reorderLevel !== undefined ? { reorderLevel: Number(v.reorderLevel) } : {}),
+          ...(v.reorderMax !== undefined ? { reorderMax: Number(v.reorderMax) } : {}),
+          ...(v.active !== undefined ? { active: v.active === "true" } : {}),
+          ...(pricingDetails !== undefined ? { pricingDetails } : {}),
+        };
         await create.mutateAsync({
-          data: {
-            sku: String(v.sku),
-            name: String(v.name),
-            ...(v.barcode ? { barcode: String(v.barcode) } : {}),
-            ...(v.description ? { description: String(v.description) } : {}),
-            ...(v.category ? { category: String(v.category) } : {}),
-            ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
-            ...(v.costingMethod ? { costingMethod: v.costingMethod as any } : {}),
-            ...(v.unitCost ? { unitCost: Number(v.unitCost) } : {}),
-            ...(v.unitPrice ? { unitPrice: Number(v.unitPrice) } : {}),
-            ...(v.reorderLevel ? { reorderLevel: Number(v.reorderLevel) } : {}),
-            ...(v.reorderMax ? { reorderMax: Number(v.reorderMax) } : {}),
-            ...(v.active !== undefined ? { active: v.active === "true" } : {}),
-          },
+          data,
         });
         queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
         toast({ title: "Part added" });
@@ -403,7 +429,8 @@ function EditPartDialog({ part }: { part: Part & { barcode?: string; description
           options: [{value: "average", label: "Average"}, {value: "fifo", label: "FIFO"}, {value: "landed", label: "Landed"}]
         },
         { name: "unitCost", label: "Unit cost (GYD)", type: "number", span: "half", defaultValue: String(part.unitCost ?? 0) },
-        { name: "unitPrice", label: "Selling price (GYD)", type: "number", span: "half", defaultValue: String(part.unitPrice ?? 0) },
+        { name: "unitPrice", label: "Selling price pre-VAT (GYD)", type: "number", span: "half", defaultValue: String(part.unitPrice ?? 0) },
+        { name: "stock", label: "Current stock", type: "number", span: "half", min: 0, defaultValue: String(part.stock ?? 0) },
         { name: "reorderLevel", label: "Reorder Min", type: "number", span: "half", defaultValue: String(part.reorderLevel ?? 5) },
         { name: "reorderMax", label: "Reorder Max", type: "number", span: "half", defaultValue: String(part.reorderMax ?? 10) },
         { 
@@ -414,22 +441,37 @@ function EditPartDialog({ part }: { part: Part & { barcode?: string; description
           defaultValue: part.active ? "true" : "false",
           options: [{value: "true", label: "Active"}, {value: "false", label: "Inactive"}]
         },
+        {
+          name: "pricingDetailsDraft",
+          label: "Worksheet pricing details",
+          type: "custom",
+          span: "full",
+          section: "Reference pricing",
+          defaultValue: pricingDetailsToDraft(part.pricingDetails),
+          validate: pricingDetailsDraftError,
+          render: (value, set) => <PricingDetailsEditor value={value} onChange={set} allowClear />,
+        },
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
-        const updateData: any = {
+        const pricingDetails = pricingDetailsFromDraft(v.pricingDetailsDraft);
+        const costingMethod =
+          v.costingMethod === "fifo" ? "fifo" : v.costingMethod === "landed" ? "landed" : "average";
+        const updateData: PartUpdate = {
           sku: String(v.sku),
           name: String(v.name),
           ...(v.barcode !== undefined ? { barcode: String(v.barcode) } : {}),
           ...(v.description !== undefined ? { description: String(v.description) } : {}),
           ...(v.category !== undefined ? { category: String(v.category) } : {}),
           ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
-          costingMethod: String(v.costingMethod),
+          costingMethod,
           unitCost: v.unitCost === "" ? 0 : Number(v.unitCost),
           unitPrice: v.unitPrice === "" ? 0 : Number(v.unitPrice),
+          stock: v.stock === "" ? 0 : Number(v.stock),
           reorderLevel: v.reorderLevel === "" ? 5 : Number(v.reorderLevel),
           reorderMax: v.reorderMax === "" ? 10 : Number(v.reorderMax),
           active: v.active === "true",
+          ...(pricingDetails !== undefined ? { pricingDetails } : {}),
         };
         await update.mutateAsync({
           id: part.id,
@@ -577,7 +619,7 @@ function PartsTab() {
                 <th className="px-4 py-3 font-semibold text-right">Available</th>
                 <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Cost</th>
                 <th className="px-4 py-3 font-semibold text-right">Price</th>
-                <th className="px-4 py-3 font-semibold text-right w-12" aria-label="Actions" />
+                <th className="px-4 py-3 font-semibold text-right w-20" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -613,6 +655,7 @@ function PartsTab() {
                       {money.gyd(p.unitPrice)}
                     </td>
                     <td className="px-2 py-2 text-right">
+                      <PricingBreakdownDialog part={p} />
                       <EditPartDialog part={p} />
                     </td>
                   </tr>
@@ -652,6 +695,7 @@ function PartsTab() {
                           <AlertTriangle className="w-3 h-3" /> Reorder
                         </Badge>
                       )}
+                      <PricingBreakdownDialog part={p} />
                       <EditPartDialog part={p} />
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import { Router, type RequestHandler } from "express";
 import multer from "multer";
-import ExcelJS from "exceljs";
+import { parsePartsXlsx } from "../lib/parts-import-xlsx";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db, partImportJobsTable as jobs, partPricingPoliciesTable as policies } from "@workspace/db";
@@ -36,19 +36,7 @@ export const createPartsImport: RequestHandler = async (req, res, next) => {
     try {
       if (/\.csv$/i.test(req.file.originalname)) matrix = parseCsv(req.file.buffer.toString("utf8"));
       else if (/\.xlsx$/i.test(req.file.originalname)) {
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(req.file.buffer as any);
-        const sheet = workbook.worksheets[0];
-        if (!sheet || sheet.rowCount > 10001 || sheet.columnCount > 100) throw new Error("Maximum 10,000 rows and 100 columns");
-        sheet.eachRow({ includeEmpty: true }, row => {
-          const cells: string[] = [];
-          for (let i = 1; i <= sheet.columnCount; i++) {
-            const cell = row.getCell(i);
-            if (cell.type === ExcelJS.ValueType.Formula || cell.type === ExcelJS.ValueType.Error) throw new Error("Formula/error cells are not accepted; upload values only");
-            cells.push(cell.text);
-          }
-          matrix.push(cells);
-        });
+        matrix = await parsePartsXlsx(req.file.buffer);
       } else throw new Error("Only CSV and XLSX files are supported");
       if (matrix.length < 2 || matrix.length > 10001 || (matrix[0]?.length ?? 0) > 100) throw new Error("File must contain 1–10,000 data rows and at most 100 columns");
       const rows = mapImportRows(matrix, options);

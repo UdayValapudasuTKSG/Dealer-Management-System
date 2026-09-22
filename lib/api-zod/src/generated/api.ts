@@ -10562,6 +10562,31 @@ export const ListPartsQueryParams = zod.object({
   "lowStock": zod.coerce.string().optional()
 })
 
+export const listPartsResponsePricingDetailsQuantityMin = 0;
+export const listPartsResponsePricingDetailsQuantityMultipleOf = 1;
+
+export const listPartsResponsePricingDetailsUnitCostUsdMin = 0;
+
+export const listPartsResponsePricingDetailsTotalUsdMin = 0;
+
+export const listPartsResponsePricingDetailsCifUsdMin = 0;
+
+export const listPartsResponsePricingDetailsDutyRateMin = 0;
+export const listPartsResponsePricingDetailsDutyRateMax = 1;
+
+export const listPartsResponsePricingDetailsVatRateMin = 0;
+export const listPartsResponsePricingDetailsVatRateMax = 1;
+
+export const listPartsResponsePricingDetailsDutyGydMin = 0;
+
+export const listPartsResponsePricingDetailsVatGydMin = 0;
+
+export const listPartsResponsePricingDetailsLandedCostGydMin = 0;
+
+export const listPartsResponsePricingDetailsSellingVatGydMin = 0;
+
+export const listPartsResponsePricingDetailsFinalSellingPriceGydMin = 0;
+
 export const listPartsResponseReorderMaxMin = 0;
 
 
@@ -10574,6 +10599,19 @@ export const ListPartsResponseItem = zod.object({
   "supplierId": zod.number().nullish(),
   "unitCost": zod.number(),
   "unitPrice": zod.number(),
+  "pricingDetails": zod.object({
+  "quantity": zod.number().min(listPartsResponsePricingDetailsQuantityMin).multipleOf(listPartsResponsePricingDetailsQuantityMultipleOf).optional(),
+  "unitCostUsd": zod.number().min(listPartsResponsePricingDetailsUnitCostUsdMin).optional(),
+  "totalUsd": zod.number().min(listPartsResponsePricingDetailsTotalUsdMin).optional(),
+  "cifUsd": zod.number().min(listPartsResponsePricingDetailsCifUsdMin).optional(),
+  "dutyRate": zod.number().min(listPartsResponsePricingDetailsDutyRateMin).max(listPartsResponsePricingDetailsDutyRateMax).optional(),
+  "vatRate": zod.number().min(listPartsResponsePricingDetailsVatRateMin).max(listPartsResponsePricingDetailsVatRateMax).optional(),
+  "dutyGyd": zod.number().min(listPartsResponsePricingDetailsDutyGydMin).optional(),
+  "vatGyd": zod.number().min(listPartsResponsePricingDetailsVatGydMin).optional(),
+  "landedCostGyd": zod.number().min(listPartsResponsePricingDetailsLandedCostGydMin).optional(),
+  "sellingVatGyd": zod.number().min(listPartsResponsePricingDetailsSellingVatGydMin).optional(),
+  "finalSellingPriceGyd": zod.number().min(listPartsResponsePricingDetailsFinalSellingPriceGydMin).optional()
+}).nullish().describe('Reference pricing worksheet values. USD does not change document currency. Quantity is original worksheet quantity, not current stock. Selling VAT and final price are informational; unitPrice remains pre-VAT GYD.'),
   "stock": zod.number(),
   "reorderLevel": zod.number(),
   "status": zod.enum(['active', 'superseded', 'obsolete']).optional(),
@@ -10593,6 +10631,31 @@ export const ListPartsResponse = zod.array(ListPartsResponseItem)
 
 
 
+export const createPartBodyPricingDetailsQuantityMin = 0;
+export const createPartBodyPricingDetailsQuantityMultipleOf = 1;
+
+export const createPartBodyPricingDetailsUnitCostUsdMin = 0;
+
+export const createPartBodyPricingDetailsTotalUsdMin = 0;
+
+export const createPartBodyPricingDetailsCifUsdMin = 0;
+
+export const createPartBodyPricingDetailsDutyRateMin = 0;
+export const createPartBodyPricingDetailsDutyRateMax = 1;
+
+export const createPartBodyPricingDetailsVatRateMin = 0;
+export const createPartBodyPricingDetailsVatRateMax = 1;
+
+export const createPartBodyPricingDetailsDutyGydMin = 0;
+
+export const createPartBodyPricingDetailsVatGydMin = 0;
+
+export const createPartBodyPricingDetailsLandedCostGydMin = 0;
+
+export const createPartBodyPricingDetailsSellingVatGydMin = 0;
+
+export const createPartBodyPricingDetailsFinalSellingPriceGydMin = 0;
+
 export const createPartBodyReorderMaxMin = 0;
 
 
@@ -10604,6 +10667,19 @@ export const CreatePartBody = zod.object({
   "supplierId": zod.number().optional(),
   "unitCost": zod.number().optional(),
   "unitPrice": zod.number().optional(),
+  "pricingDetails": zod.object({
+  "quantity": zod.number().min(createPartBodyPricingDetailsQuantityMin).multipleOf(createPartBodyPricingDetailsQuantityMultipleOf).optional(),
+  "unitCostUsd": zod.number().min(createPartBodyPricingDetailsUnitCostUsdMin).optional(),
+  "totalUsd": zod.number().min(createPartBodyPricingDetailsTotalUsdMin).optional(),
+  "cifUsd": zod.number().min(createPartBodyPricingDetailsCifUsdMin).optional(),
+  "dutyRate": zod.number().min(createPartBodyPricingDetailsDutyRateMin).max(createPartBodyPricingDetailsDutyRateMax).optional(),
+  "vatRate": zod.number().min(createPartBodyPricingDetailsVatRateMin).max(createPartBodyPricingDetailsVatRateMax).optional(),
+  "dutyGyd": zod.number().min(createPartBodyPricingDetailsDutyGydMin).optional(),
+  "vatGyd": zod.number().min(createPartBodyPricingDetailsVatGydMin).optional(),
+  "landedCostGyd": zod.number().min(createPartBodyPricingDetailsLandedCostGydMin).optional(),
+  "sellingVatGyd": zod.number().min(createPartBodyPricingDetailsSellingVatGydMin).optional(),
+  "finalSellingPriceGyd": zod.number().min(createPartBodyPricingDetailsFinalSellingPriceGydMin).optional()
+}).nullish().describe('Reference pricing worksheet values. USD does not change document currency. Quantity is original worksheet quantity, not current stock. Selling VAT and final price are informational; unitPrice remains pre-VAT GYD.'),
   "stock": zod.number().optional(),
   "reorderLevel": zod.number().optional(),
   "status": zod.enum(['active', 'superseded', 'obsolete']).optional(),
@@ -10615,6 +10691,31 @@ export const CreatePartBody = zod.object({
   "reorderMax": zod.number().min(createPartBodyReorderMaxMin).optional(),
   "active": zod.boolean().optional()
 })
+
+export const createPartResponsePricingDetailsQuantityMin = 0;
+export const createPartResponsePricingDetailsQuantityMultipleOf = 1;
+
+export const createPartResponsePricingDetailsUnitCostUsdMin = 0;
+
+export const createPartResponsePricingDetailsTotalUsdMin = 0;
+
+export const createPartResponsePricingDetailsCifUsdMin = 0;
+
+export const createPartResponsePricingDetailsDutyRateMin = 0;
+export const createPartResponsePricingDetailsDutyRateMax = 1;
+
+export const createPartResponsePricingDetailsVatRateMin = 0;
+export const createPartResponsePricingDetailsVatRateMax = 1;
+
+export const createPartResponsePricingDetailsDutyGydMin = 0;
+
+export const createPartResponsePricingDetailsVatGydMin = 0;
+
+export const createPartResponsePricingDetailsLandedCostGydMin = 0;
+
+export const createPartResponsePricingDetailsSellingVatGydMin = 0;
+
+export const createPartResponsePricingDetailsFinalSellingPriceGydMin = 0;
 
 export const createPartResponseReorderMaxMin = 0;
 
@@ -10628,6 +10729,19 @@ export const CreatePartResponse = zod.object({
   "supplierId": zod.number().nullish(),
   "unitCost": zod.number(),
   "unitPrice": zod.number(),
+  "pricingDetails": zod.object({
+  "quantity": zod.number().min(createPartResponsePricingDetailsQuantityMin).multipleOf(createPartResponsePricingDetailsQuantityMultipleOf).optional(),
+  "unitCostUsd": zod.number().min(createPartResponsePricingDetailsUnitCostUsdMin).optional(),
+  "totalUsd": zod.number().min(createPartResponsePricingDetailsTotalUsdMin).optional(),
+  "cifUsd": zod.number().min(createPartResponsePricingDetailsCifUsdMin).optional(),
+  "dutyRate": zod.number().min(createPartResponsePricingDetailsDutyRateMin).max(createPartResponsePricingDetailsDutyRateMax).optional(),
+  "vatRate": zod.number().min(createPartResponsePricingDetailsVatRateMin).max(createPartResponsePricingDetailsVatRateMax).optional(),
+  "dutyGyd": zod.number().min(createPartResponsePricingDetailsDutyGydMin).optional(),
+  "vatGyd": zod.number().min(createPartResponsePricingDetailsVatGydMin).optional(),
+  "landedCostGyd": zod.number().min(createPartResponsePricingDetailsLandedCostGydMin).optional(),
+  "sellingVatGyd": zod.number().min(createPartResponsePricingDetailsSellingVatGydMin).optional(),
+  "finalSellingPriceGyd": zod.number().min(createPartResponsePricingDetailsFinalSellingPriceGydMin).optional()
+}).nullish().describe('Reference pricing worksheet values. USD does not change document currency. Quantity is original worksheet quantity, not current stock. Selling VAT and final price are informational; unitPrice remains pre-VAT GYD.'),
   "stock": zod.number(),
   "reorderLevel": zod.number(),
   "status": zod.enum(['active', 'superseded', 'obsolete']).optional(),
@@ -10648,6 +10762,31 @@ export const UpdatePartParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updatePartBodyPricingDetailsQuantityMin = 0;
+export const updatePartBodyPricingDetailsQuantityMultipleOf = 1;
+
+export const updatePartBodyPricingDetailsUnitCostUsdMin = 0;
+
+export const updatePartBodyPricingDetailsTotalUsdMin = 0;
+
+export const updatePartBodyPricingDetailsCifUsdMin = 0;
+
+export const updatePartBodyPricingDetailsDutyRateMin = 0;
+export const updatePartBodyPricingDetailsDutyRateMax = 1;
+
+export const updatePartBodyPricingDetailsVatRateMin = 0;
+export const updatePartBodyPricingDetailsVatRateMax = 1;
+
+export const updatePartBodyPricingDetailsDutyGydMin = 0;
+
+export const updatePartBodyPricingDetailsVatGydMin = 0;
+
+export const updatePartBodyPricingDetailsLandedCostGydMin = 0;
+
+export const updatePartBodyPricingDetailsSellingVatGydMin = 0;
+
+export const updatePartBodyPricingDetailsFinalSellingPriceGydMin = 0;
+
 export const updatePartBodyReorderMaxMin = 0;
 
 
@@ -10659,6 +10798,19 @@ export const UpdatePartBody = zod.object({
   "supplierId": zod.number().optional(),
   "unitCost": zod.number().optional(),
   "unitPrice": zod.number().optional(),
+  "pricingDetails": zod.object({
+  "quantity": zod.number().min(updatePartBodyPricingDetailsQuantityMin).multipleOf(updatePartBodyPricingDetailsQuantityMultipleOf).optional(),
+  "unitCostUsd": zod.number().min(updatePartBodyPricingDetailsUnitCostUsdMin).optional(),
+  "totalUsd": zod.number().min(updatePartBodyPricingDetailsTotalUsdMin).optional(),
+  "cifUsd": zod.number().min(updatePartBodyPricingDetailsCifUsdMin).optional(),
+  "dutyRate": zod.number().min(updatePartBodyPricingDetailsDutyRateMin).max(updatePartBodyPricingDetailsDutyRateMax).optional(),
+  "vatRate": zod.number().min(updatePartBodyPricingDetailsVatRateMin).max(updatePartBodyPricingDetailsVatRateMax).optional(),
+  "dutyGyd": zod.number().min(updatePartBodyPricingDetailsDutyGydMin).optional(),
+  "vatGyd": zod.number().min(updatePartBodyPricingDetailsVatGydMin).optional(),
+  "landedCostGyd": zod.number().min(updatePartBodyPricingDetailsLandedCostGydMin).optional(),
+  "sellingVatGyd": zod.number().min(updatePartBodyPricingDetailsSellingVatGydMin).optional(),
+  "finalSellingPriceGyd": zod.number().min(updatePartBodyPricingDetailsFinalSellingPriceGydMin).optional()
+}).nullish().describe('Reference pricing worksheet values. USD does not change document currency. Quantity is original worksheet quantity, not current stock. Selling VAT and final price are informational; unitPrice remains pre-VAT GYD.'),
   "stock": zod.number().optional(),
   "reorderLevel": zod.number().optional(),
   "status": zod.enum(['active', 'superseded', 'obsolete']).optional(),
@@ -10670,6 +10822,31 @@ export const UpdatePartBody = zod.object({
   "reorderMax": zod.number().min(updatePartBodyReorderMaxMin).optional(),
   "active": zod.boolean().optional()
 })
+
+export const updatePartResponsePricingDetailsQuantityMin = 0;
+export const updatePartResponsePricingDetailsQuantityMultipleOf = 1;
+
+export const updatePartResponsePricingDetailsUnitCostUsdMin = 0;
+
+export const updatePartResponsePricingDetailsTotalUsdMin = 0;
+
+export const updatePartResponsePricingDetailsCifUsdMin = 0;
+
+export const updatePartResponsePricingDetailsDutyRateMin = 0;
+export const updatePartResponsePricingDetailsDutyRateMax = 1;
+
+export const updatePartResponsePricingDetailsVatRateMin = 0;
+export const updatePartResponsePricingDetailsVatRateMax = 1;
+
+export const updatePartResponsePricingDetailsDutyGydMin = 0;
+
+export const updatePartResponsePricingDetailsVatGydMin = 0;
+
+export const updatePartResponsePricingDetailsLandedCostGydMin = 0;
+
+export const updatePartResponsePricingDetailsSellingVatGydMin = 0;
+
+export const updatePartResponsePricingDetailsFinalSellingPriceGydMin = 0;
 
 export const updatePartResponseReorderMaxMin = 0;
 
@@ -10683,6 +10860,19 @@ export const UpdatePartResponse = zod.object({
   "supplierId": zod.number().nullish(),
   "unitCost": zod.number(),
   "unitPrice": zod.number(),
+  "pricingDetails": zod.object({
+  "quantity": zod.number().min(updatePartResponsePricingDetailsQuantityMin).multipleOf(updatePartResponsePricingDetailsQuantityMultipleOf).optional(),
+  "unitCostUsd": zod.number().min(updatePartResponsePricingDetailsUnitCostUsdMin).optional(),
+  "totalUsd": zod.number().min(updatePartResponsePricingDetailsTotalUsdMin).optional(),
+  "cifUsd": zod.number().min(updatePartResponsePricingDetailsCifUsdMin).optional(),
+  "dutyRate": zod.number().min(updatePartResponsePricingDetailsDutyRateMin).max(updatePartResponsePricingDetailsDutyRateMax).optional(),
+  "vatRate": zod.number().min(updatePartResponsePricingDetailsVatRateMin).max(updatePartResponsePricingDetailsVatRateMax).optional(),
+  "dutyGyd": zod.number().min(updatePartResponsePricingDetailsDutyGydMin).optional(),
+  "vatGyd": zod.number().min(updatePartResponsePricingDetailsVatGydMin).optional(),
+  "landedCostGyd": zod.number().min(updatePartResponsePricingDetailsLandedCostGydMin).optional(),
+  "sellingVatGyd": zod.number().min(updatePartResponsePricingDetailsSellingVatGydMin).optional(),
+  "finalSellingPriceGyd": zod.number().min(updatePartResponsePricingDetailsFinalSellingPriceGydMin).optional()
+}).nullish().describe('Reference pricing worksheet values. USD does not change document currency. Quantity is original worksheet quantity, not current stock. Selling VAT and final price are informational; unitPrice remains pre-VAT GYD.'),
   "stock": zod.number(),
   "reorderLevel": zod.number(),
   "status": zod.enum(['active', 'superseded', 'obsolete']).optional(),

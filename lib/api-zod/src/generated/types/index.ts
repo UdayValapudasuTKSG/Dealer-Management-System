@@ -662,6 +662,7 @@ export * from './partImportRowPreviewAction';
 export * from './partInput';
 export * from './partInputCostingMethod';
 export * from './partInputStatus';
+export * from './partPricingDetails';
 export * from './partPricingPolicy';
 export * from './partPricingPolicyInput';
 export * from './partPurchase';

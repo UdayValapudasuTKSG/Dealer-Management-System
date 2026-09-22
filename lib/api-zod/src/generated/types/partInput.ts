@@ -7,6 +7,7 @@
  */
 import type { PartInputCostingMethod } from './partInputCostingMethod';
 import type { PartInputStatus } from './partInputStatus';
+import type { PartPricingDetails } from './partPricingDetails';
 
 export interface PartInput {
   /** @minLength 1 */
@@ -17,6 +18,7 @@ export interface PartInput {
   supplierId?: number;
   unitCost?: number;
   unitPrice?: number;
+  pricingDetails?: PartPricingDetails | null;
   stock?: number;
   reorderLevel?: number;
   status?: PartInputStatus;

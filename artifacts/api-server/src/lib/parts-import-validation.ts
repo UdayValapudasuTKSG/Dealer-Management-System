@@ -1,8 +1,10 @@
-export const importFields = ["sku", "name", "description", "category", "unitCost", "unitPrice", "costingMethod", "reorderMin", "reorderMax", "barcode", "location", "stock"] as const;
+import type { PartPricingDetails } from "@workspace/db";
+export const pricingFields = ["unitCostUsd", "totalUsd", "cifUsd", "dutyRate", "vatRate", "dutyGyd", "vatGyd", "landedCostGyd", "sellingVatGyd", "finalSellingPriceGyd", "pricingQuantity"] as const;
+export const importFields = ["sku", "name", "description", "category", "unitCost", "unitPrice", "costingMethod", "reorderMin", "reorderMax", "barcode", "location", "stock", ...pricingFields] as const;
 export type ImportField = typeof importFields[number];
 export type ImportOptions = { mode: "upsert" | "reject"; mapping?: Partial<Record<ImportField, string>>; applyStock?: boolean };
 export type ImportError = { row: number; field: string; message: string };
-export type ImportRow = Partial<Record<ImportField, string | number>> & { sku: string; name: string; unitCost: number; unitPrice: number };
+export type ImportRow = Partial<Record<ImportField, string | number>> & { sku: string; name: string; unitCost: number; unitPrice: number; pricingDetails?: PartPricingDetails };
 export type PricingPolicy = { category: string | null; markupFactor: number };
 const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -31,7 +33,7 @@ export function mapImportRows(matrix: string[][], options: ImportOptions): Recor
   const headers = matrix[0]?.map(h => h.trim().replace(/^\uFEFF/, "")) ?? [];
   if (!headers.length) throw new Error("File has no header row");
   if (new Set(headers.map(normalize)).size !== headers.length) throw new Error("Duplicate or ambiguous column headers");
-  const aliases: Record<string, string> = { partnumber: "sku", partno: "sku", cost: "unitCost", price: "unitPrice", reorderlevel: "reorderMin", quantity: "stock", qty: "stock", bin: "location" };
+  const aliases: Record<string, string> = { partnumber: "sku", partno: "sku", partname: "name", cost: "unitCost", price: "unitPrice", reorderlevel: "reorderMin", quantity: "stock", qty: "stock", bin: "location", unitcostgyd: "unitCost", unitsp10gyd: "unitPrice", duty: "dutyRate", vat: "vatRate", lancostgyd: "landedCostGyd", "14vat": "sellingVatGyd", finalsp: "finalSellingPriceGyd" };
   const indexes = new Map<string, number>();
   headers.forEach((h, i) => {
     const field = importFields.find(f => normalize(f) === normalize(h)) ?? aliases[normalize(h)];
@@ -65,15 +67,17 @@ export function validateImportRows(
     else seen.set(sku, row);
     const old = existing.get(sku);
     if (old && options.mode === "reject") error("sku", "SKU already exists; select upsert to update");
-    for (const field of ["unitCost", "unitPrice", "reorderMin", "reorderMax", "stock"]) {
+    for (const field of ["unitCost", "unitPrice", "reorderMin", "reorderMax", "stock", ...pricingFields]) {
       if (result[field] === undefined) continue;
       const raw = String(result[field]);
       const value = Number(raw);
-      if (!/^(?:\d+\.?\d*|\.\d+)$/.test(raw) || !Number.isFinite(value) || value < 0) error(field, "Must be a finite nonnegative number");
-      else if (["stock", "reorderMin", "reorderMax"].includes(field) && (!Number.isSafeInteger(value) || value > 2147483647)) error(field, "Must be a nonnegative 32-bit integer");
+      if (!/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(raw) || !Number.isFinite(value) || value < 0) error(field, "Must be a finite nonnegative number");
+      else if (["stock", "pricingQuantity", "reorderMin", "reorderMax"].includes(field) && (!Number.isSafeInteger(value) || value > 2147483647)) error(field, "Must be a nonnegative 32-bit integer");
+      else if (["dutyRate", "vatRate"].includes(field) && value > 1) error(field, "Use a fraction between 0 and 1");
       result[field] = value;
     }
-    if (result.stock !== undefined && !options.applyStock) error("stock", "Stock adjustment requires explicit applyStock=true");
+    const hasPricing = pricingFields.some(field => result[field] !== undefined);
+    if (result.stock !== undefined && !options.applyStock && !hasPricing) error("stock", "Stock adjustment requires explicit applyStock=true");
     const min = result.reorderMin ?? old?.reorderMin ?? 5;
     const max = result.reorderMax ?? old?.reorderMax;
     if (max != null && Number(max) < Number(min)) error("reorderMax", "Must be at least reorderMin");
@@ -87,7 +91,38 @@ export function validateImportRows(
         if (!Number.isFinite(result.unitPrice)) error("unitPrice", "Calculated price is not finite");
       }
     }
-    rows.push(result as ImportRow);
+    let pricingDetails: PartPricingDetails | undefined;
+    if (hasPricing) {
+      pricingDetails = {};
+      for (const field of pricingFields) {
+        if (result[field] !== undefined) {
+          pricingDetails[field === "pricingQuantity" ? "quantity" : field] = Number(result[field]);
+        }
+      }
+      if (pricingDetails.quantity === undefined && result.stock !== undefined) pricingDetails.quantity = Number(result.stock);
+      const d = pricingDetails;
+      // Absolute two-cent tolerance plus floating point noise; do not assume
+      // any markup, exchange rate, freight factor or selling tax rate.
+      const check = (field: string, actual: number | undefined, expected: number | undefined) => {
+        if (actual !== undefined && expected !== undefined && (!Number.isFinite(expected) || Math.abs(actual - expected) > 0.02 + Math.abs(expected) * 1e-10)) error(field, "Inconsistent pricing arithmetic");
+      };
+      if (d.quantity !== undefined && d.unitCostUsd !== undefined) check("totalUsd", d.totalUsd, d.quantity * d.unitCostUsd);
+      if (d.quantity !== undefined) check("landedCostGyd", d.landedCostGyd, d.quantity * Number(result.unitCost));
+      if (d.landedCostGyd !== undefined && d.dutyGyd !== undefined && d.vatGyd !== undefined) {
+        const baseGyd = d.landedCostGyd - d.dutyGyd - d.vatGyd;
+        if (baseGyd < -0.02) error("landedCostGyd", "Landed cost cannot be less than duty plus VAT");
+        if (d.dutyRate !== undefined) check("dutyGyd", d.dutyGyd, baseGyd * d.dutyRate);
+        if (d.vatRate !== undefined) check("vatGyd", d.vatGyd, (baseGyd + d.dutyGyd) * d.vatRate);
+      }
+      if (d.sellingVatGyd !== undefined) check("finalSellingPriceGyd", d.finalSellingPriceGyd, Number(result.unitPrice) + d.sellingVatGyd);
+      if (d.finalSellingPriceGyd !== undefined && d.finalSellingPriceGyd + 0.02 < Number(result.unitPrice)) error("finalSellingPriceGyd", "Final price cannot be less than pre-VAT selling price");
+      for (const field of pricingFields) delete result[field];
+      if (!options.applyStock) delete result.stock;
+    }
+    // Round only the canonical GYD master prices, retaining full worksheet precision.
+    result.unitCost = Math.round(Number(result.unitCost) * 100) / 100;
+    result.unitPrice = Math.round(Number(result.unitPrice) * 100) / 100;
+    rows.push({ ...result, ...(pricingDetails ? { pricingDetails } : {}) } as ImportRow);
   });
   return { rows, errors };
 }

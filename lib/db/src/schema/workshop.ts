@@ -53,6 +53,20 @@ export type Supplier = typeof suppliersTable.$inferSelect;
 export const PART_STATUSES = ["active", "superseded", "obsolete"] as const;
 export type PartStatus = (typeof PART_STATUSES)[number];
 
+export type PartPricingDetails = {
+  quantity?: number;
+  unitCostUsd?: number;
+  totalUsd?: number;
+  cifUsd?: number;
+  dutyRate?: number;
+  vatRate?: number;
+  dutyGyd?: number;
+  vatGyd?: number;
+  landedCostGyd?: number;
+  sellingVatGyd?: number;
+  finalSellingPriceGyd?: number;
+};
+
 export const partsTable = pgTable("parts", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -69,6 +83,7 @@ export const partsTable = pgTable("parts", {
   supplierId: integer("supplier_id").references(() => suppliersTable.id),
   unitCost: doublePrecision("unit_cost").notNull().default(0),
   unitPrice: doublePrecision("unit_price").notNull().default(0),
+  pricingDetails: jsonb("pricing_details").$type<PartPricingDetails>(),
   stock: integer("stock").notNull().default(0),
   reorderLevel: integer("reorder_level").notNull().default(5),
   lowStockAlertActive: boolean("low_stock_alert_active").notNull().default(false),

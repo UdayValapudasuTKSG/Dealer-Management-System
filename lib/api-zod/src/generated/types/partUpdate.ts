@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartPricingDetails } from './partPricingDetails';
 import type { PartUpdateCostingMethod } from './partUpdateCostingMethod';
 import type { PartUpdateStatus } from './partUpdateStatus';
 
@@ -15,6 +16,7 @@ export interface PartUpdate {
   supplierId?: number;
   unitCost?: number;
   unitPrice?: number;
+  pricingDetails?: PartPricingDetails | null;
   stock?: number;
   reorderLevel?: number;
   status?: PartUpdateStatus;

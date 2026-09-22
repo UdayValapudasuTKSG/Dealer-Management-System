@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Download,
   FileSpreadsheet,
   Loader2,
   RefreshCw,
@@ -50,7 +51,17 @@ type ImportField =
   | "reorderMax"
   | "barcode"
   | "location"
-  | "stock";
+  | "stock"
+  | "unitCostUsd"
+  | "totalUsd"
+  | "cifUsd"
+  | "dutyRate"
+  | "vatRate"
+  | "dutyGyd"
+  | "vatGyd"
+  | "landedCostGyd"
+  | "sellingVatGyd"
+  | "finalSellingPriceGyd";
 type ImportStatus =
   | "pending"
   | "queued"
@@ -107,6 +118,16 @@ const FIELDS: FieldDefinition[] = [
   { key: "barcode", label: "Barcode" },
   { key: "location", label: "Location / bin" },
   { key: "stock", label: "Stock balance" },
+  { key: "unitCostUsd", label: "Unit cost (USD)" },
+  { key: "totalUsd", label: "Total (USD)" },
+  { key: "cifUsd", label: "CIF (USD)" },
+  { key: "dutyRate", label: "Duty rate (fraction)" },
+  { key: "vatRate", label: "VAT rate (fraction)" },
+  { key: "dutyGyd", label: "Duty amount (GYD)" },
+  { key: "vatGyd", label: "VAT amount (GYD)" },
+  { key: "landedCostGyd", label: "Landed cost (GYD)" },
+  { key: "sellingVatGyd", label: "Selling VAT (GYD)" },
+  { key: "finalSellingPriceGyd", label: "Final selling price (GYD)" },
 ];
 const NONE = "__not_mapped__";
 const activeStatuses = new Set<ImportStatus>(["pending", "queued", "validating", "processing", "committing"]);
@@ -117,18 +138,74 @@ const aliases: Record<ImportField, string[]> = {
   name: ["name", "partname"],
   description: ["description", "desc"],
   category: ["category"],
-  unitCost: ["unitcost", "cost"],
-  unitPrice: ["unitprice", "price", "sellprice"],
+  unitCost: ["unitcost", "unitcostgyd", "costgyd"],
+  unitPrice: ["unitprice", "unitsp10gyd", "sellpricegyd"],
   costingMethod: ["costingmethod"],
   reorderMin: ["reordermin", "reorderlevel"],
   reorderMax: ["reordermax"],
   barcode: ["barcode"],
   location: ["location", "bin", "binlocation"],
   stock: ["stock", "quantity", "qty"],
+  unitCostUsd: ["unitcostusd"],
+  totalUsd: ["totalusd"],
+  cifUsd: ["cifusd"],
+  dutyRate: ["dutyrate", "duty"],
+  vatRate: ["vatrate", "vat"],
+  dutyGyd: ["dutygyd"],
+  vatGyd: ["vatgyd"],
+  landedCostGyd: ["landedcostgyd", "lancostgyd"],
+  sellingVatGyd: ["sellingvatgyd", "14vat"],
+  finalSellingPriceGyd: ["finalsellingpricegyd", "finalsp"],
 };
 
 const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 const resumeKey = "aura-parts-import-job";
+const WORKBOOK_HEADERS = [
+  "QTY",
+  "PART NO",
+  "PART NAME",
+  "UNIT COST USD",
+  "TOTAL USD",
+  "CIF USD",
+  "DUTY",
+  "VAT",
+  "DUTY GYD",
+  "VAT GYD",
+  "LAN/COST (GYD)",
+  "UNIT COST (GYD)",
+  "UNIT SP 10% (GYD)",
+  "14%VAT",
+  "FINAL SP",
+] as const;
+
+function downloadTemplate() {
+  const sample = [
+    1,
+    "SAMPLE-001",
+    "Sample part",
+    100,
+    100,
+    105,
+    0.25,
+    0.14,
+    5500,
+    3850,
+    31350,
+    31350,
+    62700,
+    8778,
+    71478,
+  ];
+  const csv = `${WORKBOOK_HEADERS.join(",")}\r\n${sample.join(",")}\r\n`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "aura-parts-pricing-template.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : "The import request failed.";
@@ -443,6 +520,27 @@ export function ImportPartsDialog({
             {markupPercent != null ? ` Your current default markup is ${markupPercent}%.` : ""}
           </DialogDescription>
         </DialogHeader>
+
+        {!jobId && (
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] p-3">
+            <div className="max-w-[560px] space-y-1 text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground">15-column pricing workbook supported</p>
+              <p>
+                Upload your workbook unchanged, or start with the matching template. In Excel, calculate
+                formulas and save the file before uploading so cached values are included.
+              </p>
+              <p>
+                USD figures are retained as reference amounts; the GYD unit cost and selling price are
+                posted exactly as supplied. “UNIT SP 10% (GYD)” is treated as the pre-VAT selling price,
+                so VAT is not added twice. QTY is retained as source quantity even when stock import is off.
+              </p>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={downloadTemplate} className="shrink-0">
+              <Download className="h-4 w-4" />
+              Download template
+            </Button>
+          </div>
+        )}
 
         {!jobId ? (
           <div className="space-y-5">

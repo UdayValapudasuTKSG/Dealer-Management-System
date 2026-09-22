@@ -8054,6 +8054,41 @@ export interface CoveragePlanUpdate {
   notes?: string;
 }
 
+/**
+ * Reference pricing worksheet values. USD does not change document currency. Quantity is original worksheet quantity, not current stock. Selling VAT and final price are informational; unitPrice remains pre-VAT GYD.
+ * @nullable
+ */
+export type PartPricingDetails = {
+  /** @minimum 0 */
+  quantity?: number;
+  /** @minimum 0 */
+  unitCostUsd?: number;
+  /** @minimum 0 */
+  totalUsd?: number;
+  /** @minimum 0 */
+  cifUsd?: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  dutyRate?: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  vatRate?: number;
+  /** @minimum 0 */
+  dutyGyd?: number;
+  /** @minimum 0 */
+  vatGyd?: number;
+  /** @minimum 0 */
+  landedCostGyd?: number;
+  /** @minimum 0 */
+  sellingVatGyd?: number;
+  /** @minimum 0 */
+  finalSellingPriceGyd?: number;
+} | null;
+
 export type PartStatus = typeof PartStatus[keyof typeof PartStatus];
 
 
@@ -8081,6 +8116,7 @@ export interface Part {
   supplierId?: number | null;
   unitCost: number;
   unitPrice: number;
+  pricingDetails?: PartPricingDetails | null;
   stock: number;
   reorderLevel: number;
   status?: PartStatus;
@@ -8128,6 +8164,7 @@ export interface PartInput {
   supplierId?: number;
   unitCost?: number;
   unitPrice?: number;
+  pricingDetails?: PartPricingDetails | null;
   stock?: number;
   reorderLevel?: number;
   status?: PartInputStatus;
@@ -8166,6 +8203,7 @@ export interface PartUpdate {
   supplierId?: number;
   unitCost?: number;
   unitPrice?: number;
+  pricingDetails?: PartPricingDetails | null;
   stock?: number;
   reorderLevel?: number;
   status?: PartUpdateStatus;
