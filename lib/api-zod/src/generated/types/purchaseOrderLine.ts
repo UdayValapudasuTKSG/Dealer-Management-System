@@ -16,6 +16,11 @@ export interface PurchaseOrderLine {
   partId?: number | null;
   source: PurchaseOrderLineSource;
   partName: string;
+  isSpecialOrder?: boolean;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  requisitionLineId?: number | null;
   quantity: number;
   qtyReceived: number;
   unitCost: number;

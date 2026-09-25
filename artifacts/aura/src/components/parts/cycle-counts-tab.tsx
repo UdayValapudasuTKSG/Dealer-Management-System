@@ -1,17 +1,19 @@
 import { useState, useRef } from "react";
-import { formatGuyanaDate, useMoney } from "@/lib/format";
-import { useGetCycleCounts, useGetCycleCount, useCreateCycleCount, useUpdateCycleCountLines, useApproveCycleCount, useCancelCycleCount } from "@/hooks/use-parts-operations";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch, useListParts } from "@workspace/api-client-react";
+import { formatGuyanaDate } from "@/lib/format";
+import { useGetCycleCounts, useCreateCycleCount, useUpdateCycleCountLines, useApproveCycleCount, useCancelCycleCount } from "@/hooks/use-parts-operations";
 import { useGetLocations, useGetBins } from "@/hooks/use-parts-operations";
-import { useListParts } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Play, Check, X, ClipboardCheck, Loader2, Save } from "lucide-react";
+import { Play, Check, ClipboardCheck, Loader2, Save, Download } from "lucide-react";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PartBarcodeScanner } from "./part-barcode-scanner";
+import { downloadPartsReport } from "./parts-analysis-export";
 
 export function CycleCountsTab() {
   const { data: counts, isLoading, isError } = useGetCycleCounts();
@@ -47,9 +49,9 @@ export function CycleCountsTab() {
               key={count.id} 
               className={cn(
                 "glass-panel border-none rounded-2xl transition-all",
-                ["in_progress", "pending_approval"].includes(count.status) ? "ring-1 ring-primary/50 cursor-pointer hover:-translate-y-0.5" : "opacity-80"
+                "ring-1 ring-primary/50 cursor-pointer hover:-translate-y-0.5"
               )}
-              onClick={() => ["in_progress", "pending_approval"].includes(count.status) && setActiveCountId(count.id)}
+              onClick={() => setActiveCountId(count.id)}
             >
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between">
@@ -69,11 +71,12 @@ export function CycleCountsTab() {
                 
                 <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs text-muted-foreground">
                   <div>Started {formatGuyanaDate(count.startedAt)}</div>
-                  {["in_progress", "pending_approval"].includes(count.status) && (
+                   {["in_progress", "pending_approval"].includes(count.status) && (
                     <div className="flex items-center text-primary gap-1 font-medium">
-                      Resume <Play className="w-3 h-3" />
+                       Resume <Play className="w-3 h-3" />
                     </div>
                   )}
+                   {!["in_progress", "pending_approval"].includes(count.status) && <span>View sheet</span>}
                 </div>
               </CardContent>
             </Card>
@@ -131,7 +134,10 @@ function StartCountDialog() {
 
 function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () => void }) {
   const { toast } = useToast();
-  const { data: count, isLoading, isError } = useGetCycleCount(countStub.id);
+  const { data: count, isLoading, isError } = useQuery({
+    queryKey: ["parts-cycle-counts", countStub.id],
+    queryFn: () => customFetch<any>(`/api/parts/operations/p05/cycle-counts/${countStub.id}`),
+  });
   const { data: parts, isError: partsError } = useListParts();
   const updateLines = useUpdateCycleCountLines();
   const approve = useApproveCycleCount();
@@ -139,6 +145,10 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
   
   // Local state for fast input before saving
   const [lines, setLines] = useState<Record<number, string>>({});
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"partNumber" | "partName">("partNumber");
+  const [descending, setDescending] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   // Initialize lines when data arrives
   const isInitialized = useRef(false);
@@ -153,6 +163,19 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
 
   if (isError) return <div role="alert" className="p-4 text-destructive">Count details could not be loaded. <Button variant="ghost" onClick={onBack}>Back</Button></div>;
   if (isLoading || !count) return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
+  const editable = ["in_progress", "pending_approval"].includes(count.status);
+  const visibleLines = [...count.lines].filter((line: any) =>
+    `${line.partNumber} ${line.partName}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
+  ).sort((a: any, b: any) => (descending ? -1 : 1) *
+    String(a[sortBy]).localeCompare(String(b[sortBy]), undefined, { numeric: true, sensitivity: "base" }));
+  const exportSheet = async (format: "csv" | "pdf") => {
+    setExporting(true);
+    try {
+      await downloadPartsReport(`/api/parts/operations/p05/cycle-counts/${count.id}/export`, `cycle-count-${count.id}`, format);
+    } catch (err) {
+      toast({ title: "Export failed", description: err instanceof Error ? err.message : "Could not export count.", variant: "destructive" });
+    } finally { setExporting(false); }
+  };
   
   const saveLines = async () => {
     const payload = Object.entries(lines).filter(([, qty]) => qty !== "").map(([id, qty]) => ({
@@ -202,7 +225,8 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
+          {(["csv", "pdf"] as const).map(format => <Button key={format} variant="outline" size="sm" disabled={exporting} onClick={() => exportSheet(format)}><Download className="w-3.5 h-3.5 mr-1" />{format.toUpperCase()}</Button>)}
+          {editable && <Button
             variant="ghost" 
             size="sm" 
             className="text-muted-foreground hover:text-destructive"
@@ -218,8 +242,8 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
             }}
           >
             Cancel Count
-          </Button>
-          <Button 
+          </Button>}
+          {editable && <Button
             variant="outline" 
             size="sm"
             onClick={saveLines}
@@ -228,14 +252,14 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
           >
             {updateLines.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             Save Draft
-          </Button>
-          <Button 
+          </Button>}
+          {editable && <Button
             className="bg-primary text-white gap-2"
             onClick={handleApprove}
             disabled={approve.isPending || updateLines.isPending || cancel.isPending}
           >
             <Check className="w-4 h-4" /> Approve & Post
-          </Button>
+          </Button>}
         </div>
       </div>
 
@@ -243,20 +267,16 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
         <div className="md:col-span-1">
           <PartBarcodeScanner 
             onScan={(code) => {
-              if (partsError) {
+      if (partsError && !count.lines?.some((l: any) => l.partNumber === code)) {
                 toast({ title: "Catalog unavailable", description: "Parts could not be loaded. Retry before scanning.", variant: "destructive" });
                 return;
               }
               // Find part matching barcode or SKU
-              const part = parts?.find((p: any) => p.sku === code || p.barcode === code);
-              if (!part) {
-                toast({ title: "Unknown Part", description: `Code ${code} not found in catalog.`, variant: "destructive" });
-                return;
-              }
-              // Find line matching part ID
-              const line = count.lines?.find((l: any) => l.partId === part.id);
+              if (!editable) return;
+              const part = parts?.find((p: any) => p.barcode === code);
+              const line = count.lines?.find((l: any) => l.partNumber === code || l.partId === part?.id);
               if (!line) {
-                toast({ title: "Part Not In Count", description: `${part.name} is not part of this cycle count.`, variant: "destructive" });
+                toast({ title: "Unknown Part", description: `Code ${code} not found in catalog.`, variant: "destructive" });
                 return;
               }
               
@@ -265,23 +285,27 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
                 const nextVal = current === '' ? 1 : Number(current) + 1;
                 return { ...prev, [line.id]: String(nextVal) };
               });
-              toast({ title: "Counted", description: `Added 1 to ${part.name}` });
+              toast({ title: "Counted", description: `Added 1 to ${line.partName}` });
             }} 
           />
         </div>
         
         <div className="md:col-span-3 glass-panel rounded-2xl overflow-hidden border border-white/10">
+          <div className="p-3 flex items-center gap-2">
+            <Input aria-label="Search count parts" placeholder="Search part number or name" value={search} onChange={e => setSearch(e.target.value)} />
+            <span className="text-xs text-muted-foreground whitespace-nowrap">{visibleLines.length} parts</span>
+          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground bg-white/[0.02]">
-                <th className="px-4 py-3 font-semibold">Part</th>
+                 {(["partNumber", "partName"] as const).map(key => <th key={key} className="px-4 py-3 font-semibold"><button type="button" onClick={() => { setDescending(sortBy === key ? !descending : false); setSortBy(key); }}>{key === "partNumber" ? "Part Number" : "Part Name"} {sortBy === key ? descending ? "↓" : "↑" : ""}</button></th>)}
                 <th className="px-4 py-3 font-semibold text-right">Expected</th>
                 <th className="px-4 py-3 font-semibold text-right w-32">Counted</th>
                 <th className="px-4 py-3 font-semibold text-right">Variance</th>
               </tr>
             </thead>
             <tbody>
-              {count.lines?.map((line: any) => {
+               {visibleLines.map((line: any) => {
                 const expected = line.expectedQty;
                 const counted = lines[line.id] === '' ? null : Number(lines[line.id]);
                 const variance = counted !== null ? counted - expected : null;
@@ -289,12 +313,14 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
 
                 return (
                   <tr key={line.id} className="border-b border-white/5">
-                    <td className="px-4 py-3 font-medium">Part #{line.partId}</td>
+                     <td className="px-4 py-3 font-medium">{line.partNumber}</td>
+                     <td className="px-4 py-3">{line.partName}</td>
                     <td className="px-4 py-3 text-right text-muted-foreground">{expected}</td>
                     <td className="px-4 py-2">
                       <Input
                         type="number"
                         min="0"
+                         disabled={!editable}
                         className={cn(
                           "h-8 text-right bg-white/[0.03] border-white/10",
                           hasVariance && "border-amber-500/50 bg-amber-500/10"

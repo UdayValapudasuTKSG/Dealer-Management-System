@@ -8,9 +8,10 @@ import {
 } from "@workspace/db";
 import { ensureInventory, moveStock, releaseHold } from "./parts-inventory";
 import { resolveDealerSmtp, sanitizeSmtpError } from "./smtp-connection";
-import { sendPartsAdvisorSms } from "./parts-operations-sms";
+import { sendPartsAdvisorSms, sendPartsCustomerSms } from "./parts-operations-sms";
 import { dealerTimezone, zonedDayKey } from "./timezone";
 import { enqueueStockEntrySync } from "./erpnext/parts-sync";
+import { arrivalFailureStatus } from "./po-delivery-policy";
 
 export type PartsTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** Only call after the enclosing stock transaction has COMMITTED. AURA transfers
@@ -72,7 +73,7 @@ export async function generateLowStockOrders(dealerId: number, actorId: number |
     const levels = await tx.select().from(inventoryLevelsTable).where(and(eq(inventoryLevelsTable.dealerId, dealerId), locationId ? eq(inventoryLevelsTable.locationId, locationId) : undefined));
     const pending = await tx.select({ partId: purchaseOrderLinesTable.partId, locationId: purchaseOrdersTable.locationId, quantity: purchaseOrderLinesTable.quantity, received: purchaseOrderLinesTable.qtyReceived })
       .from(purchaseOrderLinesTable).innerJoin(purchaseOrdersTable, and(eq(purchaseOrdersTable.id, purchaseOrderLinesTable.purchaseOrderId), eq(purchaseOrdersTable.dealerId, dealerId)))
-      .where(and(eq(purchaseOrderLinesTable.dealerId, dealerId), inArray(purchaseOrdersTable.status, ["draft", "ordered", "sent", "partially_received"])));
+      .where(and(eq(purchaseOrderLinesTable.dealerId, dealerId), inArray(purchaseOrdersTable.status, ["draft", "pending_review", "approved", "ordered", "sent", "partially_received"])));
     const locations = await tx.select().from(inventoryLocationsTable).where(and(eq(inventoryLocationsTable.dealerId, dealerId), eq(inventoryLocationsTable.active, true)));
     const groups = new Map<string, { part: typeof parts[number]; locationId: number; quantity: number; supplierId: number | null }[]>();
     for (const part of parts) {
@@ -124,7 +125,7 @@ export async function createSpecialOrder(dealerId: number, actorId: number, inpu
     let supplierId = part.supplierId;
     if (supplierId && (await owned(tx, suppliersTable, dealerId, supplierId)).status !== "active") supplierId = null;
     const [po] = await tx.insert(purchaseOrdersTable).values({ dealerId, supplierId, locationId: input.locationId, source: "special_order", status: "draft", needsSupplier: !supplierId, createdBy: actorId, advisorId: input.advisorId, jobCardId: input.referenceType === "job" ? input.referenceId : null, estimateId: input.referenceType === "estimate" ? input.referenceId : null, reference }).returning();
-    const lines = await tx.insert(purchaseOrderLinesTable).values({ dealerId, purchaseOrderId: po!.id, partId: part.id, partName: part.name, quantity: input.quantity, unitCost: part.unitCost, jobCardId: input.referenceType === "job" ? input.referenceId : null }).returning();
+    const lines = await tx.insert(purchaseOrderLinesTable).values({ dealerId, purchaseOrderId: po!.id, partId: part.id, partName: part.name, quantity: input.quantity, unitCost: part.unitCost, isSpecialOrder: true, jobCardId: input.referenceType === "job" ? input.referenceId : null }).returning();
     return { ...po, lines };
   });
 }
@@ -258,23 +259,7 @@ export async function postPartsReceipt(tx: PartsTx, input: { dealerId: number; p
 
 const escapeHtml = (s: unknown) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 export async function queueSupplierEmail(dealerId: number, actorId: number, id: number, resend: boolean) {
-  return db.transaction(async tx => {
-    await procurementLock(tx, dealerId);
-    const po = await owned(tx, purchaseOrdersTable, dealerId, id, true);
-    demand(["draft", "ordered", "sent", "partially_received"].includes(po.status), "This PO cannot be sent");
-    demand(po.supplierId, "Assign a supplier before sending", 400);
-    const supplier = await owned(tx, suppliersTable, dealerId, po.supplierId);
-    demand(supplier.status === "active" && supplier.email, "Active supplier email is required", 400);
-    const prior = await tx.select().from(partNotificationDeliveriesTable).where(and(eq(partNotificationDeliveriesTable.dealerId, dealerId), eq(partNotificationDeliveriesTable.type, "supplier.po"), eq(partNotificationDeliveriesTable.referenceType, "purchase_order"), sql`${partNotificationDeliveriesTable.payload}->>'purchaseOrderId' = ${String(id)}`));
-    demand(!prior.some(r => ["pending", "sending"].includes(r.status)), "Supplier email already queued");
-    demand(!prior.length || resend, "Explicit resend confirmation required");
-    const lines = await tx.select().from(purchaseOrderLinesTable).where(and(eq(purchaseOrderLinesTable.dealerId, dealerId), eq(purchaseOrderLinesTable.purchaseOrderId, id)));
-    demand(lines.length, "PO has no lines", 400);
-    const html = `<h1>Purchase order #${id}</h1><p>${escapeHtml(supplier.name)}</p><table><thead><tr><th>Part</th><th>Qty</th><th>Unit cost</th></tr></thead><tbody>${lines.map(l => `<tr><td>${escapeHtml(l.partName)}</td><td>${l.quantity}</td><td>${l.unitCost.toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
-    const [delivery] = await tx.insert(partNotificationDeliveriesTable).values({ dealerId, recipientId: actorId, channel: "email", type: "supplier.po", referenceType: "purchase_order", referenceId: `${id}:send:${prior.length + 1}`, payload: { purchaseOrderId: id, to: supplier.email, subject: `Purchase order #${id}`, html, approvedBy: actorId, resend } }).returning();
-    await operationAudit(tx, dealerId, actorId, "purchase_order", id, resend ? "Approved supplier PO resend" : "Approved supplier PO email", { deliveryId: delivery!.id });
-    return delivery;
-  });
+  throw new PartsOperationError("Use the approved PO email preview workflow", 409);
 }
 
 export type PartsDeliveryTransport = {
@@ -296,13 +281,17 @@ export async function sweepPartsNotifications(dealerId: number, transport: Parts
     let providerAccepted = false;
     try {
       const p = row.payload;
+      demand(row.type !== "supplier.po", "Legacy supplier email blocked: approve and preview this PO before sending");
       if (row.channel === "internal") {
         const [member] = await db.select({ id: usersTable.id }).from(dealerUsersTable).innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
           .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, row.recipientId), eq(usersTable.status, "active")));
         demand(member, "Advisor is no longer an active member of this dealer");
-        await db.insert(notificationsTable).values({ dealerId, userId: row.recipientId, type: "system", title: String(p.title), body: String(p.body), entityType: "purchase_order", entityId: Number(p.purchaseOrderId), link: "/parts" }).onConflictDoUpdate({ target: [notificationsTable.dealerId, notificationsTable.userId, notificationsTable.type, notificationsTable.entityType, notificationsTable.entityId], targetWhere: sql`entity_type is not null and entity_id is not null`, set: { read: false, body: String(p.body), updatedAt: new Date() } });
+        await db.insert(notificationsTable).values({ dealerId, userId: row.recipientId, type: "system", title: String(p.title), body: String(p.body), entityType: "parts_arrival_delivery", entityId: row.id, link: "/parts?tab=orders" }).onConflictDoUpdate({ target: [notificationsTable.dealerId, notificationsTable.userId, notificationsTable.type, notificationsTable.entityType, notificationsTable.entityId], targetWhere: sql`entity_type is not null and entity_id is not null`, set: { read: false, body: String(p.body), updatedAt: new Date() } });
       } else if (row.channel === "sms") {
-        await (transport.sms ?? sendPartsAdvisorSms)(dealerId, row.recipientId, String(p.body));
+        if (p.customerId) {
+          if (transport.sms) await transport.sms(dealerId, 0, String(p.body));
+          else await sendPartsCustomerSms(dealerId, Number(p.customerId), String(p.body));
+        } else await (transport.sms ?? sendPartsAdvisorSms)(dealerId, row.recipientId, String(p.body));
       } else {
         const message = { to: String(p.to), subject: String(p.subject), html: String(p.html) };
         if (transport.email) await transport.email(dealerId, message);
@@ -315,17 +304,13 @@ export async function sweepPartsNotifications(dealerId: number, transport: Parts
       providerAccepted = true;
       await db.transaction(async tx => {
         await tx.update(partNotificationDeliveriesTable).set({ status: "sent", sentAt: new Date() }).where(and(eq(partNotificationDeliveriesTable.dealerId, dealerId), eq(partNotificationDeliveriesTable.id, row.id)));
-        if (row.type === "supplier.po") {
-          const po = await owned(tx, purchaseOrdersTable, dealerId, Number(p.purchaseOrderId), true);
-          await tx.update(purchaseOrdersTable).set({ status: po.status === "draft" ? "ordered" : po.status, sentAt: new Date(), sendCount: po.sendCount + 1 }).where(and(eq(purchaseOrdersTable.dealerId, dealerId), eq(purchaseOrdersTable.id, po.id)));
-        }
       });
       results.push({ id: row.id, status: "sent" });
     } catch (error) {
       const errorMessage = error instanceof PartsOperationError || (error instanceof Error && error.name === "PartsSmsConfigurationError")
         ? error.message
         : row.channel === "sms" ? "SMS provider rejected or could not confirm the message. Check the dealer SMS setup and provider delivery logs before retrying." : sanitizeSmtpError(error).message;
-      const status = providerAccepted ? "sending" : "failed";
+      const status = arrivalFailureStatus(row.attempts, providerAccepted, row.channel);
       await db.update(partNotificationDeliveriesTable).set({ status, errorMessage: providerAccepted ? "Provider accepted message but delivery bookkeeping failed. Investigate before retrying to avoid duplicates." : errorMessage }).where(and(eq(partNotificationDeliveriesTable.dealerId, dealerId), eq(partNotificationDeliveriesTable.id, row.id)));
       results.push({ id: row.id, status });
     }

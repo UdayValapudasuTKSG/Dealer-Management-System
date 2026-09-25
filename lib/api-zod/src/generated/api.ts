@@ -5059,7 +5059,7 @@ export const ListPaymentsResponseItem = zod.object({
   "invoiceId": zod.number(),
   "customerName": zod.string(),
   "amount": zod.number(),
-  "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
+  "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing', 'account_credit']),
   "reference": zod.string().nullish(),
   "receivedBy": zod.string().nullish(),
   "gateId": zod.number().nullish(),
@@ -5085,7 +5085,7 @@ export const CreatePaymentResponse = zod.object({
   "invoiceId": zod.number(),
   "customerName": zod.string(),
   "amount": zod.number(),
-  "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
+  "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing', 'account_credit']),
   "reference": zod.string().nullish(),
   "receivedBy": zod.string().nullish(),
   "gateId": zod.number().nullish(),
@@ -8597,14 +8597,18 @@ export const ConvertPartRequisitionToPurchaseOrdersResponse = zod.object({
 })),
   "purchaseOrders": zod.array(zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(convertPartRequisitionToPurchaseOrdersResponsePurchaseOrdersItemSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -8618,6 +8622,9 @@ export const ConvertPartRequisitionToPurchaseOrdersResponse = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -11365,14 +11372,18 @@ export const listPartsPurchaseOrderReviewQueueResponseLinesItemLandedCostCompone
 
 export const ListPartsPurchaseOrderReviewQueueResponseItem = zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(listPartsPurchaseOrderReviewQueueResponseSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -11386,6 +11397,9 @@ export const ListPartsPurchaseOrderReviewQueueResponseItem = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -11418,6 +11432,9 @@ export const ListPartsPurchaseOrderReviewQueueResponse = zod.array(ListPartsPurc
 
 export const createPartsOperationalPurchaseOrderBodyLinesItemUnitCostMin = 0;
 
+export const createPartsOperationalPurchaseOrderBodyLinesItemIsSpecialOrderDefault = false;
+
+
 export const createPartsOperationalPurchaseOrderBodyLinesItemLandedCostComponentsFreightMin = 0;
 
 export const createPartsOperationalPurchaseOrderBodyLinesItemLandedCostComponentsDutyMin = 0;
@@ -11438,6 +11455,10 @@ export const CreatePartsOperationalPurchaseOrderBody = zod.object({
   "partId": zod.number().min(1),
   "quantity": zod.number().min(1),
   "unitCost": zod.number().min(createPartsOperationalPurchaseOrderBodyLinesItemUnitCostMin),
+  "isSpecialOrder": zod.boolean().default(createPartsOperationalPurchaseOrderBodyLinesItemIsSpecialOrderDefault),
+  "customerId": zod.number().min(1).nullish(),
+  "jobCardId": zod.number().min(1).nullish(),
+  "requisitionLineId": zod.number().min(1).nullish(),
   "landedCostComponents": zod.object({
   "freight": zod.number().min(createPartsOperationalPurchaseOrderBodyLinesItemLandedCostComponentsFreightMin).optional(),
   "duty": zod.number().min(createPartsOperationalPurchaseOrderBodyLinesItemLandedCostComponentsDutyMin).optional(),
@@ -11461,14 +11482,18 @@ export const createPartsOperationalPurchaseOrderResponseLinesItemLandedCostCompo
 
 export const CreatePartsOperationalPurchaseOrderResponse = zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(createPartsOperationalPurchaseOrderResponseSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -11482,6 +11507,9 @@ export const CreatePartsOperationalPurchaseOrderResponse = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -11552,14 +11580,18 @@ export const createPartsSpecialOrderResponseLinesItemLandedCostComponentsOtherMi
 
 export const CreatePartsSpecialOrderResponse = zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(createPartsSpecialOrderResponseSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -11573,6 +11605,9 @@ export const CreatePartsSpecialOrderResponse = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -11626,14 +11661,18 @@ export const assignPartsPurchaseOrderSupplierResponseLinesItemLandedCostComponen
 
 export const AssignPartsPurchaseOrderSupplierResponse = zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(assignPartsPurchaseOrderSupplierResponseSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -11647,6 +11686,9 @@ export const AssignPartsPurchaseOrderSupplierResponse = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -11683,70 +11725,747 @@ export const ApprovePartsSupplierEmailParams = zod.object({
 })
 
 export const approvePartsSupplierEmailBodyResendDefault = false;
+export const approvePartsSupplierEmailBodyToMin = 3;
+
+export const approvePartsSupplierEmailBodyCcMax = 2000;
+
+export const approvePartsSupplierEmailBodySubjectMax = 300;
+
+export const approvePartsSupplierEmailBodyHtmlMax = 100000;
+
+
 
 export const ApprovePartsSupplierEmailBody = zod.object({
   "confirm": zod.literal(true),
-  "resend": zod.boolean().default(approvePartsSupplierEmailBodyResendDefault)
+  "resend": zod.boolean().default(approvePartsSupplierEmailBodyResendDefault),
+  "snapshotId": zod.number().min(1),
+  "to": zod.string().min(approvePartsSupplierEmailBodyToMin),
+  "cc": zod.string().max(approvePartsSupplierEmailBodyCcMax),
+  "subject": zod.string().min(1).max(approvePartsSupplierEmailBodySubjectMax),
+  "html": zod.string().min(1).max(approvePartsSupplierEmailBodyHtmlMax)
 })
-
-export const approvePartsSupplierEmailResponseSendCountMin = 0;
-
-export const approvePartsSupplierEmailResponseLinesItemLandedCostComponentsFreightMin = 0;
-
-export const approvePartsSupplierEmailResponseLinesItemLandedCostComponentsDutyMin = 0;
-
-export const approvePartsSupplierEmailResponseLinesItemLandedCostComponentsHandlingMin = 0;
-
-export const approvePartsSupplierEmailResponseLinesItemLandedCostComponentsOtherMin = 0;
-
-
 
 export const ApprovePartsSupplierEmailResponse = zod.object({
   "id": zod.number(),
-  "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "customerId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
+  "recipient": zod.string(),
+  "subject": zod.string(),
+  "template": zod.string(),
+  "channel": zod.enum(['email', 'sms', 'whatsapp']),
+  "status": zod.enum(['queued', 'sending', 'sent', 'failed', 'cancelled']),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "nextAttemptAt": zod.coerce.date().nullish(),
+  "sentAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * Requires parts view permission. Strict active dealership and PO location scope.
+ */
+
+
+
+export const GetSupplierInvoicesForPoParams = zod.object({
+  "poId": zod.coerce.number().min(1)
+})
+
+
+
+
+export const GetSupplierInvoicesForPoQueryParams = zod.object({
+  "locationId": zod.coerce.number().min(1)
+})
+
+export const GetSupplierInvoicesForPoResponse = zod.object({
+  "po": zod.object({
+
+}).passthrough(),
+  "lines": zod.array(zod.object({
+
+}).passthrough()),
+  "invoices": zod.array(zod.object({
+
+}).passthrough())
+})
+
+
+/**
+ * Requires parts edit permission. PDF/JPEG/PNG signature validated; private tenant/branch storage. Maximum file size 10 MiB. Case-insensitive trimmed number unique within dealer and supplier, including across POs.
+ */
+
+
+
+export const UploadSupplierPurchaseInvoiceParams = zod.object({
+  "poId": zod.coerce.number().min(1)
+})
+
+
+
+
+export const UploadSupplierPurchaseInvoiceQueryParams = zod.object({
+  "locationId": zod.coerce.number().min(1)
+})
+
+export const UploadSupplierPurchaseInvoiceBody = zod.object({
+  "file": zod.instanceof(File),
+  "invoice": zod.string().describe('JSON serialization of SupplierInvoiceInput. Submit both fields with FormData.')
+})
+
+export const UploadSupplierPurchaseInvoiceResponse = zod.object({
+  "id": zod.number(),
+  "status": zod.enum(['pending', 'reconciled']),
+  "invoice_number": zod.string().optional(),
+  "invoice_date": zod.string().optional(),
+  "dealer_id": zod.number().optional(),
+  "location_id": zod.number().optional(),
+  "supplier_id": zod.number().optional(),
+  "po_id": zod.number().optional(),
+  "subtotal_minor": zod.string().optional(),
+  "shipping_minor": zod.string().optional(),
+  "duties_minor": zod.string().optional(),
+  "tax_minor": zod.string().optional(),
+  "total_minor": zod.string().optional()
+})
+
+
+/**
+ * Requires parts edit permission. Pending only. Retains original attachment, rematches part numbers, resets all variance approvals and audits before/after values.
+ */
+
+
+
+export const EditSupplierPurchaseInvoiceParams = zod.object({
+  "invoiceId": zod.coerce.number().min(1)
+})
+
+
+
+
+export const EditSupplierPurchaseInvoiceQueryParams = zod.object({
+  "locationId": zod.coerce.number().min(1)
+})
+
+export const editSupplierPurchaseInvoiceBodyInvoiceNumberMax = 120;
+
+export const editSupplierPurchaseInvoiceBodyShippingRegExp = new RegExp('^\\d{1,12}(?:\\.\\d{1,2})?$');
+export const editSupplierPurchaseInvoiceBodyDutiesRegExp = new RegExp('^\\d{1,12}(?:\\.\\d{1,2})?$');
+export const editSupplierPurchaseInvoiceBodyTaxRegExp = new RegExp('^\\d{1,12}(?:\\.\\d{1,2})?$');
+export const editSupplierPurchaseInvoiceBodyTotalRegExp = new RegExp('^\\d{1,12}(?:\\.\\d{1,2})?$');
+export const editSupplierPurchaseInvoiceBodyToleranceBpsDefault = 0;
+export const editSupplierPurchaseInvoiceBodyToleranceBpsMin = 0;
+export const editSupplierPurchaseInvoiceBodyToleranceBpsMax = 10000;
+
+export const editSupplierPurchaseInvoiceBodyLinesItemPartNumberMax = 120;
+
+export const editSupplierPurchaseInvoiceBodyLinesItemDescriptionMax = 1000;
+
+export const editSupplierPurchaseInvoiceBodyLinesItemQuantityMin = 0;
+export const editSupplierPurchaseInvoiceBodyLinesItemQuantityMax = 1000000;
+
+export const editSupplierPurchaseInvoiceBodyLinesItemUnitCostRegExp = new RegExp('^\\d{1,12}(?:\\.\\d{1,2})?$');
+export const editSupplierPurchaseInvoiceBodyLinesMax = 500;
+
+
+
+export const EditSupplierPurchaseInvoiceBody = zod.object({
+  "invoiceNumber": zod.string().min(1).max(editSupplierPurchaseInvoiceBodyInvoiceNumberMax),
+  "invoiceDate": zod.coerce.date(),
+  "shipping": zod.string().regex(editSupplierPurchaseInvoiceBodyShippingRegExp).describe('Nonnegative decimal major units, up to two decimal places. Server stores and calculates in bigint minor units.'),
+  "duties": zod.string().regex(editSupplierPurchaseInvoiceBodyDutiesRegExp).describe('Nonnegative decimal major units, up to two decimal places. Server stores and calculates in bigint minor units.'),
+  "tax": zod.string().regex(editSupplierPurchaseInvoiceBodyTaxRegExp).describe('Nonnegative decimal major units, up to two decimal places. Server stores and calculates in bigint minor units.'),
+  "total": zod.string().regex(editSupplierPurchaseInvoiceBodyTotalRegExp).describe('Nonnegative decimal major units, up to two decimal places. Server stores and calculates in bigint minor units.'),
+  "toleranceBps": zod.number().min(editSupplierPurchaseInvoiceBodyToleranceBpsMin).max(editSupplierPurchaseInvoiceBodyToleranceBpsMax).default(editSupplierPurchaseInvoiceBodyToleranceBpsDefault),
+  "lines": zod.array(zod.object({
+  "partNumber": zod.string().min(1).max(editSupplierPurchaseInvoiceBodyLinesItemPartNumberMax),
+  "description": zod.string().max(editSupplierPurchaseInvoiceBodyLinesItemDescriptionMax),
+  "quantity": zod.number().min(editSupplierPurchaseInvoiceBodyLinesItemQuantityMin).max(editSupplierPurchaseInvoiceBodyLinesItemQuantityMax),
+  "unitCost": zod.string().regex(editSupplierPurchaseInvoiceBodyLinesItemUnitCostRegExp).describe('Nonnegative decimal major units, up to two decimal places. Server stores and calculates in bigint minor units.')
+})).min(1).max(editSupplierPurchaseInvoiceBodyLinesMax)
+})
+
+export const EditSupplierPurchaseInvoiceResponse = zod.object({
+  "id": zod.number(),
+  "status": zod.enum(['pending', 'reconciled']),
+  "invoice_number": zod.string().optional(),
+  "invoice_date": zod.string().optional(),
+  "dealer_id": zod.number().optional(),
+  "location_id": zod.number().optional(),
+  "supplier_id": zod.number().optional(),
+  "po_id": zod.number().optional(),
+  "subtotal_minor": zod.string().optional(),
+  "shipping_minor": zod.string().optional(),
+  "duties_minor": zod.string().optional(),
+  "tax_minor": zod.string().optional(),
+  "total_minor": zod.string().optional()
+})
+
+
+/**
+ * Requires parts approve permission. Records actor, reason, timestamp and current receipt/pricing snapshot in audit. Changes to that snapshot require renewed acceptance.
+ */
+
+
+
+export const AcceptSupplierInvoiceVarianceParams = zod.object({
+  "invoiceId": zod.coerce.number().min(1)
+})
+
+
+
+
+export const AcceptSupplierInvoiceVarianceQueryParams = zod.object({
+  "locationId": zod.coerce.number().min(1)
+})
+
+
+export const acceptSupplierInvoiceVarianceBodyReasonMin = 3;
+export const acceptSupplierInvoiceVarianceBodyReasonMax = 2000;
+
+
+
+export const AcceptSupplierInvoiceVarianceBody = zod.object({
+  "lineId": zod.number().min(1),
+  "reason": zod.string().min(acceptSupplierInvoiceVarianceBodyReasonMin).max(acceptSupplierInvoiceVarianceBodyReasonMax)
+})
+
+export const AcceptSupplierInvoiceVarianceResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * Requires parts approve permission. Transactional and idempotent with PO, invoice and part locks. Allocates shipping and duties in integer pennies by line value, then by receipt quantity. Costs only uninvoiced received quantities; never receives stock again. Multiple invoices on the same PO line consume the residual receipt quantity. Unmatched lines, repeated PO parts, over-invoicing, stale variance approvals and missing receipt cost layers explicitly block reconciliation.
+ */
+
+
+
+export const ReconcileSupplierPurchaseInvoiceParams = zod.object({
+  "invoiceId": zod.coerce.number().min(1)
+})
+
+
+
+
+export const ReconcileSupplierPurchaseInvoiceQueryParams = zod.object({
+  "locationId": zod.coerce.number().min(1)
+})
+
+export const ReconcileSupplierPurchaseInvoiceResponse = zod.object({
+  "id": zod.number(),
+  "status": zod.enum(['pending', 'reconciled']),
+  "invoice_number": zod.string().optional(),
+  "invoice_date": zod.string().optional(),
+  "dealer_id": zod.number().optional(),
+  "location_id": zod.number().optional(),
+  "supplier_id": zod.number().optional(),
+  "po_id": zod.number().optional(),
+  "subtotal_minor": zod.string().optional(),
+  "shipping_minor": zod.string().optional(),
+  "duties_minor": zod.string().optional(),
+  "tax_minor": zod.string().optional(),
+  "total_minor": zod.string().optional()
+})
+
+
+/**
+ * Requires parts view permission, tenant/location ownership and private tenant object ACL. Attachment response with private no-store caching.
+ */
+
+
+
+export const DownloadSupplierInvoiceFileParams = zod.object({
+  "invoiceId": zod.coerce.number().min(1)
+})
+
+
+
+
+export const DownloadSupplierInvoiceFileQueryParams = zod.object({
+  "locationId": zod.coerce.number().min(1)
+})
+
+export const DownloadSupplierInvoiceFileResponse = zod.unknown()
+
+
+export const GetPurchaseOrderImportTemplateResponse = zod.unknown()
+
+
+/**
+ * Returns current billable customer lines and a fingerprint; already invoiced sources return the existing invoice reference only. Requires parts create or service edit or finance create.
+ */
+
+
+
+export const PreviewPartsCustomerInvoiceParams = zod.object({
+  "type": zod.enum(['requisition', 'special_order']),
+  "id": zod.coerce.number().min(1).describe('Requisition ID or special-order PO line ID.')
+})
+
+export const PreviewPartsCustomerInvoiceResponse = zod.object({
+  "invoice": zod.union([zod.object({
+  "id": zod.number(),
+  "invoiceNumber": zod.string()
+}),zod.null()]),
+  "previewFingerprint": zod.string().optional(),
+  "customer": zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+}).optional(),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
-  "estimateId": zod.number().nullish(),
-  "advisorId": zod.number().nullish(),
-  "createdBy": zod.number().nullish(),
-  "sentAt": zod.coerce.date().nullish(),
-  "sendCount": zod.number().min(approvePartsSupplierEmailResponseSendCountMin),
-  "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
-  "expectedDate": zod.coerce.date().nullish(),
-  "reference": zod.string().nullish(),
-  "notes": zod.string().nullish(),
-  "createdAt": zod.coerce.date(),
   "lines": zod.array(zod.object({
-  "id": zod.number(),
-  "purchaseOrderId": zod.number(),
   "partId": zod.number().nullish(),
-  "source": zod.enum(['INTERNAL', 'EXTERNAL']),
-  "partName": zod.string(),
+  "name": zod.string(),
+  "sku": zod.string().nullish(),
   "quantity": zod.number(),
-  "qtyReceived": zod.number(),
-  "unitCost": zod.number(),
-  "landedCostComponents": zod.object({
-  "freight": zod.number().min(approvePartsSupplierEmailResponseLinesItemLandedCostComponentsFreightMin).optional(),
-  "duty": zod.number().min(approvePartsSupplierEmailResponseLinesItemLandedCostComponentsDutyMin).optional(),
-  "handling": zod.number().min(approvePartsSupplierEmailResponseLinesItemLandedCostComponentsHandlingMin).optional(),
-  "other": zod.number().min(approvePartsSupplierEmailResponseLinesItemLandedCostComponentsOtherMin).optional()
-}).optional(),
-  "landedUnitCost": zod.number().nullish(),
-  "jobCardId": zod.number().nullish().describe('Originating job card (backorder link)'),
-  "requisitionContext": zod.union([zod.object({
-  "requisitionId": zod.number(),
-  "requisitionLineId": zod.number(),
-  "source": zod.enum(['INTERNAL', 'EXTERNAL']),
-  "jobCardId": zod.number().nullish(),
-  "serviceOrderId": zod.number().nullish(),
-  "quantityOrdered": zod.number(),
-  "quantityReceived": zod.number()
-}),zod.null()]).optional(),
-  "createdAt": zod.coerce.date()
+  "unitPrice": zod.number(),
+  "requisitionLineId": zod.number().nullish(),
+  "jobCardPartId": zod.number().nullish()
+})).optional(),
+  "subtotal": zod.number().optional(),
+  "shippingTotal": zod.number().optional(),
+  "dutiesTotal": zod.number().optional(),
+  "total": zod.number().optional(),
+  "tax": zod.record(zod.string(), zod.unknown()).optional(),
+  "canApplyDeposit": zod.boolean().optional(),
+  "deposits": zod.array(zod.object({
+  "id": zod.number(),
+  "invoiceNumber": zod.string(),
+  "available": zod.string().describe('Decimal GYD available balance.')
+})).optional()
+})
+
+
+/**
+ * Generates once from an unchanged preview. Optional deposit credit additionally requires finance edit; duplicate sources return a conflict with the existing invoice.
+ */
+
+
+
+export const GeneratePartsCustomerInvoiceParams = zod.object({
+  "type": zod.enum(['requisition', 'special_order']),
+  "id": zod.coerce.number().min(1).describe('Requisition ID or special-order PO line ID.')
+})
+
+export const generatePartsCustomerInvoiceBodyPreviewFingerprintRegExp = new RegExp('^[a-f0-9]{64}$');
+
+export const generatePartsCustomerInvoiceBodyDepositAmountOneRegExp = new RegExp('^[0-9]{1,12}(?:[.][0-9]{1,2})?$');
+export const generatePartsCustomerInvoiceBodyDepositAmountTwoMin = 0;
+export const generatePartsCustomerInvoiceBodyDepositAmountTwoMax = 999999999999.99;
+export const generatePartsCustomerInvoiceBodyDepositAmountTwoMultipleOf = 0.01;
+
+
+
+export const GeneratePartsCustomerInvoiceBody = zod.object({
+  "previewFingerprint": zod.string().regex(generatePartsCustomerInvoiceBodyPreviewFingerprintRegExp),
+  "depositInvoiceId": zod.number().min(1).optional(),
+  "depositAmount": zod.union([zod.string().regex(generatePartsCustomerInvoiceBodyDepositAmountOneRegExp),zod.number().min(generatePartsCustomerInvoiceBodyDepositAmountTwoMin).max(generatePartsCustomerInvoiceBodyDepositAmountTwoMax).multipleOf(generatePartsCustomerInvoiceBodyDepositAmountTwoMultipleOf)]).optional().describe('Required when depositInvoiceId is supplied.')
+})
+
+export const GeneratePartsCustomerInvoiceResponse = zod.object({
+  "invoice": zod.object({
+  "id": zod.number(),
+  "invoiceNumber": zod.string()
+})
+})
+
+
+
+
+
+export const GetPartsCustomerInvoicePdfParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const GetPartsCustomerInvoicePdfResponse = zod.unknown()
+
+
+/**
+ * Queues the existing customer invoice template through the shared outbox with invoice-scoped deduplication.
+ */
+
+
+
+export const EmailPartsCustomerInvoiceParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const EmailPartsCustomerInvoiceResponse = zod.object({
+  "status": zod.string(),
+  "emailLogId": zod.number()
+})
+
+
+
+
+
+export const GetPartsServiceEstimatePdfParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const GetPartsServiceEstimatePdfResponse = zod.unknown()
+
+
+
+
+
+export const GetPartsEstimateChargesParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const getPartsEstimateChargesResponseShippingTotalMin = 0;
+
+export const getPartsEstimateChargesResponseDutiesTotalMin = 0;
+
+
+
+export const GetPartsEstimateChargesResponse = zod.object({
+  "shippingTotal": zod.number().min(getPartsEstimateChargesResponseShippingTotalMin),
+  "dutiesTotal": zod.number().min(getPartsEstimateChargesResponseDutiesTotalMin)
+})
+
+
+/**
+ * Requires parts or service edit. Updating charges supersedes estimate approval and increments its version. Issued invoice charges cannot be edited.
+ */
+
+
+
+export const UpdatePartsEstimateChargesParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const updatePartsEstimateChargesBodyShippingAmountOneRegExp = new RegExp('^[0-9]{1,12}(?:[.][0-9]{1,2})?$');
+export const updatePartsEstimateChargesBodyShippingAmountTwoMin = 0;
+export const updatePartsEstimateChargesBodyShippingAmountTwoMax = 999999999999.99;
+export const updatePartsEstimateChargesBodyShippingAmountTwoMultipleOf = 0.01;
+
+export const updatePartsEstimateChargesBodyDutiesAmountOneRegExp = new RegExp('^[0-9]{1,12}(?:[.][0-9]{1,2})?$');
+export const updatePartsEstimateChargesBodyDutiesAmountTwoMin = 0;
+export const updatePartsEstimateChargesBodyDutiesAmountTwoMax = 999999999999.99;
+export const updatePartsEstimateChargesBodyDutiesAmountTwoMultipleOf = 0.01;
+
+
+
+export const UpdatePartsEstimateChargesBody = zod.object({
+  "shippingAmount": zod.union([zod.string().regex(updatePartsEstimateChargesBodyShippingAmountOneRegExp),zod.number().min(updatePartsEstimateChargesBodyShippingAmountTwoMin).max(updatePartsEstimateChargesBodyShippingAmountTwoMax).multipleOf(updatePartsEstimateChargesBodyShippingAmountTwoMultipleOf)]).describe('Nonnegative decimal GYD amount. Prefer strings for exact decimal input.'),
+  "dutiesAmount": zod.union([zod.string().regex(updatePartsEstimateChargesBodyDutiesAmountOneRegExp),zod.number().min(updatePartsEstimateChargesBodyDutiesAmountTwoMin).max(updatePartsEstimateChargesBodyDutiesAmountTwoMax).multipleOf(updatePartsEstimateChargesBodyDutiesAmountTwoMultipleOf)]).describe('Nonnegative decimal GYD amount. Prefer strings for exact decimal input.')
+})
+
+export const updatePartsEstimateChargesResponseShippingTotalMin = 0;
+
+export const updatePartsEstimateChargesResponseDutiesTotalMin = 0;
+
+
+
+export const UpdatePartsEstimateChargesResponse = zod.object({
+  "shippingTotal": zod.number().min(updatePartsEstimateChargesResponseShippingTotalMin),
+  "dutiesTotal": zod.number().min(updatePartsEstimateChargesResponseDutiesTotalMin)
+})
+
+
+/**
+ * Requires parts create permission. CSV/XLSX upload limited to 10 MiB. Validates without writing any order or stock records.
+ */
+
+
+
+export const PreviewPurchaseOrderImportBody = zod.object({
+  "file": zod.instanceof(File),
+  "locationId": zod.number().min(1),
+  "decisions": zod.string().optional().describe('JSON object mapping source row numbers to create or skip; only for unknown parts.')
+})
+
+export const PreviewPurchaseOrderImportResponse = zod.object({
+  "fingerprint": zod.string(),
+  "ready": zod.number(),
+  "invalid": zod.number(),
+  "skipped": zod.number(),
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number(),
+  "supplier_code": zod.string(),
+  "part_number": zod.string(),
+  "part_name": zod.string(),
+  "qty": zod.string(),
+  "unit_cost": zod.string(),
+  "special_order": zod.string(),
+  "customer_ref": zod.string(),
+  "ro_number": zod.string(),
+  "status": zod.enum(['invalid', 'skipped', 'ready']),
+  "unknownPart": zod.boolean(),
+  "errors": zod.array(zod.string()),
+  "supplierId": zod.number().nullish(),
+  "partId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish()
 }))
 })
+
+
+/**
+ * Reupload exact previewed file with same decisions and fingerprint. Creates Draft POs grouped by supplier. Invalid and explicitly skipped rows are omitted; duplicate file+branch commits are blocked.
+ */
+
+export const commitPurchaseOrderImportBodyFingerprintMin = 64;
+export const commitPurchaseOrderImportBodyFingerprintMax = 64;
+
+
+
+export const CommitPurchaseOrderImportBody = zod.object({
+  "file": zod.instanceof(File),
+  "locationId": zod.number().min(1),
+  "decisions": zod.string().optional().describe('Exact same JSON decisions used for preview.'),
+  "fingerprint": zod.string().min(commitPurchaseOrderImportBodyFingerprintMin).max(commitPurchaseOrderImportBodyFingerprintMax)
+})
+
+export const CommitPurchaseOrderImportResponse = zod.object({
+  "purchaseOrderIds": zod.array(zod.number()),
+  "importedRows": zod.number(),
+  "invalidRows": zod.number()
+})
+
+
+
+
+
+export const GetNamedPartsCycleCountParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const GetNamedPartsCycleCountResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
+
+
+
+
+
+export const ExportNamedPartsCycleCountParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const ExportNamedPartsCycleCountQueryParams = zod.object({
+  "format": zod.enum(['csv', 'pdf'])
+})
+
+export const ExportNamedPartsCycleCountResponse = zod.unknown()
+
+
+
+export const exportNamedPartsAgingQueryCategoryMax = 500;
+
+
+
+export const ExportNamedPartsAgingQueryParams = zod.object({
+  "format": zod.enum(['csv', 'pdf']),
+  "locationId": zod.coerce.number().min(1).optional(),
+  "category": zod.coerce.string().min(1).max(exportNamedPartsAgingQueryCategoryMax).optional(),
+  "thresholds": zod.coerce.string().optional().describe('Ascending unique day thresholds separated by commas; default 30,60,90; at most 10.')
+})
+
+export const ExportNamedPartsAgingResponse = zod.unknown()
+
+
+
+
+
+export const GetNamedPartsValuationQueryParams = zod.object({
+  "format": zod.enum(['csv', 'pdf']).optional(),
+  "locationId": zod.coerce.number().min(1).optional(),
+  "asOf": zod.coerce.string().optional().describe('ISO date or timestamp; date-only uses end of day except today.')
+})
+
+export const GetNamedPartsValuationResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
+
+
+
+
+
+export const ReviewPartsPurchaseOrderParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const reviewPartsPurchaseOrderBodyCommentMax = 2000;
+
+
+
+export const ReviewPartsPurchaseOrderBody = zod.object({
+  "action": zod.enum(['submit', 'approve', 'return', 'cancel']),
+  "comment": zod.string().max(reviewPartsPurchaseOrderBodyCommentMax).optional()
+})
+
+export const ReviewPartsPurchaseOrderResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
+
+
+
+
+
+export const PreviewPartsPurchaseOrderEmailParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const previewPartsPurchaseOrderEmailBodyResendDefault = false;
+
+export const PreviewPartsPurchaseOrderEmailBody = zod.object({
+  "resend": zod.boolean().default(previewPartsPurchaseOrderEmailBodyResendDefault)
+})
+
+export const PreviewPartsPurchaseOrderEmailResponse = zod.object({
+  "id": zod.number(),
+  "to": zod.string(),
+  "cc": zod.string(),
+  "subject": zod.string(),
+  "html": zod.string(),
+  "filename": zod.string(),
+  "sha256": zod.string()
+})
+
+
+
+
+
+export const GetPartsPurchaseOrderEmailHistoryParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const GetPartsPurchaseOrderEmailHistoryResponseItem = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
+export const GetPartsPurchaseOrderEmailHistoryResponse = zod.array(GetPartsPurchaseOrderEmailHistoryResponseItem)
+
+
+
+
+
+
+export const GetPartsPurchaseOrderSnapshotPdfParams = zod.object({
+  "id": zod.coerce.number().min(1),
+  "snapshotId": zod.coerce.number().min(1)
+})
+
+export const GetPartsPurchaseOrderSnapshotPdfResponse = zod.unknown()
+
+
+
+
+
+export const ClosePartsPurchaseOrderParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const ClosePartsPurchaseOrderResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
+
+
+
+
+
+export const EditPartsPurchaseOrderDraftParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const editPartsPurchaseOrderDraftBodyNotesMax = 2000;
+
+
+
+export const editPartsPurchaseOrderDraftBodyLinesItemUnitCostMin = 0;
+
+export const editPartsPurchaseOrderDraftBodyLinesMax = 500;
+
+
+
+export const EditPartsPurchaseOrderDraftBody = zod.object({
+  "expectedDate": zod.coerce.date().nullish(),
+  "notes": zod.string().max(editPartsPurchaseOrderDraftBodyNotesMax).optional(),
+  "lines": zod.array(zod.object({
+  "id": zod.number().min(1),
+  "quantity": zod.number().min(1),
+  "unitCost": zod.number().min(editPartsPurchaseOrderDraftBodyLinesItemUnitCostMin),
+  "isSpecialOrder": zod.boolean(),
+  "customerId": zod.number().nullable(),
+  "jobCardId": zod.number().nullable(),
+  "requisitionLineId": zod.number().nullable()
+})).min(1).max(editPartsPurchaseOrderDraftBodyLinesMax)
+})
+
+export const EditPartsPurchaseOrderDraftResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
+
+
+
+
+
+export const GetPartsCommunicationSettingsParams = zod.object({
+  "locationId": zod.coerce.number().min(1)
+})
+
+export const getPartsCommunicationSettingsResponseSubjectMax = 300;
+
+export const getPartsCommunicationSettingsResponseBodyHtmlMax = 100000;
+
+
+
+export const GetPartsCommunicationSettingsResponse = zod.object({
+  "subject": zod.string().min(1).max(getPartsCommunicationSettingsResponseSubjectMax),
+  "body_html": zod.string().min(1).max(getPartsCommunicationSettingsResponseBodyHtmlMax),
+  "sms_enabled": zod.boolean(),
+  "parts_manager": zod.boolean(),
+  "service_manager": zod.boolean(),
+  "customer_sms": zod.boolean()
+})
+
+
+
+
+
+export const UpdatePartsCommunicationSettingsParams = zod.object({
+  "locationId": zod.coerce.number().min(1)
+})
+
+export const updatePartsCommunicationSettingsBodySubjectMax = 300;
+
+export const updatePartsCommunicationSettingsBodyBodyHtmlMax = 100000;
+
+
+
+export const UpdatePartsCommunicationSettingsBody = zod.object({
+  "subject": zod.string().min(1).max(updatePartsCommunicationSettingsBodySubjectMax),
+  "body_html": zod.string().min(1).max(updatePartsCommunicationSettingsBodyBodyHtmlMax),
+  "sms_enabled": zod.boolean(),
+  "parts_manager": zod.boolean(),
+  "service_manager": zod.boolean(),
+  "customer_sms": zod.boolean()
+})
+
+export const updatePartsCommunicationSettingsResponseSubjectMax = 300;
+
+export const updatePartsCommunicationSettingsResponseBodyHtmlMax = 100000;
+
+
+
+export const UpdatePartsCommunicationSettingsResponse = zod.object({
+  "subject": zod.string().min(1).max(updatePartsCommunicationSettingsResponseSubjectMax),
+  "body_html": zod.string().min(1).max(updatePartsCommunicationSettingsResponseBodyHtmlMax),
+  "sms_enabled": zod.boolean(),
+  "parts_manager": zod.boolean(),
+  "service_manager": zod.boolean(),
+  "customer_sms": zod.boolean()
+})
+
+
+
+
+
+export const UpdatePartsSupplierCcEmailsParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const updatePartsSupplierCcEmailsBodyCcEmailsItemMin = 3;
+
+export const updatePartsSupplierCcEmailsBodyCcEmailsMax = 20;
+
+
+
+export const UpdatePartsSupplierCcEmailsBody = zod.object({
+  "ccEmails": zod.array(zod.string().min(updatePartsSupplierCcEmailsBodyCcEmailsItemMin)).max(updatePartsSupplierCcEmailsBodyCcEmailsMax)
+})
+
+export const UpdatePartsSupplierCcEmailsResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
 
 
 export const ListPartsNotificationDeliveriesQueryParams = zod.object({
@@ -12105,14 +12824,18 @@ export const listPurchaseOrdersResponseLinesItemLandedCostComponentsOtherMin = 0
 
 export const ListPurchaseOrdersResponseItem = zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(listPurchaseOrdersResponseSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -12126,6 +12849,9 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -12205,14 +12931,18 @@ export const createPurchaseOrderResponseLinesItemLandedCostComponentsOtherMin = 
 
 export const CreatePurchaseOrderResponse = zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(createPurchaseOrderResponseSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -12226,6 +12956,9 @@ export const CreatePurchaseOrderResponse = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -12278,14 +13011,18 @@ export const updatePurchaseOrderResponseLinesItemLandedCostComponentsOtherMin = 
 
 export const UpdatePurchaseOrderResponse = zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(updatePurchaseOrderResponseSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -12299,6 +13036,9 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -12396,14 +13136,18 @@ export const receivePurchaseOrderResponseLinesItemLandedCostComponentsOtherMin =
 
 export const ReceivePurchaseOrderResponse = zod.object({
   "id": zod.number(),
+  "poNumber": zod.string().nullish(),
   "supplierId": zod.number().nullish(),
-  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
-  "source": zod.enum(['manual', 'low_stock_alert', 'special_order']),
+  "status": zod.enum(['draft', 'pending_review', 'approved', 'sent', 'ordered', 'partially_received', 'received', 'closed', 'cancelled']),
+  "source": zod.enum(['manual', 'import', 'low_stock_alert', 'special_order']),
   "locationId": zod.number().nullish(),
   "jobCardId": zod.number().nullish(),
   "estimateId": zod.number().nullish(),
   "advisorId": zod.number().nullish(),
   "createdBy": zod.number().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewComment": zod.string().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "sendCount": zod.number().min(receivePurchaseOrderResponseSendCountMin),
   "needsSupplier": zod.boolean().describe('True when queued for supplier assignment'),
@@ -12417,6 +13161,9 @@ export const ReceivePurchaseOrderResponse = zod.object({
   "partId": zod.number().nullish(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
   "partName": zod.string(),
+  "isSpecialOrder": zod.boolean().optional(),
+  "customerId": zod.number().nullish(),
+  "requisitionLineId": zod.number().nullish(),
   "quantity": zod.number(),
   "qtyReceived": zod.number(),
   "unitCost": zod.number(),
@@ -12510,6 +13257,7 @@ export const listSuppliersResponseLeadTimeDaysMin = 0;
 export const ListSuppliersResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "ccEmails": zod.array(zod.string()).optional(),
   "contactName": zod.string().nullish(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -12541,6 +13289,7 @@ export const createSupplierResponseLeadTimeDaysMin = 0;
 export const CreateSupplierResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "ccEmails": zod.array(zod.string()).optional(),
   "contactName": zod.string().nullish(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -12571,6 +13320,7 @@ export const GetSupplierDeliveryHistoryResponse = zod.object({
   "supplier": zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "ccEmails": zod.array(zod.string()).optional(),
   "contactName": zod.string().nullish(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),

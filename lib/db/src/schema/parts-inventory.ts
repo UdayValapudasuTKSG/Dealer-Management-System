@@ -137,6 +137,7 @@ export const partReconciliationsTable = pgTable("part_reconciliations", {
   check("part_reconciliations_status_ck", sql`${t.status} in ('pending','matched','flagged','resolved')`),
 ]);
 export const partNotificationDeliveriesTable = pgTable("part_notification_deliveries", {
+  locationId: integer("location_id"),
   ...identity(), recipientId: integer("recipient_id").notNull(), channel: text("channel").notNull(),
   type: text("type").notNull(), referenceType: text("reference_type").notNull(), referenceId: text("reference_id").notNull(),
   status: text("status").notNull().default("pending"), attempts: integer("attempts").notNull().default(0),

@@ -18,6 +18,10 @@ import { agingReport, valuationReport, replenishmentReport, reconciliationFlags,
 import { partsSmsReadiness } from "../lib/parts-operations-sms";
 import { issueJobParts } from "../lib/job-part-stock";
 import { calculateLandedUnitCost } from "../lib/parts-landed-cost";
+import { previewPoEmail, poSnapshotPdf, sendPoPreview } from "../lib/po-communications";
+import { nextPoStatus } from "../lib/po-lifecycle-policy";
+import { assertNoUnreconciledSupplierInvoices } from "../lib/supplier-invoices";
+import { notificationsTable, emailLogsTable, customersTable } from "@workspace/db";
 
 const router = Router();
 const id = z.coerce.number().int().positive();
@@ -165,7 +169,7 @@ router.post("/transfers", endpoint("edit", async (req, _res, c) => {
 }));
 
 router.get("/purchase-orders", endpoint("view", async (req, _res, c) => {
-  const orders = await db.select().from(purchaseOrdersTable).where(and(scope(purchaseOrdersTable, c.dealerId), req.query.status ? eq(purchaseOrdersTable.status, text.parse(req.query.status)) : undefined, req.query.source ? eq(purchaseOrdersTable.source, z.enum(["manual", "low_stock_alert", "special_order"]).parse(req.query.source)) : undefined)).orderBy(desc(purchaseOrdersTable.id));
+  const orders = await db.select().from(purchaseOrdersTable).where(and(scope(purchaseOrdersTable, c.dealerId), req.query.status ? eq(purchaseOrdersTable.status, text.parse(req.query.status)) : undefined, req.query.source ? eq(purchaseOrdersTable.source, z.enum(["manual", "import", "low_stock_alert", "special_order"]).parse(req.query.source)) : undefined, req.query.locationId ? eq(purchaseOrdersTable.locationId, id.parse(req.query.locationId)) : undefined, req.query.supplierId ? eq(purchaseOrdersTable.supplierId, id.parse(req.query.supplierId)) : undefined, req.query.from ? sql`${purchaseOrdersTable.createdAt} >= ${z.iso.date().parse(req.query.from)}::date` : undefined, req.query.to ? sql`${purchaseOrdersTable.createdAt} < ${z.iso.date().parse(req.query.to)}::date + interval '1 day'` : undefined)).orderBy(desc(purchaseOrdersTable.id));
   const lines = await db.select().from(purchaseOrderLinesTable).where(scope(purchaseOrderLinesTable, c.dealerId));
   return orders.map(po => ({ ...po, needsSupplier: !po.supplierId, lines: lines.filter(l => l.purchaseOrderId === po.id) }));
 }));
@@ -174,6 +178,7 @@ router.post("/purchase-orders/special-order", endpoint("edit", async (req, _res,
 router.post("/purchase-orders", endpoint("edit", async (req, _res, c) => {
   const input = z.object({ supplierId: id.optional(), locationId: id, expectedDate: z.iso.date().optional(), notes: z.string().max(2000).optional(), lines: z.array(z.object({
     partId: id, quantity: qty.positive(), unitCost: money,
+    isSpecialOrder: z.boolean().default(false), customerId: id.nullable().optional(), jobCardId: id.nullable().optional(), requisitionLineId: id.nullable().optional(),
     landedCostComponents: z.object({ freight: money.optional(), duty: money.optional(),
       handling: money.optional(), other: money.optional() }).strict().optional(),
   }).strict()).min(1).max(500) }).strict().parse(req.body);
@@ -183,11 +188,19 @@ router.post("/purchase-orders", endpoint("edit", async (req, _res, c) => {
     const lines = [];
     for (const line of input.lines) {
       const part = await owned(tx, partsTable, c.dealerId, line.partId);
+      if (line.customerId) await owned(tx, customersTable, c.dealerId, line.customerId);
+      if (line.jobCardId) await owned(tx, jobCardsTable, c.dealerId, line.jobCardId);
+      if (line.requisitionLineId) {
+        const linked = await tx.execute(sql`select id from part_requisition_lines where dealer_id=${c.dealerId} and id=${line.requisitionLineId}`);
+        demand(linked.rows.length, "Requisition line not found", 404);
+      }
       lines.push({ ...line, partName: part.name, landedCostComponents: line.landedCostComponents ?? {},
         landedUnitCost: calculateLandedUnitCost(line.unitCost, line.quantity, line.landedCostComponents) });
     }
     const [po] = await tx.insert(purchaseOrdersTable).values({ dealerId: c.dealerId, supplierId: input.supplierId, locationId: input.locationId, source: "manual", status: "draft", createdBy: c.actorId, needsSupplier: !input.supplierId, expectedDate: input.expectedDate, notes: input.notes }).returning();
-    const inserted = await tx.insert(purchaseOrderLinesTable).values(lines.map(l => ({ ...l, dealerId: c.dealerId, purchaseOrderId: po!.id }))).returning(); return { ...po, lines: inserted };
+    const inserted = await tx.insert(purchaseOrderLinesTable).values(lines.map(l => ({ ...l, dealerId: c.dealerId, purchaseOrderId: po!.id }))).returning();
+    await operationAudit(tx, c.dealerId, c.actorId, "purchase_order", po!.id, "Created draft purchase order", { before: null, after: "draft", locationId: input.locationId, lineIds: inserted.map(l => l.id) });
+    return { ...po, lines: inserted };
   });
 }));
 router.patch("/purchase-orders/:id/supplier", endpoint("edit", async (req, _res, c) => {
@@ -204,8 +217,107 @@ router.patch("/purchase-orders/:id/supplier", endpoint("edit", async (req, _res,
   });
 }));
 router.post("/purchase-orders/:id/send", endpoint("approve", async (req, _res, c) => {
-  const input = z.object({ confirm: z.literal(true), resend: z.boolean().default(false) }).strict().parse(req.body);
-  return queueSupplierEmail(c.dealerId, c.actorId, id.parse(req.params.id), input.resend);
+  const input = z.object({ confirm: z.literal(true), resend: z.boolean().default(false), snapshotId: id, to: z.email(), cc: z.string().max(2000), subject: z.string().min(1).max(300).regex(/^[^\r\n]+$/), html: z.string().min(1).max(100000) }).strict().parse(req.body);
+  for (const address of input.cc.split(",").map(s => s.trim()).filter(Boolean)) z.email().parse(address);
+  return sendPoPreview(c.dealerId, c.actorId, id.parse(req.params.id), input);
+}));
+router.post("/purchase-orders/:id/preview", endpoint("approve", async (req, _res, c) => {
+  const input = z.object({ resend: z.boolean().default(false) }).strict().parse(req.body ?? {});
+  return previewPoEmail(c.dealerId, c.actorId, id.parse(req.params.id), input.resend);
+}));
+router.put("/suppliers/:id/cc-emails", endpoint("edit", async (req, _res, c) => {
+  const input = z.object({ ccEmails: z.array(z.email()).max(20) }).strict().parse(req.body);
+  return db.transaction(async tx => {
+    const supplier = await owned(tx, suppliersTable, c.dealerId, id.parse(req.params.id), true);
+    const [updated] = await tx.update(suppliersTable).set({ ccEmails: [...new Set(input.ccEmails)] }).where(scope(suppliersTable, c.dealerId, supplier.id)).returning();
+    await operationAudit(tx, c.dealerId, c.actorId, "supplier", supplier.id, "Updated supplier CC addresses", { before: supplier.ccEmails, after: input.ccEmails });
+    return updated;
+  });
+}));
+router.get("/purchase-orders/:id/snapshots/:snapshotId/pdf", endpoint("view", async (req, res, c) => {
+  const bytes = await poSnapshotPdf(c.dealerId, id.parse(req.params.id), id.parse(req.params.snapshotId));
+  res.setHeader("Cache-Control", "private, no-store");
+  res.type("application/pdf").send(bytes);
+}));
+router.get("/purchase-orders/:id/email-history", endpoint("view", async (req, _res, c) => {
+  await owned(db, purchaseOrdersTable, c.dealerId, id.parse(req.params.id));
+  const rows = await db.execute(sql`select e.id,e.status,e.sent_at,e.provider_message_id,e.last_error,s.to_address,s.cc,s.subject,s.body_html,s.filename,s.sha256 from po_email_snapshots s join email_logs e on e.id=s.email_log_id where s.dealer_id=${c.dealerId} and s.purchase_order_id=${id.parse(req.params.id)} order by e.id desc`);
+  return rows.rows;
+}));
+router.post("/purchase-orders/:id/close", endpoint("approve", async (req, _res, c) => db.transaction(async tx => {
+  const po = await owned(tx, purchaseOrdersTable, c.dealerId, id.parse(req.params.id), true);
+  demand(po.status === "received", "Only fully received purchase orders can be closed");
+  const installed = await tx.execute(sql`select to_regclass('supplier_invoices') as name`);
+  demand(installed.rows[0]?.name, "Supplier invoice reconciliation migration must be installed before closing POs", 503);
+  await assertNoUnreconciledSupplierInvoices(tx, c.dealerId, po.id);
+  const [updated] = await tx.update(purchaseOrdersTable).set({ status: "closed" }).where(and(scope(purchaseOrdersTable, c.dealerId, po.id), eq(purchaseOrdersTable.status, "received"))).returning();
+  demand(updated, "PO changed; reload and retry");
+  await operationAudit(tx, c.dealerId, c.actorId, "purchase_order", po.id, "Closed purchase order", { before: "received", after: "closed" });
+  return updated;
+})));
+router.post("/purchase-orders/:id/review", endpoint("edit", async (req, res, c) => {
+  const input = z.object({ action: z.enum(["submit", "approve", "return", "cancel"]), comment: z.string().trim().max(2000).optional() }).strict().parse(req.body);
+  if (input.action !== "submit") demand(hasPermission(res.locals.user, "parts", "approve"), "Parts approval permission required", 403);
+  if (input.action === "return") demand(input.comment, "A return comment is required", 400);
+  return db.transaction(async tx => {
+    const po = await owned(tx, purchaseOrdersTable, c.dealerId, id.parse(req.params.id), true);
+    if (input.action === "submit") {
+      demand(po.supplierId && po.locationId, "Supplier and receiving location are required");
+      const lines = await tx.select().from(purchaseOrderLinesTable).where(and(scope(purchaseOrderLinesTable, c.dealerId), eq(purchaseOrderLinesTable.purchaseOrderId, po.id)));
+      demand(lines.length && lines.every(line => line.quantity > 0), "Add order lines before review");
+    }
+    const busy = await tx.execute(sql`select e.id from po_email_snapshots s join email_logs e on e.id=s.email_log_id where s.dealer_id=${c.dealerId} and s.purchase_order_id=${po.id} and e.status in ('queued','sending')`);
+    demand(!busy.rows.length, "Cannot change a PO while email delivery is pending");
+    let status: string;
+    try { status = nextPoStatus(po.status, input.action, po.createdBy, c.actorId, hasPermission(res.locals.user, "parts", "admin")); }
+    catch (e) { throw new PartsOperationError((e as Error).message); }
+    const [updated] = await tx.update(purchaseOrdersTable).set({ status, reviewedBy: input.action === "submit" ? null : c.actorId, reviewedAt: input.action === "submit" ? null : new Date(), reviewComment: input.comment ?? null }).where(and(scope(purchaseOrdersTable, c.dealerId, po.id), eq(purchaseOrdersTable.status, po.status))).returning();
+    demand(updated, "PO changed; refresh and try again");
+    await operationAudit(tx, c.dealerId, c.actorId, "purchase_order", po.id, `PO ${input.action}`, { before: po.status, after: status, comment: input.comment });
+    if (input.action === "return" && po.createdBy) await tx.insert(notificationsTable).values({ dealerId: c.dealerId, userId: po.createdBy, type: "system", title: `PO #${po.id} returned to draft`, body: input.comment!, entityType: "purchase_order_review", entityId: po.id, link: "/parts?tab=orders" }).onConflictDoUpdate({ target: [notificationsTable.dealerId, notificationsTable.userId, notificationsTable.type, notificationsTable.entityType, notificationsTable.entityId], targetWhere: sql`entity_type is not null and entity_id is not null`, set: { body: input.comment!, read: false, updatedAt: new Date() } });
+    return updated;
+  });
+}));
+router.patch("/purchase-orders/:id/draft", endpoint("edit", async (req, _res, c) => {
+  const input = z.object({ expectedDate: z.iso.date().nullable().optional(), notes: z.string().max(2000).optional(), lines: z.array(z.object({ id, quantity: qty.positive(), unitCost: money, isSpecialOrder: z.boolean(), customerId: id.nullable(), jobCardId: id.nullable(), requisitionLineId: id.nullable() }).strict()).min(1).max(500) }).strict().parse(req.body);
+  return db.transaction(async tx => {
+    const po = await owned(tx, purchaseOrdersTable, c.dealerId, id.parse(req.params.id), true);
+    demand(po.status === "draft", "Only drafts can be edited");
+    demand(new Set(input.lines.map(l => l.id)).size === input.lines.length, "Duplicate lines", 400);
+    for (const line of input.lines) {
+      const current = await owned(tx, purchaseOrderLinesTable, c.dealerId, line.id);
+      demand(current.purchaseOrderId === po.id, "Line belongs to another PO", 404);
+      if (line.customerId) await owned(tx, customersTable, c.dealerId, line.customerId);
+      if (line.jobCardId) await owned(tx, jobCardsTable, c.dealerId, line.jobCardId);
+      if (line.requisitionLineId) {
+        const linked = await tx.execute(sql`select id from part_requisition_lines where dealer_id=${c.dealerId} and id=${line.requisitionLineId}`);
+        demand(linked.rows.length, "Requisition line not found", 404);
+      }
+      await tx.update(purchaseOrderLinesTable).set({ quantity: line.quantity, unitCost: line.unitCost, isSpecialOrder: line.isSpecialOrder, customerId: line.customerId, jobCardId: line.jobCardId, requisitionLineId: line.requisitionLineId }).where(scope(purchaseOrderLinesTable, c.dealerId, line.id));
+    }
+    await tx.update(purchaseOrdersTable).set({ expectedDate: input.expectedDate, notes: input.notes, reviewedBy: null, reviewedAt: null }).where(and(scope(purchaseOrdersTable, c.dealerId, po.id), eq(purchaseOrdersTable.status, "draft")));
+    await operationAudit(tx, c.dealerId, c.actorId, "purchase_order", po.id, "Edited draft PO", { before: "draft", after: "draft", lines: input.lines });
+    return { id: po.id };
+  });
+}));
+router.get("/communication-settings/:locationId", endpoint("view", async (req, _res, c) => {
+  const locationId = id.parse(req.params.locationId);
+  await validateLocation(db, c.dealerId, locationId);
+  const result = await db.execute(sql`select * from po_communication_settings where dealer_id=${c.dealerId} and location_id=${locationId}`);
+  return result.rows[0] ?? { location_id: locationId, subject: "Purchase order {{po_number}}", body_html: "<p>Dear {{supplier_name}},</p><p>Please find purchase order {{po_number}} attached for {{branch}}. Expected: {{expected_date}}.</p><p>{{sender_name}}</p>", sms_enabled: false, parts_manager: true, service_manager: true, customer_sms: false };
+}));
+router.put("/communication-settings/:locationId", endpoint("edit", async (req, res, c) => {
+  demand(hasPermission(res.locals.user, "settings", "admin"), "Settings admin permission required", 403);
+  const locationId = id.parse(req.params.locationId);
+  const input = z.object({ subject: z.string().min(1).max(300).regex(/^[^\r\n]+$/), body_html: z.string().min(1).max(100000), sms_enabled: z.boolean(), parts_manager: z.boolean(), service_manager: z.boolean(), customer_sms: z.boolean() }).strict().parse(req.body);
+  const allowed = ["po_number", "supplier_name", "branch", "expected_date", "sender_name"];
+  for (const token of (input.subject + input.body_html).matchAll(/\{\{\s*(\w+)\s*\}\}/g)) demand(allowed.includes(token[1]), `Unknown template token ${token[1]}`, 400);
+  return db.transaction(async tx => {
+    await validateLocation(tx, c.dealerId, locationId);
+    await tx.execute(sql`insert into po_communication_settings(dealer_id,location_id,subject,body_html,sms_enabled,parts_manager,service_manager,customer_sms) values(${c.dealerId},${locationId},${input.subject},${input.body_html},${input.sms_enabled},${input.parts_manager},${input.service_manager},${input.customer_sms}) on conflict(dealer_id,location_id) do update set subject=excluded.subject,body_html=excluded.body_html,sms_enabled=excluded.sms_enabled,parts_manager=excluded.parts_manager,service_manager=excluded.service_manager,customer_sms=excluded.customer_sms`);
+    await operationAudit(tx, c.dealerId, c.actorId, "parts_communication_settings", locationId, "Updated PO communication settings", input);
+    return input;
+  });
 }));
 router.get("/notifications", endpoint("view", async (req, _res, c) => db.select().from(partNotificationDeliveriesTable).where(and(scope(partNotificationDeliveriesTable, c.dealerId), req.query.status ? eq(partNotificationDeliveriesTable.status, z.enum(["pending", "sending", "sent", "failed"]).parse(req.query.status)) : undefined)).orderBy(desc(partNotificationDeliveriesTable.id)).limit(500)));
 router.get("/notifications/sms-settings", endpoint("view", async (_req, _res, c) => partsSmsReadiness(c.dealerId)));

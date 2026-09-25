@@ -1,4 +1,5 @@
 import { and, desc, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
+import { loadServiceInvoicePartsCharges } from "./parts-estimate-charges";
 import {
   db,
   pool,
@@ -3502,6 +3503,10 @@ export async function processQueue(): Promise<void> {
         )
         .returning();
       if (!item) continue; // another worker claimed it
+      if (item.template === "parts.purchase_order") {
+        await (await import("./po-communications")).deliverClaimedPoEmail(item);
+        continue;
+      }
       try {
         await withReviewedOutboxCommunicationLock(item, async () => {
       if (!(await recheckOutboxStatus(item.id, "sending"))) return;
@@ -3676,6 +3681,7 @@ export async function processQueue(): Promise<void> {
               1,
               await dealerTimezone(item.dealerId),
               branding,
+              await loadServiceInvoicePartsCharges(svcInvoice.dealerId, svcInvoice.id),
             );
             const ref = `SV-${String(svcInvoice.id).padStart(5, "0")}`;
             attachments = [

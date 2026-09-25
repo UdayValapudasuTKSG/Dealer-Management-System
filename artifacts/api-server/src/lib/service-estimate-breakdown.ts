@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   db,
   externalJobCardPartsTable,
@@ -8,6 +8,8 @@ import {
   type ServiceEstimateLine,
 } from "@workspace/db";
 import { computeServiceTax, ensureDealerTaxes } from "./taxes";
+import { loadPartsEstimateCharges } from "./parts-estimate-charges";
+import { nonTaxChargeLines } from "./parts-billing-money";
 import {
   calculateQuotedLaborTotal,
   effectiveQuotedLaborHours,
@@ -30,6 +32,8 @@ export type ServiceEstimateBreakdown = {
   externalPartsTotal: number;
   labourTotal: number;
   surchargeTotal: number;
+  shippingTotal: number;
+  dutiesTotal: number;
   tax: number;
   subtotal: number;
   total: number;
@@ -99,6 +103,10 @@ export async function buildServiceEstimateBreakdown(
         and(
           eq(jobCardPartsTable.dealerId, card.dealerId),
           eq(jobCardPartsTable.jobCardId, card.id),
+          sql`NOT EXISTS (SELECT 1 FROM parts_billed_job_lines b WHERE b.dealer_id=${card.dealerId} AND b.job_card_part_id=${jobCardPartsTable.id})`,
+          sql`NOT EXISTS (SELECT 1 FROM part_requisition_fulfillments f
+            JOIN parts_billed_requisition_lines b ON b.requisition_line_id=f.line_id AND b.dealer_id=f.dealer_id
+            WHERE f.dealer_id=${card.dealerId} AND f.job_card_part_id=${jobCardPartsTable.id})`,
         ),
       ),
     tx
@@ -112,6 +120,8 @@ export async function buildServiceEstimateBreakdown(
         and(
           eq(externalJobCardPartsTable.dealerId, card.dealerId),
           eq(externalJobCardPartsTable.jobCardId, card.id),
+          sql`NOT EXISTS (SELECT 1 FROM parts_billed_requisition_lines b
+            WHERE b.dealer_id=${card.dealerId} AND b.requisition_line_id=${externalJobCardPartsTable.requisitionLineId})`,
         ),
       ),
     ensureDealerTaxes(card.dealerId),
@@ -191,7 +201,11 @@ export async function buildServiceEstimateBreakdown(
   const subtotal = cents(
     internalPartsTotal + externalPartsTotal + labourTotal + surchargeTotal,
   );
-  const { tax, total } = computeServiceTax(subtotal, taxes);
+  const { shippingTotal, dutiesTotal } = await loadPartsEstimateCharges(tx, card.dealerId, card.id);
+  const taxed = computeServiceTax(subtotal, taxes);
+  const tax = taxed.tax;
+  const total = cents(taxed.total + shippingTotal + dutiesTotal);
+  lines.push(...nonTaxChargeLines(shippingTotal, dutiesTotal));
   if (tax) {
     lines.push({ kind: "tax", description: "Tax", quantity: 1, amount: tax });
   }
@@ -205,6 +219,8 @@ export async function buildServiceEstimateBreakdown(
     externalPartsTotal,
     labourTotal,
     surchargeTotal,
+    shippingTotal,
+    dutiesTotal,
     tax,
     subtotal,
     total,

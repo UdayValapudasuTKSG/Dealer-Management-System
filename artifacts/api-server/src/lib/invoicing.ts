@@ -27,6 +27,7 @@ import { financeUsers } from "./notify-matrix";
 import { queueInvoiceSync, queuePaymentSync } from "./erpnext/entities";
 import { allocateReservationInventory } from "./reservation-allocations";
 import { dealerTimezone, zonedParts } from "./timezone";
+import { assertDepositCreditWithinBalances } from "./parts-billing-money";
 
 /**
  * Invoicing + payment ledger helpers (L6). All amounts in GYD; each
@@ -204,6 +205,63 @@ export async function invoicePaidTotal(invoiceId: number): Promise<number> {
     .from(paymentsTable)
     .where(eq(paymentsTable.invoiceId, invoiceId));
   return paid;
+}
+
+/**
+ * Non-cash reallocation of a real, unallocated customer deposit. Uses the same
+ * invoice row locks and payment ledger as applyPayment, in the caller's issuance
+ * transaction. Neither row is a new receipt: no cash was collected here.
+ * Vehicle/deal reservations are deliberately ineligible (their commitment
+ * gates own those funds). Both sides are visible as account_credit entries.
+ */
+export async function applyPartsDepositCredit(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  args: { dealerId: number; customerId: number; depositInvoiceId: number; invoiceId: number; amount: number; actorId: number; actorName: string },
+) {
+  const minor = Math.round(args.amount * 100);
+  if (!Number.isSafeInteger(minor) || minor <= 0 || Math.abs(args.amount * 100 - minor) > 0.0001) {
+    throw Object.assign(new Error("Deposit credit must be a positive two-decimal amount"), { status: 400 });
+  }
+  if (args.depositInvoiceId === args.invoiceId) throw new Error("A deposit cannot credit itself");
+  const locked = await tx.select().from(invoicesTable).where(and(
+    eq(invoicesTable.dealerId, args.dealerId),
+    inArray(invoicesTable.id, [args.depositInvoiceId, args.invoiceId]),
+  )).orderBy(invoicesTable.id).for("update");
+  const deposit = locked.find(i => i.id === args.depositInvoiceId);
+  const target = locked.find(i => i.id === args.invoiceId);
+  if (!deposit || !target || deposit.customerId !== args.customerId || target.customerId !== args.customerId ||
+      deposit.kind !== "reservation" || deposit.dealId != null || deposit.applicationId != null ||
+      /\(booking #\d+\)/i.test(deposit.description ?? "") ||
+      deposit.status === "void" || target.status === "void" || deposit.currency !== target.currency) {
+    throw Object.assign(new Error("Deposit must be an uncommitted, same-customer reservation in this dealership and currency"), { status: 422 });
+  }
+  const prior = await tx.execute(sql`SELECT id FROM parts_deposit_allocations WHERE dealer_id=${args.dealerId} AND invoice_id=${args.invoiceId}`);
+  if (prior.rows.length) throw Object.assign(new Error("Deposit credit already applied"), { status: 409 });
+  const totals = await tx.select({ invoiceId: paymentsTable.invoiceId, paid: sql<number>`coalesce(sum(${paymentsTable.amount}),0)::float` })
+    .from(paymentsTable).where(and(eq(paymentsTable.dealerId, args.dealerId), inArray(paymentsTable.invoiceId, [deposit.id, target.id])))
+    .groupBy(paymentsTable.invoiceId);
+  const depositPaid = Math.round((totals.find(t => t.invoiceId === deposit.id)?.paid ?? 0) * 100);
+  const targetPaid = Math.round((totals.find(t => t.invoiceId === target.id)?.paid ?? 0) * 100);
+  const targetDue = Math.round(target.amount * 100) - targetPaid;
+  assertDepositCreditWithinBalances(minor, depositPaid, targetDue);
+  const reference = `NON-CASH DEPOSIT CREDIT ${deposit.invoiceNumber} → ${target.invoiceNumber}`;
+  const [debit] = await tx.insert(paymentsTable).values({
+    dealerId: args.dealerId, invoiceId: deposit.id, customerName: deposit.customerName, amount: -minor / 100,
+    method: "account_credit", reference, receivedBy: args.actorName,
+  }).returning();
+  const [credit] = await tx.insert(paymentsTable).values({
+    dealerId: args.dealerId, invoiceId: target.id, customerName: target.customerName, amount: minor / 100,
+    method: "account_credit", reference, receivedBy: args.actorName,
+  }).returning();
+  const status = (paid: number, amount: number) => paid >= Math.round(amount * 100) ? "paid" : paid > 0 ? "partially_paid" : "issued";
+  await tx.update(invoicesTable).set({ status: status(depositPaid - minor, deposit.amount) })
+    .where(and(eq(invoicesTable.id, deposit.id), eq(invoicesTable.dealerId, args.dealerId)));
+  await tx.update(invoicesTable).set({ status: status(targetPaid + minor, target.amount) })
+    .where(and(eq(invoicesTable.id, target.id), eq(invoicesTable.dealerId, args.dealerId)));
+  await tx.execute(sql`INSERT INTO parts_deposit_allocations
+    (dealer_id, customer_id, deposit_invoice_id, invoice_id, amount, debit_payment_id, credit_payment_id, authorized_by)
+    VALUES (${args.dealerId}, ${args.customerId}, ${deposit.id}, ${target.id}, ${(minor / 100).toFixed(2)}, ${debit.id}, ${credit.id}, ${args.actorId})`);
+  return { amount: minor / 100, depositInvoiceId: deposit.id, debitPaymentId: debit.id, creditPaymentId: credit.id };
 }
 
 export type ApplyPaymentArgs = {

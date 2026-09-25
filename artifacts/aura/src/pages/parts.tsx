@@ -71,6 +71,7 @@ import {
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
+import { PurchaseOrderImportDialog } from "@/components/parts/purchase-order-import-dialog";
 import { PartBarcodeScanner } from "@/components/parts/part-barcode-scanner";
 import {
   PricingBreakdownDialog,
@@ -199,6 +200,7 @@ import { LedgerTab, HoldsTab } from "@/components/parts/operations-tabs";
 import { CycleCountsTab } from "@/components/parts/cycle-counts-tab";
 import { ReconciliationTab } from "@/components/parts/reconciliation-tab";
 import { POReviewTab } from "@/components/parts/po-review-tab";
+import { PoDraftEditor } from "@/components/parts/po-draft-editor";
 import { NotificationsTab } from "@/components/parts/notifications-tab";
 import { ReportingWorkspace } from "@/components/parts/reporting-workspace";
 
@@ -233,7 +235,7 @@ export default function Parts() {
         ) : tab === "suppliers" ? (
           <CreateSupplierDialog />
         ) : tab === "orders" ? (
-          <CreatePurchaseOrderDialog />
+          <div className="flex items-center gap-2"><PurchaseOrderImportDialog /><PoDraftEditor /></div>
         ) : tab === "purchases" ? (
           <CreatePurchaseDialog />
         ) : null
@@ -280,7 +282,7 @@ export default function Parts() {
           {tab === "cycle-counts" && <CycleCountsTab />}
           {tab === "requisitions" && <RequisitionsWorkspace />}
           {tab === "suppliers" && <SuppliersTab />}
-          {tab === "orders" && <POReviewTab />}
+          {tab === "orders" && <PurchaseOrdersWorkspace />}
           {tab === "purchases" && <PurchasesTab />}
           {tab === "reconciliation" && <ReconciliationTab />}
           {tab === "reporting" && <ReportingWorkspace />}
@@ -1371,6 +1373,12 @@ function CreatePurchaseOrderDialog() {
       </DialogContent>
     </Dialog>
   );
+}
+
+function PurchaseOrdersWorkspace() {
+  const [receivingPo, setReceivingPo] = useState<PurchaseOrder | null>(null);
+  const queryClient = useQueryClient();
+  return <><POReviewTab onReceive={setReceivingPo} /><ReceivePurchaseOrderDialog order={receivingPo} onOpenChange={open => { if (!open) setReceivingPo(null); }} onSuccess={() => { setReceivingPo(null); void queryClient.invalidateQueries(); }} /></>;
 }
 
 function PurchaseOrdersTab() {

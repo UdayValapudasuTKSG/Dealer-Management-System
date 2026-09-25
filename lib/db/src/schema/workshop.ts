@@ -4,6 +4,7 @@ import {
   text,
   integer,
   doublePrecision,
+  numeric,
   date,
   timestamp,
   jsonb,
@@ -28,6 +29,7 @@ export const suppliersTable = pgTable("suppliers", {
   address: text("address"),
   leadTimeDays: integer("lead_time_days").notNull().default(7),
   email: text("email"),
+  ccEmails: jsonb("cc_emails").$type<string[]>().notNull().default([]),
   phone: text("phone"),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -148,6 +150,10 @@ export type PartPurchase = typeof partPurchasesTable.$inferSelect;
 /** Formal PO lifecycle: draft → ordered → partially_received → received (+ cancelled). */
 export const PURCHASE_ORDER_STATUSES = [
   "draft",
+  "pending_review",
+  "approved",
+  "sent",
+  "closed",
   "ordered",
   "partially_received",
   "received",
@@ -628,6 +634,7 @@ export type PartCreditNote = typeof partCreditNotesTable.$inferSelect;
 export const purchaseOrdersTable = pgTable("purchase_orders", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
+  poNumber: text("po_number"),
   supplierId: integer("supplier_id").references(() => suppliersTable.id),
   status: text("status").notNull().default("draft"),
   source: text("source").notNull().default("manual"),
@@ -636,6 +643,9 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   estimateId: integer("estimate_id"),
   advisorId: integer("advisor_id"),
   createdBy: integer("created_by"),
+  reviewedBy: integer("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewComment: text("review_comment"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   sendCount: integer("send_count").notNull().default(0),
   needsSupplier: boolean("needs_supplier").notNull().default(false),
@@ -647,7 +657,7 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
     .defaultNow(),
 }, (t) => [
   index("purchase_orders_dealer_review_idx").on(t.dealerId, t.status, t.locationId),
-  check("purchase_orders_inventory_source_ck", sql`${t.source} in ('manual','low_stock_alert','special_order') and ${t.sendCount} >= 0`),
+  check("purchase_orders_inventory_source_ck", sql`${t.source} in ('manual','import','low_stock_alert','special_order') and ${t.sendCount} >= 0`),
 ]);
 
 export type PurchaseOrder = typeof purchaseOrdersTable.$inferSelect;
@@ -663,9 +673,13 @@ export const purchaseOrderLinesTable = pgTable("purchase_order_lines", {
   partId: integer("part_id").references(() => partsTable.id),
   source: text("source").notNull().default("INTERNAL"),
   partName: text("part_name").notNull(),
+  isSpecialOrder: boolean("is_special_order").notNull().default(false),
+  customerId: integer("customer_id"),
+  requisitionLineId: integer("requisition_line_id"),
   quantity: integer("quantity").notNull(),
   qtyReceived: integer("qty_received").notNull().default(0),
   unitCost: doublePrecision("unit_cost").notNull().default(0),
+  unitCostAmount: numeric("unit_cost_amount", { precision: 15, scale: 2 }),
   landedCostComponents: jsonb("landed_cost_components").$type<{ freight?: number; duty?: number; handling?: number; other?: number }>().notNull().default({}),
   landedUnitCost: doublePrecision("landed_unit_cost"),
   /** Originating job card (backorder link) — received parts trace back here. */

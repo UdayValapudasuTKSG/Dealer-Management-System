@@ -74,3 +74,4 @@ export * from "./feedbackForms";
 export * from "./vehicleOnboarding";
 export * from "./serviceTimesheets";
 export * from "./technicianWorkSegments";
+export * from "./supplier-invoices";

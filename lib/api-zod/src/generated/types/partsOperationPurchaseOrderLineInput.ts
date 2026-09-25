@@ -14,5 +14,21 @@ export interface PartsOperationPurchaseOrderLineInput {
   quantity: number;
   /** @minimum 0 */
   unitCost: number;
+  isSpecialOrder?: boolean;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  customerId?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  jobCardId?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  requisitionLineId?: number | null;
   landedCostComponents?: PartsOperationLandedCostComponents;
 }

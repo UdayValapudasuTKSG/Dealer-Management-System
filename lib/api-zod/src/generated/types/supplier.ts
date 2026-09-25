@@ -9,6 +9,7 @@
 export interface Supplier {
   id: number;
   name: string;
+  ccEmails?: string[];
   /** @nullable */
   contactName?: string | null;
   /** @nullable */

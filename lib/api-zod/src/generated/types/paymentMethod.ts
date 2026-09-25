@@ -16,4 +16,5 @@ export const PaymentMethod = {
   cheque: 'cheque',
   mobile_money: 'mobile_money',
   financing: 'financing',
+  account_credit: 'account_credit',
 } as const;

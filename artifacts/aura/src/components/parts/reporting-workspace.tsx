@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
 import { useMoney } from "@/lib/format";
-import { useGetAging, useGetValuation, useGetReplenishment, useGetLocations } from "@/hooks/use-parts-operations";
+import { useGetAging, useGetReplenishment, useGetLocations } from "@/hooks/use-parts-operations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +11,19 @@ import { Download, TrendingDown, DollarSign, Calculator, AlertTriangle, ArrowRig
 import { cn } from "@/lib/utils";
 import { useGeneratePartsLowStockPurchaseOrders } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { downloadPartsReport } from "./parts-analysis-export";
+
+function filterAndSortParts<T extends { sku: string; name: string }>(rows: T[], search: string, sortBy: "sku" | "name", descending: boolean) {
+  return rows.filter(row => `${row.sku} ${row.name}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    .sort((a, b) => (descending ? -1 : 1) * a[sortBy].localeCompare(b[sortBy], undefined, { numeric: true, sensitivity: "base" }));
+}
+
+function PartHeadings({ sortBy, descending, setSort }: { sortBy: "sku" | "name"; descending: boolean; setSort: (key: "sku" | "name") => void }) {
+  return <>{(["sku", "name"] as const).map(key =>
+    <th key={key} className="px-4 py-3 font-semibold"><button type="button" onClick={() => setSort(key)}>
+      {key === "sku" ? "Part Number" : "Part Name"} {sortBy === key ? descending ? "↓" : "↑" : ""}
+    </button></th>)}</>;
+}
 
 function ReportError({ message }: { message: string }) {
   return <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{message} Please retry; no financial conclusions should be drawn from unavailable data.</div>;
@@ -50,14 +65,30 @@ export function ReportingWorkspace() {
 function ValuationReport() {
   const [asOf, setAsOf] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"sku" | "name">("sku");
+  const [descending, setDescending] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const { toast } = useToast();
   const { data: locations, isError: locationsError } = useGetLocations();
   
   const queryParams: any = {};
   if (asOf) queryParams.asOf = new Date(asOf).toISOString();
   if (locationId) queryParams.locationId = Number(locationId);
 
-  const { data: valuation, isLoading, isError } = useGetValuation(queryParams);
+  const searchParams = new URLSearchParams(queryParams);
+  const { data: valuation, isLoading, isError } = useQuery<any>({
+    queryKey: ["parts-valuation-p05", queryParams],
+    queryFn: () => customFetch(`/api/parts/operations/p05/valuation?${searchParams}`),
+  });
   const money = useMoney();
+  const changeSort = (key: "sku" | "name") => { setDescending(sortBy === key ? !descending : false); setSortBy(key); };
+  const exportReport = async (format: "csv" | "pdf") => {
+    setDownloading(true);
+    try { await downloadPartsReport(`/api/parts/operations/p05/valuation?${searchParams}`, "parts-valuation", format); }
+    catch (err) { toast({ title: "Export failed", description: err instanceof Error ? err.message : "Could not export valuation.", variant: "destructive" }); }
+    finally { setDownloading(false); }
+  };
 
   return (
     <div className="space-y-6">
@@ -83,6 +114,10 @@ function ValuationReport() {
             className="h-9 rounded-xl bg-white/[0.04] border-white/10 text-sm"
           />
         </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input aria-label="Search valuation parts" placeholder="Search part number or name" className="max-w-xs" value={search} onChange={e => setSearch(e.target.value)} />
+        {(["csv", "pdf"] as const).map(format => <Button key={format} size="sm" variant="outline" disabled={downloading || isLoading || isError || !valuation} onClick={() => exportReport(format)}><Download className="w-3.5 h-3.5 mr-1" />Export {format.toUpperCase()}</Button>)}
       </div>
 
       {locationsError && <ReportError message="Locations could not be loaded." />}
@@ -112,6 +147,21 @@ function ValuationReport() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="glass-panel rounded-2xl overflow-x-auto border border-white/10">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <PartHeadings sortBy={sortBy} descending={descending} setSort={changeSort} />
+                <th className="px-4 py-3">Location</th><th className="px-4 py-3 text-right">Quantity</th><th className="px-4 py-3 text-right">Value (GYD)</th>
+              </tr></thead>
+              <tbody>{filterAndSortParts(valuation.rows ?? [], search, sortBy, descending).map((row: any) =>
+                <tr key={`${row.partId}-${row.locationId}`} className="border-b border-white/5">
+                  <td className="px-4 py-3">{row.sku}</td><td className="px-4 py-3">{row.name}</td>
+                  <td className="px-4 py-3">{row.locationId}</td><td className="px-4 py-3 text-right">{row.quantity}</td>
+                  <td className="px-4 py-3 text-right">{money.gyd(row.value)}</td>
+                </tr>)}</tbody>
+            </table>
           </div>
 
           {(valuation.byLocation || valuation.locations) && (
@@ -146,16 +196,16 @@ function ValuationReport() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                      <th className="px-4 py-3 font-semibold">Part</th>
-                      <th className="px-4 py-3 font-semibold">SKU</th>
+                       <th className="px-4 py-3 font-semibold">Part Number</th>
+                       <th className="px-4 py-3 font-semibold">Part Name</th>
                       <th className="px-4 py-3 font-semibold">Reason</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {valuation.unavailable.map((u: any) => (
+                     {filterAndSortParts(valuation.unavailable, search, sortBy, descending).map((u: any) => (
                       <tr key={`${u.partId}-${u.sku}`} className="border-b border-white/5 text-muted-foreground">
-                        <td className="px-4 py-3">Part #{u.partId}</td>
                         <td className="px-4 py-3">{u.sku}</td>
+                         <td className="px-4 py-3">{u.name}</td>
                         <td className="px-4 py-3">{u.reason}</td>
                       </tr>
                     ))}
@@ -175,6 +225,9 @@ function AgingReport() {
   const [customThresholds, setCustomThresholds] = useState<string>("30,60,90");
   const [locationId, setLocationId] = useState("");
   const [category, setCategory] = useState("");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"sku" | "name">("sku");
+  const [descending, setDescending] = useState(false);
   const { data: locations, isError: locationsError } = useGetLocations();
 
   const queryParams: any = { thresholds };
@@ -186,27 +239,18 @@ function AgingReport() {
   const { toast } = useToast();
   const money = useMoney();
 
-  const handleDownload = async () => {
+  const handleDownload = async (format: "csv" | "pdf") => {
     setDownloading(true);
     try {
-      const search = new URLSearchParams({ ...queryParams, format: "csv" });
-      const response = await fetch(`/api/parts/operations/aging?${search}`, { credentials: "include" });
-      if (!response.ok || !response.headers.get("content-type")?.includes("text/csv")) throw new Error("CSV export failed. Please retry.");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `inventory-aging.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await downloadPartsReport(`/api/parts/operations/p05/aging/export?${new URLSearchParams(queryParams)}`, "inventory-aging", format);
     } catch (err) {
       toast({ title: "Export failed", description: err instanceof Error ? err.message : "Could not export aging report.", variant: "destructive" });
     } finally { setDownloading(false); }
   };
 
   const rows = aging?.rows || [];
+  const visibleRows = filterAndSortParts(rows, search, sortBy, descending);
+  const changeSort = (key: "sku" | "name") => { setDescending(sortBy === key ? !descending : false); setSortBy(key); };
 
   return (
     <div className="space-y-4">
@@ -272,16 +316,19 @@ function AgingReport() {
             </Button>
           ))}
         </div>
-        <Button
+        <div className="flex items-center gap-2">
+        <Input aria-label="Search aging parts" placeholder="Search part number or name" className="max-w-xs" value={search} onChange={e => setSearch(e.target.value)} />
+        {(["csv", "pdf"] as const).map(format => <Button key={format}
           variant="outline"
           size="sm"
           className="rounded-full gap-2 border-white/10"
-          onClick={handleDownload}
+          onClick={() => handleDownload(format)}
           disabled={downloading || isError || isLoading || !rows.length}
         >
           {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-          Export CSV
-        </Button>
+          Export {format.toUpperCase()}
+        </Button>)}
+        </div>
       </div>
 
       {isLoading && <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />}
@@ -300,7 +347,7 @@ function AgingReport() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">Part</th>
+                 <PartHeadings sortBy={sortBy} descending={descending} setSort={changeSort} />
                 <th className="px-4 py-3 font-semibold">Category</th>
                 <th className="px-4 py-3 font-semibold text-right">Idle Qty</th>
                 <th className="px-4 py-3 font-semibold text-right">Tied Capital</th>
@@ -308,9 +355,10 @@ function AgingReport() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row: any) => (
+               {visibleRows.map((row: any) => (
                 <tr key={`${row.partId}-${row.locationId}`} className="border-b border-white/5 hover:bg-foreground/[0.03]">
-                  <td className="px-4 py-3 font-medium">Part #{row.partId}</td>
+                   <td className="px-4 py-3 font-medium">{row.sku}</td>
+                   <td className="px-4 py-3">{row.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{row.category || '—'}</td>
                   <td className="px-4 py-3 text-right font-medium text-rose-400">{row.quantity}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{money.gyd(row.currentValue)}</td>
@@ -330,6 +378,9 @@ function AgingReport() {
 
 function ReplenishmentReport() {
   const [locationId, setLocationId] = useState("");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"sku" | "name">("sku");
+  const [descending, setDescending] = useState(false);
   const { data: locations, isError: locationsError } = useGetLocations();
   const generate = useGeneratePartsLowStockPurchaseOrders();
   const { toast } = useToast();
@@ -338,6 +389,7 @@ function ReplenishmentReport() {
   if (locationId) queryParams.locationId = Number(locationId);
 
   const { data: suggestions, isLoading, isError } = useGetReplenishment(queryParams.locationId);
+  const visibleSuggestions = filterAndSortParts(suggestions ?? [], search, sortBy, descending);
   const generateDrafts = async () => {
     if (!locationId || !window.confirm("Generate low-stock purchase-order drafts for this location? This applies low-stock rules, not individual seasonal suggestions. Nothing will be sent to suppliers.")) return;
     try {
@@ -372,6 +424,14 @@ function ReplenishmentReport() {
         </Button>
         <p className="text-xs text-muted-foreground">Select a location. Draft generation uses low-stock thresholds, not individual seasonal suggestions.</p>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input aria-label="Search replenishment parts" className="max-w-xs" placeholder="Search part number or name" value={search} onChange={e => setSearch(e.target.value)} />
+        <label className="text-xs text-muted-foreground" htmlFor="replenishment-sort">Sort by</label>
+        <select id="replenishment-sort" className="bg-background text-sm rounded-md border border-white/10 p-2" value={sortBy} onChange={e => setSortBy(e.target.value as "sku" | "name")}>
+          <option value="sku">Part Number</option><option value="name">Part Name</option>
+        </select>
+        <Button size="sm" variant="outline" onClick={() => setDescending(!descending)} aria-label="Reverse part order">{descending ? "↓" : "↑"}</Button>
+      </div>
       {locationsError && <ReportError message="Locations could not be loaded." />}
       {isError && <ReportError message="Replenishment suggestions could not be loaded." />}
       {isLoading && <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />}
@@ -385,13 +445,13 @@ function ReplenishmentReport() {
 
       {!isError && !isLoading && (suggestions?.length ?? 0) > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {suggestions!.map((sug: any) => (
+           {visibleSuggestions.map((sug: any) => (
             <Card key={`${sug.partId}-${sug.locationId}`} className="glass-panel border-none rounded-2xl relative overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-1 bg-primary/40" />
               <CardContent className="p-5 space-y-4">
                 <div>
                   <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase flex items-center justify-between">
-                    {sug.name || `Part #${sug.partId}`} · Location {sug.locationId}
+                     {sug.sku} · {sug.name} · Location {sug.locationId}
                     <span className="text-primary bg-primary/10 px-1.5 py-0.5 rounded text-[9px]">
                       Suggested: {sug.suggestedQuantity ?? "Unavailable"}
                     </span>

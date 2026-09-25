@@ -5029,6 +5029,7 @@ export const PaymentMethod = {
   cheque: 'cheque',
   mobile_money: 'mobile_money',
   financing: 'financing',
+  account_credit: 'account_credit',
 } as const;
 
 export interface Payment {
@@ -6830,9 +6831,13 @@ export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof Purcha
 
 export const PurchaseOrderStatus = {
   draft: 'draft',
+  pending_review: 'pending_review',
+  approved: 'approved',
+  sent: 'sent',
   ordered: 'ordered',
   partially_received: 'partially_received',
   received: 'received',
+  closed: 'closed',
   cancelled: 'cancelled',
 } as const;
 
@@ -6841,6 +6846,7 @@ export type PurchaseOrderSource = typeof PurchaseOrderSource[keyof typeof Purcha
 
 export const PurchaseOrderSource = {
   manual: 'manual',
+  import: 'import',
   low_stock_alert: 'low_stock_alert',
   special_order: 'special_order',
 } as const;
@@ -6891,6 +6897,11 @@ export interface PurchaseOrderLine {
   partId?: number | null;
   source: PurchaseOrderLineSource;
   partName: string;
+  isSpecialOrder?: boolean;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  requisitionLineId?: number | null;
   quantity: number;
   qtyReceived: number;
   unitCost: number;
@@ -6909,6 +6920,8 @@ export interface PurchaseOrderLine {
 export interface PurchaseOrder {
   id: number;
   /** @nullable */
+  poNumber?: string | null;
+  /** @nullable */
   supplierId?: number | null;
   status: PurchaseOrderStatus;
   source: PurchaseOrderSource;
@@ -6922,6 +6935,12 @@ export interface PurchaseOrder {
   advisorId?: number | null;
   /** @nullable */
   createdBy?: number | null;
+  /** @nullable */
+  reviewedBy?: number | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  /** @nullable */
+  reviewComment?: string | null;
   /** @nullable */
   sentAt?: string | null;
   /** @minimum 0 */
@@ -8232,6 +8251,7 @@ export interface PartUpdate {
 export interface Supplier {
   id: number;
   name: string;
+  ccEmails?: string[];
   /** @nullable */
   contactName?: string | null;
   /** @nullable */
@@ -8697,6 +8717,22 @@ export interface PartsOperationPurchaseOrderLineInput {
   quantity: number;
   /** @minimum 0 */
   unitCost: number;
+  isSpecialOrder?: boolean;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  customerId?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  jobCardId?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  requisitionLineId?: number | null;
   landedCostComponents?: PartsOperationLandedCostComponents;
 }
 
@@ -8754,6 +8790,259 @@ export interface PartsOperationSupplierAssignmentInput {
 export interface PartsOperationPurchaseOrderSendInput {
   confirm: true;
   resend?: boolean;
+  /** @minimum 1 */
+  snapshotId: number;
+  /** @minLength 3 */
+  to: string;
+  /** @maxLength 2000 */
+  cc: string;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 100000
+     */
+  html: string;
+}
+
+export interface PartsPoEmailPreview {
+  id: number;
+  to: string;
+  cc: string;
+  subject: string;
+  html: string;
+  filename: string;
+  sha256: string;
+}
+
+export type PartsPoReviewInputAction = typeof PartsPoReviewInputAction[keyof typeof PartsPoReviewInputAction];
+
+
+export const PartsPoReviewInputAction = {
+  submit: 'submit',
+  approve: 'approve',
+  return: 'return',
+  cancel: 'cancel',
+} as const;
+
+export interface PartsPoReviewInput {
+  action: PartsPoReviewInputAction;
+  /** @maxLength 2000 */
+  comment?: string;
+}
+
+export interface PartsPoPreviewInput {
+  resend?: boolean;
+}
+
+export interface PartsSupplierCcInput {
+  /**
+     * @maxItems 20
+     * @items.minLength 3
+     */
+  ccEmails: string[];
+}
+
+export type PartsPoDraftUpdateLinesItem = {
+  /** @minimum 1 */
+  id: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 0 */
+  unitCost: number;
+  isSpecialOrder: boolean;
+  /** @nullable */
+  customerId: number | null;
+  /** @nullable */
+  jobCardId: number | null;
+  /** @nullable */
+  requisitionLineId: number | null;
+};
+
+export interface PartsPoDraftUpdate {
+  /** @nullable */
+  expectedDate?: string | null;
+  /** @maxLength 2000 */
+  notes?: string;
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  lines: PartsPoDraftUpdateLinesItem[];
+}
+
+/**
+ * Nonnegative decimal GYD amount. Prefer strings for exact decimal input.
+ */
+export type PartsBillingAmount = string | number;
+
+export interface PartsBillingGenerateInput {
+  /** @pattern ^[a-f0-9]{64}$ */
+  previewFingerprint: string;
+  /** @minimum 1 */
+  depositInvoiceId?: number;
+  /** Required when depositInvoiceId is supplied. */
+  depositAmount?: PartsBillingAmount;
+}
+
+export interface PartsBillingInvoiceReference {
+  id: number;
+  invoiceNumber: string;
+  [key: string]: unknown;
+ }
+
+export interface PartsBillingInvoiceResult {
+  invoice: PartsBillingInvoiceReference;
+}
+
+export type PartsBillingPreviewResultCustomer = {
+  id: number;
+  name: string;
+};
+
+export type PartsBillingPreviewResultLinesItem = {
+  /** @nullable */
+  partId?: number | null;
+  name: string;
+  /** @nullable */
+  sku?: string | null;
+  quantity: number;
+  unitPrice: number;
+  /** @nullable */
+  requisitionLineId?: number | null;
+  /** @nullable */
+  jobCardPartId?: number | null;
+};
+
+export type PartsBillingPreviewResultTax = { [key: string]: unknown };
+
+export type PartsBillingPreviewResultDepositsItem = {
+  id: number;
+  invoiceNumber: string;
+  /** Decimal GYD available balance. */
+  available: string;
+};
+
+export interface PartsBillingPreviewResult {
+  invoice: PartsBillingInvoiceReference | null;
+  previewFingerprint?: string;
+  customer?: PartsBillingPreviewResultCustomer;
+  /** @nullable */
+  locationId?: number | null;
+  /** @nullable */
+  jobCardId?: number | null;
+  lines?: PartsBillingPreviewResultLinesItem[];
+  subtotal?: number;
+  shippingTotal?: number;
+  dutiesTotal?: number;
+  total?: number;
+  tax?: PartsBillingPreviewResultTax;
+  canApplyDeposit?: boolean;
+  deposits?: PartsBillingPreviewResultDepositsItem[];
+}
+
+export interface PartsBillingEmailResult {
+  status: string;
+  emailLogId: number;
+}
+
+export interface PartsEstimateCharges {
+  /** @minimum 0 */
+  shippingTotal: number;
+  /** @minimum 0 */
+  dutiesTotal: number;
+}
+
+export interface PartsEstimateChargesInput {
+  shippingAmount: PartsBillingAmount;
+  dutiesAmount: PartsBillingAmount;
+}
+
+export interface PurchaseOrderImportUpload {
+  file: Blob;
+  /** @minimum 1 */
+  locationId: number;
+  /** JSON object mapping source row numbers to create or skip; only for unknown parts. */
+  decisions?: string;
+}
+
+export interface PurchaseOrderImportCommitUpload {
+  file: Blob;
+  /** @minimum 1 */
+  locationId: number;
+  /** Exact same JSON decisions used for preview. */
+  decisions?: string;
+  /**
+     * @minLength 64
+     * @maxLength 64
+     */
+  fingerprint: string;
+}
+
+export type PurchaseOrderImportPreviewRowStatus = typeof PurchaseOrderImportPreviewRowStatus[keyof typeof PurchaseOrderImportPreviewRowStatus];
+
+
+export const PurchaseOrderImportPreviewRowStatus = {
+  invalid: 'invalid',
+  skipped: 'skipped',
+  ready: 'ready',
+} as const;
+
+export interface PurchaseOrderImportPreviewRow {
+  rowNumber: number;
+  supplier_code: string;
+  part_number: string;
+  part_name: string;
+  qty: string;
+  unit_cost: string;
+  special_order: string;
+  customer_ref: string;
+  ro_number: string;
+  status: PurchaseOrderImportPreviewRowStatus;
+  unknownPart: boolean;
+  errors: string[];
+  /** @nullable */
+  supplierId?: number | null;
+  /** @nullable */
+  partId?: number | null;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  jobCardId?: number | null;
+}
+
+export interface PurchaseOrderImportPreview {
+  fingerprint: string;
+  ready: number;
+  invalid: number;
+  skipped: number;
+  rows: PurchaseOrderImportPreviewRow[];
+}
+
+export interface PurchaseOrderImportCommitted {
+  purchaseOrderIds: number[];
+  importedRows: number;
+  invalidRows: number;
+}
+
+export interface PartsCommunicationSettings {
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 100000
+     */
+  body_html: string;
+  sms_enabled: boolean;
+  parts_manager: boolean;
+  service_manager: boolean;
+  customer_sms: boolean;
 }
 
 export interface PartsOperationCycleCountInput {
@@ -11188,6 +11477,92 @@ export interface AmberVehicleStatus {
   freshness: AmberVehicleStatusFreshness;
 }
 
+export type SupplierInvoiceRecordStatus = typeof SupplierInvoiceRecordStatus[keyof typeof SupplierInvoiceRecordStatus];
+
+
+export const SupplierInvoiceRecordStatus = {
+  pending: 'pending',
+  reconciled: 'reconciled',
+} as const;
+
+export interface SupplierInvoiceRecord {
+  id: number;
+  status: SupplierInvoiceRecordStatus;
+  invoice_number?: string;
+  invoice_date?: string;
+  dealer_id?: number;
+  location_id?: number;
+  supplier_id?: number;
+  po_id?: number;
+  subtotal_minor?: string;
+  shipping_minor?: string;
+  duties_minor?: string;
+  tax_minor?: string;
+  total_minor?: string;
+  [key: string]: unknown;
+ }
+
+/**
+ * Nonnegative decimal major units, up to two decimal places. Server stores and calculates in bigint minor units.
+ * @pattern ^\d{1,12}(?:\.\d{1,2})?$
+ */
+export type SupplierInvoiceAmount = string;
+
+export type SupplierInvoiceInputLinesItem = {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  partNumber: string;
+  /** @maxLength 1000 */
+  description: string;
+  /**
+     * @minimum 0
+     * @maximum 1000000
+     */
+  quantity: number;
+  unitCost: SupplierInvoiceAmount;
+};
+
+export interface SupplierInvoiceInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  invoiceNumber: string;
+  invoiceDate: string;
+  shipping: SupplierInvoiceAmount;
+  duties: SupplierInvoiceAmount;
+  tax: SupplierInvoiceAmount;
+  total: SupplierInvoiceAmount;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  toleranceBps?: number;
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  lines: SupplierInvoiceInputLinesItem[];
+}
+
+export interface SupplierInvoiceUploadInput {
+  file: Blob;
+  /** JSON serialization of SupplierInvoiceInput. Submit both fields with FormData. */
+  invoice: string;
+}
+
+export interface SupplierInvoiceVarianceInput {
+  /** @minimum 1 */
+  lineId: number;
+  /**
+     * @minLength 3
+     * @maxLength 2000
+     */
+  reason: string;
+}
+
 export type VerifyMetaWebhookParams = {
 'hub.mode'?: string;
 'hub.verify_token'?: string;
@@ -11534,6 +11909,119 @@ export const ListPartsPurchaseOrderReviewQueueSource = {
   manual: 'manual',
   low_stock_alert: 'low_stock_alert',
   special_order: 'special_order',
+} as const;
+
+export type GetSupplierInvoicesForPoParams = {
+/**
+ * @minimum 1
+ */
+locationId: number;
+};
+
+export type GetSupplierInvoicesForPo200Po = { [key: string]: unknown };
+
+export type GetSupplierInvoicesForPo200LinesItem = { [key: string]: unknown };
+
+export type GetSupplierInvoicesForPo200InvoicesItem = { [key: string]: unknown };
+
+export type GetSupplierInvoicesForPo200 = {
+  po: GetSupplierInvoicesForPo200Po;
+  lines: GetSupplierInvoicesForPo200LinesItem[];
+  invoices: GetSupplierInvoicesForPo200InvoicesItem[];
+};
+
+export type UploadSupplierPurchaseInvoiceParams = {
+/**
+ * @minimum 1
+ */
+locationId: number;
+};
+
+export type EditSupplierPurchaseInvoiceParams = {
+/**
+ * @minimum 1
+ */
+locationId: number;
+};
+
+export type AcceptSupplierInvoiceVarianceParams = {
+/**
+ * @minimum 1
+ */
+locationId: number;
+};
+
+export type AcceptSupplierInvoiceVariance200 = { [key: string]: unknown };
+
+export type ReconcileSupplierPurchaseInvoiceParams = {
+/**
+ * @minimum 1
+ */
+locationId: number;
+};
+
+export type DownloadSupplierInvoiceFileParams = {
+/**
+ * @minimum 1
+ */
+locationId: number;
+};
+
+export type ExportNamedPartsCycleCountParams = {
+format: ExportNamedPartsCycleCountFormat;
+};
+
+export type ExportNamedPartsCycleCountFormat = typeof ExportNamedPartsCycleCountFormat[keyof typeof ExportNamedPartsCycleCountFormat];
+
+
+export const ExportNamedPartsCycleCountFormat = {
+  csv: 'csv',
+  pdf: 'pdf',
+} as const;
+
+export type ExportNamedPartsAgingParams = {
+format: ExportNamedPartsAgingFormat;
+/**
+ * @minimum 1
+ */
+locationId?: number;
+/**
+ * @minLength 1
+ * @maxLength 500
+ */
+category?: string;
+/**
+ * Ascending unique day thresholds separated by commas; default 30,60,90; at most 10.
+ */
+thresholds?: string;
+};
+
+export type ExportNamedPartsAgingFormat = typeof ExportNamedPartsAgingFormat[keyof typeof ExportNamedPartsAgingFormat];
+
+
+export const ExportNamedPartsAgingFormat = {
+  csv: 'csv',
+  pdf: 'pdf',
+} as const;
+
+export type GetNamedPartsValuationParams = {
+format?: GetNamedPartsValuationFormat;
+/**
+ * @minimum 1
+ */
+locationId?: number;
+/**
+ * ISO date or timestamp; date-only uses end of day except today.
+ */
+asOf?: string;
+};
+
+export type GetNamedPartsValuationFormat = typeof GetNamedPartsValuationFormat[keyof typeof GetNamedPartsValuationFormat];
+
+
+export const GetNamedPartsValuationFormat = {
+  csv: 'csv',
+  pdf: 'pdf',
 } as const;
 
 export type ListPartsNotificationDeliveriesParams = {

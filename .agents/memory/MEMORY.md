@@ -78,3 +78,4 @@
 - [Parts stock timing](parts-stock-timing.md) — reserve on attachment, deduct at physical issue, bill only unissued quantities; never deduct historical issues twice.
 - [Parts import compatibility](parts-import-compatibility.md) — supplied pricing layouts extend the catalog template; they must not replace or drop broader parts fields.
 - [PO template branding](po-template-branding.md) — use active-dealership branding; sample contacts and payment terms are not universal defaults.
+- [Parts specification boundaries](parts-spec-boundaries.md) — internal restock is non-billable; location context does not establish branch staff membership.

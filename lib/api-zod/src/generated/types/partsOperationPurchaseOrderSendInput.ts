@@ -9,4 +9,20 @@
 export interface PartsOperationPurchaseOrderSendInput {
   confirm: true;
   resend?: boolean;
+  /** @minimum 1 */
+  snapshotId: number;
+  /** @minLength 3 */
+  to: string;
+  /** @maxLength 2000 */
+  cc: string;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 100000
+     */
+  html: string;
 }

@@ -101,6 +101,7 @@ export type WhatsappKind = (typeof WHATSAPP_KINDS)[number];
 export const emailLogsTable = pgTable("email_logs", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
+  locationId: integer("location_id"),
   customerId: integer("customer_id"),
   leadId: integer("lead_id"),
   /** Durable owner of a service-estimate delivery. Unlike payload metadata,

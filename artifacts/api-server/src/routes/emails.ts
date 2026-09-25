@@ -607,6 +607,10 @@ router.post("/emails/logs/:id/retry", async (req, res): Promise<void> => {
     res.status(422).json({ error: "This message was already delivered." });
     return;
   }
+  if (row.template === "parts.purchase_order") {
+    res.status(409).json({ error: "Use the PO Preview & send action to retry or resend. Uncertain deliveries must be investigated before another send." });
+    return;
+  }
   const [updated] = await db
     .update(emailLogsTable)
     .set({ status: "queued", attempts: 0, nextAttemptAt: null, lastError: null })

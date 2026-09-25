@@ -11,6 +11,7 @@ export type PurchaseOrderSource = typeof PurchaseOrderSource[keyof typeof Purcha
 
 export const PurchaseOrderSource = {
   manual: 'manual',
+  import: 'import',
   low_stock_alert: 'low_stock_alert',
   special_order: 'special_order',
 } as const;

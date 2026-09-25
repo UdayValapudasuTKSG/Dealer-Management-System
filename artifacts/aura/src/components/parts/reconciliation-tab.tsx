@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { SupplierInvoicePanel } from "./supplier-invoice-panel";
 import { AlertTriangle, Check, CheckCircle2, FileSpreadsheet, Loader2, X } from "lucide-react";
 import { useListPurchaseOrders, type PurchaseOrder } from "@workspace/api-client-react";
 import { useMoney } from "@/lib/format";
@@ -32,12 +33,13 @@ export function ReconciliationTab() {
   const canApprove = can("parts", "approve");
   const queue = useGetReconciliationQueue(status === "all" ? undefined : status);
 
-  if (queue.isLoading) return <div className="h-64 rounded-3xl bg-white/[0.05] animate-pulse" />;
-  if (queue.error) return <div className="rounded-2xl border border-destructive/30 p-6 text-destructive" role="alert">Unable to load reconciliation records: {errorText(queue.error)}</div>;
+  if (queue.isLoading) return <div className="space-y-6"><SupplierInvoicePanel /><div className="h-64 rounded-3xl bg-white/[0.05] animate-pulse" /></div>;
+  if (queue.error) return <div className="space-y-6"><SupplierInvoicePanel /><div className="rounded-2xl border border-destructive/30 p-6 text-destructive" role="alert">Unable to load reconciliation records: {errorText(queue.error)}</div></div>;
   const items = (queue.data ?? []) as ReconciliationItem[];
 
   return (
     <div className="space-y-6">
+      <SupplierInvoicePanel />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div><h2 className="text-lg font-bold tracking-tight">Invoice Reconciliation</h2><p className="mt-1 text-sm text-muted-foreground">Match vendor invoices to purchase order receipts.</p></div>
         {canEdit && <SubmitInvoiceDialog />}

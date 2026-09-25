@@ -1,7 +1,11 @@
 import { useState } from "react";
+import { PoLifecycleActions } from "./po-lifecycle-actions";
+import { CustomerInvoiceAction } from "./customer-invoice-action";
+import { PoDraftEditor } from "./po-draft-editor";
+import { SupplierInvoicePanel } from "./supplier-invoice-panel";
+import { PoCommunicationSettings } from "./po-communication-settings";
 import {
   getListPartsPurchaseOrderReviewQueueQueryKey,
-  useApprovePartsSupplierEmail,
   useAssignPartsPurchaseOrderSupplier,
   useCreatePartsSpecialOrder,
   useGeneratePartsLowStockPurchaseOrders,
@@ -52,14 +56,21 @@ function errorMessage(error: unknown) {
 
 type PurchaseOrderSourceFilter = "" | "low_stock_alert" | "special_order" | "manual";
 const SOURCE_FILTERS: { id: PurchaseOrderSourceFilter; label: string }[] = [
-  { id: "", label: "All Drafts" },
+  { id: "", label: "All Orders" },
   { id: "low_stock_alert", label: "Auto-Replenish" },
   { id: "special_order", label: "Special Orders" },
   { id: "manual", label: "Manual" },
 ];
 
-export function POReviewTab() {
+export function POReviewTab({ onReceive }: { onReceive?: (po: PurchaseOrder) => void } = {}) {
   const [sourceFilter, setSourceFilter] = useState<PurchaseOrderSourceFilter>("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const suppliers = useListSuppliers();
+  const locations = useListPartsLocations();
   const params = sourceFilter ? { source: sourceFilter } : undefined;
   const { data: queue, isLoading, isError, error, refetch } =
     useListPartsPurchaseOrderReviewQueue(params);
@@ -84,11 +95,19 @@ export function POReviewTab() {
           ))}
         </div>
         <div className="flex gap-2">
+          <PoDraftEditor />
+          <PoCommunicationSettings />
           <GenerateOrdersDialog />
           <SpecialOrderDialog />
         </div>
       </div>
-
+      <div className="grid gap-3 sm:grid-cols-5">
+        <Label>Status<select className="block w-full rounded border bg-background p-2" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">All statuses</option>{["draft", "pending_review", "approved", "sent", "ordered", "partially_received", "received", "closed", "cancelled"].map(s => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}</select></Label>
+        <Label>Branch<select className="block w-full rounded border bg-background p-2" value={locationFilter} onChange={e => setLocationFilter(e.target.value)}><option value="">All branches</option>{locations.data?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Label>
+        <Label>Supplier<select className="block w-full rounded border bg-background p-2" value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)}><option value="">All suppliers</option>{suppliers.data?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Label>
+        <Label>Created from<Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} /></Label>
+        <Label>Created through<Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} /></Label>
+      </div>
       {isError ? (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive">
           {errorMessage(error)}
@@ -103,7 +122,7 @@ export function POReviewTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {queue.map((po) => <POReviewCard key={po.id} po={po} />)}
+          {queue.filter(po => (!statusFilter || po.status === statusFilter) && (!locationFilter || po.locationId === Number(locationFilter)) && (!supplierFilter || po.supplierId === Number(supplierFilter)) && (!fromDate || String(po.createdAt).slice(0, 10) >= fromDate) && (!toDate || String(po.createdAt).slice(0, 10) <= toDate)).map((po) => <POReviewCard key={po.id} po={po} onReceive={onReceive} />)}
         </div>
       )}
     </div>
@@ -299,19 +318,16 @@ function SpecialOrderDialog() {
   );
 }
 
-function POReviewCard({ po }: { po: PurchaseOrder }) {
+function POReviewCard({ po, onReceive }: { po: PurchaseOrder; onReceive?: (po: PurchaseOrder) => void }) {
   const { toast } = useToast();
   const { can } = useAuthz();
   const queryClient = useQueryClient();
   const assign = useAssignPartsPurchaseOrderSupplier();
-  const send = useApprovePartsSupplierEmail();
   const { data: suppliers } = useListSuppliers();
   const { data: locations } = useListPartsLocations();
   const money = useMoney();
   const [assignOpen, setAssignOpen] = useState(false);
   const [supplierId, setSupplierId] = useState(po.supplierId ? String(po.supplierId) : "");
-  const [confirmAction, setConfirmAction] = useState<"send" | "resend" | null>(null);
-  const mayApprove = can("parts", "approve");
 
   const handleAssign = async () => {
     if (!supplierId) {
@@ -328,22 +344,6 @@ function POReviewCard({ po }: { po: PurchaseOrder }) {
     }
   };
 
-  const handleSend = async () => {
-    const resend = confirmAction === "resend";
-    if (!po.supplierId || po.needsSupplier) {
-      toast({ title: "Supplier required", description: "Assign a supplier before sending.", variant: "destructive" });
-      return;
-    }
-    try {
-      await send.mutateAsync({ id: po.id, data: resend ? { confirm: true, resend: true } : { confirm: true } });
-      await queryClient.invalidateQueries({ queryKey: getListPartsPurchaseOrderReviewQueueQueryKey() });
-      toast({ title: resend ? "Supplier email re-queued" : "Supplier email queued", description: "Delivery status is tracked in the Outbox." });
-      setConfirmAction(null);
-    } catch (error) {
-      toast({ title: resend ? "Could not re-queue PO" : "Could not send PO", description: errorMessage(error), variant: "destructive" });
-    }
-  };
-
   const supplierName = suppliers?.find((supplier) => supplier.id === po.supplierId)?.name;
   const locationName = locations?.find((location) => location.id === po.locationId)?.name;
   return (
@@ -353,7 +353,7 @@ function POReviewCard({ po }: { po: PurchaseOrder }) {
           <div className="flex-1 space-y-4 p-5">
             <div>
               <div className="mb-1.5 flex items-center gap-2">
-                <Badge variant="outline" className="border-white/10 bg-white/[0.05] font-mono text-[10px] uppercase">PO #{po.id}</Badge>
+                <Badge variant="outline" className="border-white/10 bg-white/[0.05] font-mono text-[10px] uppercase">{po.poNumber ?? `PO #${po.id}`}</Badge>
                 <Badge variant="secondary" className="border-none text-[10px] uppercase tracking-widest">
                   {po.source.replaceAll("_", " ")}
                 </Badge>
@@ -372,7 +372,9 @@ function POReviewCard({ po }: { po: PurchaseOrder }) {
                 <tbody>
                   {po.lines.map((line) => (
                     <tr key={line.id} className="border-b border-white/5 last:border-0">
-                      <td className="px-3 py-2 font-medium">{line.partName}</td>
+                      <td className="px-3 py-2 font-medium">{line.partName}
+                        {line.isSpecialOrder && line.customerId && <div className="mt-2"><CustomerInvoiceAction sourceType="special_order" sourceId={line.id} /></div>}
+                      </td>
                       <td className="px-3 py-2 text-right">{line.quantity}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{money.gyd(line.unitCost)}</td>
                     </tr>
@@ -382,24 +384,18 @@ function POReviewCard({ po }: { po: PurchaseOrder }) {
             </div>
           </div>
           <div className="flex flex-col justify-center gap-3 border-t border-white/10 bg-white/[0.02] p-5 md:w-64 md:border-l md:border-t-0">
-            <Button variant={po.needsSupplier ? "destructive" : "outline"} onClick={() => setAssignOpen(true)} disabled={assign.isPending}>
+            <Button variant={po.needsSupplier ? "destructive" : "outline"} onClick={() => setAssignOpen(true)} disabled={assign.isPending || po.status !== "draft" || !can("parts", "edit")}>
               {po.needsSupplier ? "Assign supplier" : "Change supplier"}
             </Button>
-            {!po.needsSupplier && (
-              <>
-                <Button onClick={() => setConfirmAction("send")} disabled={send.isPending || !mayApprove} className="gap-2">
-                  <Send className="h-4 w-4" /> Approve & send
-                </Button>
-                {po.sendCount > 0 && (
-                  <Button variant="outline" onClick={() => setConfirmAction("resend")} disabled={send.isPending || !mayApprove} className="gap-2">
-                    <RefreshCw className="h-3.5 w-3.5" /> Resend ({po.sendCount} sent)
-                  </Button>
-                )}
-                {!mayApprove && <p className="text-center text-xs text-muted-foreground">Manager approval permission is required to send.</p>}
-              </>
-            )}
+            {onReceive && ["sent", "ordered", "partially_received"].includes(po.status) && can("parts", "edit") && <Button onClick={() => onReceive(po)}>Receive shipment</Button>}
+            <PoDraftEditor po={po} />
+            <PoLifecycleActions po={po} />
           </div>
         </CardContent>
+        <details className="border-t border-white/10 p-4">
+          <summary className="cursor-pointer text-sm font-medium">Upload Supplier Invoice / Reconcile invoices</summary>
+          <div className="mt-4"><SupplierInvoicePanel purchaseOrderId={po.id} locationId={po.locationId} /></div>
+        </details>
       </Card>
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
@@ -419,24 +415,6 @@ function POReviewCard({ po }: { po: PurchaseOrder }) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={confirmAction !== null} onOpenChange={(open) => { if (!open) setConfirmAction(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{confirmAction === "resend" ? "Resend this purchase order?" : "Approve and send this purchase order?"}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmAction === "resend"
-                ? "This explicitly queues another supplier email. Check the Outbox first if the prior delivery status is uncertain."
-                : `This queues PO #${po.id} for delivery to ${supplierName ?? "the assigned supplier"}. No stock is received by this action.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={(event) => { event.preventDefault(); void handleSend(); }} disabled={send.isPending}>
-              {send.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Confirm
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

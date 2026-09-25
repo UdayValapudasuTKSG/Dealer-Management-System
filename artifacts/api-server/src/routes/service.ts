@@ -30,6 +30,7 @@ import {
   serviceBrandsFromInventoryMakes,
 } from "../lib/service-labour-pricing";
 import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
+import { snapshotServicePartsCharges, loadServiceInvoicePartsCharges } from "../lib/parts-estimate-charges";
 import { effectiveQuotedLaborHours } from "../lib/service-labor-hours";
 import {
   clearEstimateStaffAcknowledgement,
@@ -4627,6 +4628,13 @@ router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.creat
       throw new Error("part_credit_line_changed");
     }
     line = lockedLine;
+    const separatelyBilled = await tx.execute(sql`SELECT b.invoice_id FROM parts_billed_requisition_lines b
+      JOIN part_requisition_fulfillments f ON f.line_id=b.requisition_line_id AND f.dealer_id=b.dealer_id
+      WHERE b.dealer_id=${dealerId} AND f.job_card_part_id=${line.id}
+      UNION ALL SELECT invoice_id FROM parts_billed_job_lines WHERE dealer_id=${dealerId} AND job_card_part_id=${line.id}`);
+    if (separatelyBilled.rows.length) {
+      throw new Error("This part has a separate customer invoice. Use an authorized parts invoice credit and stock return; a service credit cannot adjust that invoice.");
+    }
     const [invoice] = await tx.select().from(serviceInvoicesTable).where(and(
       eq(serviceInvoicesTable.jobCardId, card.id),
       eq(serviceInvoicesTable.dealerId, dealerId),
@@ -5119,6 +5127,7 @@ async function issueServiceInvoice(
         })
         .returning();
 
+      await snapshotServicePartsCharges(tx, card.dealerId, created.id, lockedBreakdown);
       // Stamp the collision split on the claim: the customer owes the
       // deductible (capped at the invoice total); the insurer owes the rest.
       // The claim auto-advances insurer_signoff → invoiced with an audit event.
@@ -5219,10 +5228,13 @@ async function issueServiceInvoice(
   // job card. ERPNext uses this original mapping as the only return-against
   // target for later service credits.
   if (invoice) {
+    const charges = await loadServiceInvoicePartsCharges(invoice.dealerId, invoice.id);
     const issuedLines = [
       ...(invoice.partsTotal > 0 ? [{ description: "Parts", amount: Math.round(invoice.partsTotal * 100) / 100 }] : []),
       ...(invoice.laborTotal > 0 ? [{ description: "Labour", amount: Math.round(invoice.laborTotal * 100) / 100 }] : []),
       ...(invoice.surchargeTotal > 0 ? [{ description: "Service surcharge", amount: Math.round(invoice.surchargeTotal * 100) / 100 }] : []),
+      ...(charges.shippingTotal > 0 ? [{ description: "Shipping", amount: charges.shippingTotal }] : []),
+      ...(charges.dutiesTotal > 0 ? [{ description: "Duties", amount: charges.dutiesTotal }] : []),
     ];
     queueServiceInvoiceSync({
       dealerId: invoice.dealerId,
@@ -5827,6 +5839,7 @@ router.get("/service-invoices/:id/pdf", async (req, res): Promise<void> => {
     rate,
     await dealerTimezone(invoice.dealerId),
     await getDealerPdfBranding(invoice.dealerId),
+    await loadServiceInvoicePartsCharges(invoice.dealerId, invoice.id),
   );
   res
     .setHeader("Content-Type", "application/pdf")

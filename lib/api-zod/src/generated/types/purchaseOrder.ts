@@ -12,6 +12,8 @@ import type { PurchaseOrderStatus } from './purchaseOrderStatus';
 export interface PurchaseOrder {
   id: number;
   /** @nullable */
+  poNumber?: string | null;
+  /** @nullable */
   supplierId?: number | null;
   status: PurchaseOrderStatus;
   source: PurchaseOrderSource;
@@ -25,6 +27,12 @@ export interface PurchaseOrder {
   advisorId?: number | null;
   /** @nullable */
   createdBy?: number | null;
+  /** @nullable */
+  reviewedBy?: number | null;
+  /** @nullable */
+  reviewedAt?: Date | null;
+  /** @nullable */
+  reviewComment?: string | null;
   /** @nullable */
   sentAt?: Date | null;
   /** @minimum 0 */

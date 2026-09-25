@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { CustomerInvoiceAction } from "./customer-invoice-action";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListPartRequisitions,
@@ -360,6 +361,7 @@ function RequisitionDialog({ open, onOpenChange, reqId }: { open: boolean, onOpe
               </Badge>
             )}
           </DialogTitle>
+          {data && <CustomerInvoiceAction sourceType="requisition" sourceId={reqId} internal={!data.jobCardId || !data.serviceOrderId} />}
         </DialogHeader>
 
         <div className="p-6 max-h-[75vh] overflow-y-auto space-y-6">

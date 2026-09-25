@@ -1,5 +1,5 @@
 export function partsSmsReadiness(dealerId: number, env: Record<string, string | undefined> = process.env) {
-  const setupLink = "/parts?tab=operations";
+const setupLink = "/parts?tab=notifications";
   let settings: unknown;
   try { settings = JSON.parse(env.PARTS_SMS_DEALER_SENDERS ?? "{}"); }
   catch { return { ready: false, enabled: false, sender: null, setupLink, reason: "PARTS_SMS_DEALER_SENDERS is invalid JSON. Ask an administrator to configure dealer SMS." }; }

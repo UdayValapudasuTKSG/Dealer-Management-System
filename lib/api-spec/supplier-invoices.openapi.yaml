@@ -1,0 +1,180 @@
+openapi: 3.1.0
+info:
+  title: Supplier purchase invoice endpoints
+  version: 1.0.0
+servers:
+  - url: /api
+security:
+  - session: []
+paths:
+  /parts/supplier-invoices/purchase-orders/{poId}:
+    parameters:
+      - $ref: '#/components/parameters/Location'
+      - name: poId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      operationId: getSupplierInvoicesForPo
+      description: Requires parts view permission. Strict active dealership and PO location scope.
+      responses:
+        '200':
+          description: PO, ordered/received/already-invoiced lines, invoice headers and reconciliation lines. Monetary minor-unit fields are decimal integer strings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [po, lines, invoices]
+                properties:
+                  po: { type: object }
+                  lines: { type: array, items: { type: object } }
+                  invoices: { type: array, items: { type: object } }
+        '404': { description: PO not found in active dealer and selected location }
+    post:
+      operationId: uploadSupplierPurchaseInvoice
+      description: Requires parts edit permission. PDF/JPEG/PNG signature validated; private tenant/branch storage. Maximum file size 10 MiB. Case-insensitive trimmed number unique within dealer and supplier, including across POs.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierInvoiceUploadInput'
+      responses:
+        '200': { description: Created supplier invoice header, content: { application/json: { schema: { $ref: '#/components/schemas/SupplierInvoiceRecord' } } } }
+        '400': { description: "Invalid file, input, or arithmetic total" }
+        '409': { description: "Duplicate invoice number, ambiguous PO line or closed PO" }
+  /parts/supplier-invoices/{invoiceId}:
+    parameters:
+      - $ref: '#/components/parameters/Invoice'
+      - $ref: '#/components/parameters/Location'
+    patch:
+      operationId: editSupplierPurchaseInvoice
+      description: Requires parts edit permission. Pending only. Retains original attachment, rematches part numbers, resets all variance approvals and audits before/after values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierInvoiceInput' }
+      responses:
+        '200': { description: Updated pending invoice ID and status, content: { application/json: { schema: { $ref: '#/components/schemas/SupplierInvoiceRecord' } } } }
+        '400': { description: Invalid input or arithmetic total }
+        '404': { description: Invoice outside active dealer and location }
+        '409': { description: Duplicate invoice number or already reconciled }
+  /parts/supplier-invoices/{invoiceId}/accept-variance:
+    parameters:
+      - $ref: '#/components/parameters/Invoice'
+      - $ref: '#/components/parameters/Location'
+    post:
+      operationId: acceptSupplierInvoiceVariance
+      description: Requires parts approve permission. Records actor, reason, timestamp and current receipt/pricing snapshot in audit. Changes to that snapshot require renewed acceptance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierInvoiceVarianceInput'
+      responses:
+        '200': { description: Accepted invoice line, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        '404': { description: Invoice or line not in selected scope }
+        '409': { description: Invoice already reconciled }
+  /parts/supplier-invoices/{invoiceId}/reconcile:
+    parameters:
+      - $ref: '#/components/parameters/Invoice'
+      - $ref: '#/components/parameters/Location'
+    post:
+      operationId: reconcileSupplierPurchaseInvoice
+      description: Requires parts approve permission. Transactional and idempotent with PO, invoice and part locks. Allocates shipping and duties in integer pennies by line value, then by receipt quantity. Costs only uninvoiced received quantities; never receives stock again. Multiple invoices on the same PO line consume the residual receipt quantity. Unmatched lines, repeated PO parts, over-invoicing, stale variance approvals and missing receipt cost layers explicitly block reconciliation.
+      responses:
+        '200': { description: "Reconciled invoice header, including reconciled actor and timestamp", content: { application/json: { schema: { $ref: '#/components/schemas/SupplierInvoiceRecord' } } } }
+        '404': { description: Invoice outside active dealer and location }
+        '409': { description: Reconciliation blocked by explicit accounting or variance validation }
+  /parts/supplier-invoices/{invoiceId}/file:
+    parameters:
+      - $ref: '#/components/parameters/Invoice'
+      - $ref: '#/components/parameters/Location'
+    get:
+      operationId: downloadSupplierInvoiceFile
+      description: Requires parts view permission, tenant/location ownership and private tenant object ACL. Attachment response with private no-store caching.
+      responses:
+        '200':
+          description: Original attachment
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+        '403': { description: File ACL denied }
+        '404': { description: Invoice outside active dealer and location }
+components:
+  securitySchemes:
+    session: { type: apiKey, in: cookie, name: __session }
+  parameters:
+    Invoice:
+      name: invoiceId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Location:
+      name: locationId
+      in: query
+      required: true
+      schema: { type: integer, minimum: 1 }
+  schemas:
+    SupplierInvoiceRecord:
+      type: object
+      required: [id, status]
+      additionalProperties: true
+      properties:
+        id: { type: integer }
+        status: { type: string, enum: [pending, reconciled] }
+        invoice_number: { type: string }
+        invoice_date: { type: string }
+        dealer_id: { type: integer }
+        location_id: { type: integer }
+        supplier_id: { type: integer }
+        po_id: { type: integer }
+        subtotal_minor: { type: string }
+        shipping_minor: { type: string }
+        duties_minor: { type: string }
+        tax_minor: { type: string }
+        total_minor: { type: string }
+    SupplierInvoiceAmount:
+      type: string
+      pattern: '^\d{1,12}(?:\.\d{1,2})?$'
+      description: Nonnegative decimal major units, up to two decimal places. Server stores and calculates in bigint minor units.
+    SupplierInvoiceInput:
+      type: object
+      required: [invoiceNumber, invoiceDate, shipping, duties, tax, total, lines]
+      properties:
+        invoiceNumber: { type: string, minLength: 1, maxLength: 120 }
+        invoiceDate: { type: string, format: date }
+        shipping: { $ref: '#/components/schemas/SupplierInvoiceAmount' }
+        duties: { $ref: '#/components/schemas/SupplierInvoiceAmount' }
+        tax: { $ref: '#/components/schemas/SupplierInvoiceAmount' }
+        total: { $ref: '#/components/schemas/SupplierInvoiceAmount' }
+        toleranceBps: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [partNumber, description, quantity, unitCost]
+            properties:
+              partNumber: { type: string, minLength: 1, maxLength: 120 }
+              description: { type: string, maxLength: 1000 }
+              quantity: { type: integer, minimum: 0, maximum: 1000000 }
+              unitCost: { $ref: '#/components/schemas/SupplierInvoiceAmount' }
+    SupplierInvoiceUploadInput:
+      type: object
+      required: [file, invoice]
+      properties:
+        file: { type: string, format: binary }
+        invoice:
+          type: string
+          description: JSON serialization of SupplierInvoiceInput. Submit both fields with FormData.
+    SupplierInvoiceVarianceInput:
+      type: object
+      required: [lineId, reason]
+      properties:
+        lineId: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 3, maxLength: 2000 }

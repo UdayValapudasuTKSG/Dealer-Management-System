@@ -19,6 +19,7 @@ export const PAYMENT_METHODS = [
   "cheque",
   "mobile_money",
   "financing",
+  "account_credit",
 ] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 

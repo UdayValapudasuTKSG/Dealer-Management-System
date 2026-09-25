@@ -6089,7 +6089,226 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationPurchaseOrderSendInput" } } } }
       responses:
-        "200": { description: Supplier email queued, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+        "200": { description: Supplier email queued, content: { application/json: { schema: { $ref: "#/components/schemas/EmailLog" } } } }
+  /parts/supplier-invoices/purchase-orders/{poId}:
+    $ref: "./supplier-invoices.openapi.yaml#/paths/~1parts~1supplier-invoices~1purchase-orders~1{poId}"
+  /parts/supplier-invoices/{invoiceId}:
+    $ref: "./supplier-invoices.openapi.yaml#/paths/~1parts~1supplier-invoices~1{invoiceId}"
+  /parts/supplier-invoices/{invoiceId}/accept-variance:
+    $ref: "./supplier-invoices.openapi.yaml#/paths/~1parts~1supplier-invoices~1{invoiceId}~1accept-variance"
+  /parts/supplier-invoices/{invoiceId}/reconcile:
+    $ref: "./supplier-invoices.openapi.yaml#/paths/~1parts~1supplier-invoices~1{invoiceId}~1reconcile"
+  /parts/supplier-invoices/{invoiceId}/file:
+    $ref: "./supplier-invoices.openapi.yaml#/paths/~1parts~1supplier-invoices~1{invoiceId}~1file"
+  /purchase-orders/import/template:
+    get:
+      operationId: getPurchaseOrderImportTemplate
+      tags: [parts]
+      responses:
+        "200": { description: Header-only CSV import template, content: { text/csv: { schema: { type: string } } } }
+  /parts/billing/{type}/{id}:
+    parameters:
+      - { name: type, in: path, required: true, schema: { type: string, enum: [requisition, special_order] } }
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 }, description: Requisition ID or special-order PO line ID. }
+    get:
+      operationId: previewPartsCustomerInvoice
+      tags: [parts]
+      description: Returns current billable customer lines and a fingerprint; already invoiced sources return the existing invoice reference only. Requires parts create or service edit or finance create.
+      responses:
+        "200": { description: Customer invoice preview or existing invoice, content: { application/json: { schema: { $ref: "#/components/schemas/PartsBillingPreviewResult" } } } }
+        "422": { description: Source cannot be invoiced or customer approval needs renewal }
+    post:
+      operationId: generatePartsCustomerInvoice
+      tags: [parts]
+      description: Generates once from an unchanged preview. Optional deposit credit additionally requires finance edit; duplicate sources return a conflict with the existing invoice.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsBillingGenerateInput" } } } }
+      responses:
+        "201": { description: Customer invoice created, content: { application/json: { schema: { $ref: "#/components/schemas/PartsBillingInvoiceResult" } } } }
+        "409": { description: Source already invoiced or preview changed }
+        "422": { description: Source or deposit accounting validation failed }
+  /parts/customer-invoices/{id}/pdf:
+    get:
+      operationId: getPartsCustomerInvoicePdf
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Branded customer invoice PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        "404": { description: Invoice not found in this dealer's parts billing sources }
+  /parts/customer-invoices/{id}/email:
+    post:
+      operationId: emailPartsCustomerInvoice
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      description: Queues the existing customer invoice template through the shared outbox with invoice-scoped deduplication.
+      responses:
+        "202": { description: Durable email status, content: { application/json: { schema: { $ref: "#/components/schemas/PartsBillingEmailResult" } } } }
+        "422": { description: Customer has no email address }
+  /job-cards/{id}/parts-estimate.pdf:
+    get:
+      operationId: getPartsServiceEstimatePdf
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Branded estimate PDF with separate nonzero Shipping and Duties lines, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        "404": { description: Estimate not found }
+  /job-cards/{id}/parts-charges:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: getPartsEstimateCharges
+      tags: [parts]
+      responses:
+        "200": { description: Non-taxable Shipping and Duties, content: { application/json: { schema: { $ref: "#/components/schemas/PartsEstimateCharges" } } } }
+    put:
+      operationId: updatePartsEstimateCharges
+      tags: [parts]
+      description: Requires parts or service edit. Updating charges supersedes estimate approval and increments its version. Issued invoice charges cannot be edited.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsEstimateChargesInput" } } } }
+      responses:
+        "200": { description: Updated charges, content: { application/json: { schema: { $ref: "#/components/schemas/PartsEstimateCharges" } } } }
+        "409": { description: Invoice already issued }
+  /purchase-orders/import/preview:
+    post:
+      operationId: previewPurchaseOrderImport
+      tags: [parts]
+      description: Requires parts create permission. CSV/XLSX upload limited to 10 MiB. Validates without writing any order or stock records.
+      requestBody: { required: true, content: { multipart/form-data: { schema: { $ref: "#/components/schemas/PurchaseOrderImportUpload" } } } }
+      responses:
+        "200": { description: Fingerprint and per-row validation, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderImportPreview" } } } }
+        "400": { description: Invalid upload or location }
+        "413": { description: File exceeds 10 MiB }
+  /purchase-orders/import/commit:
+    post:
+      operationId: commitPurchaseOrderImport
+      tags: [parts]
+      description: Reupload exact previewed file with same decisions and fingerprint. Creates Draft POs grouped by supplier. Invalid and explicitly skipped rows are omitted; duplicate file+branch commits are blocked.
+      requestBody: { required: true, content: { multipart/form-data: { schema: { $ref: "#/components/schemas/PurchaseOrderImportCommitUpload" } } } }
+      responses:
+        "201": { description: Draft purchase orders created, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderImportCommitted" } } } }
+        "400": { description: No valid rows or invalid upload }
+        "409": { description: Preview changed or file was already imported }
+  /parts/operations/p05/cycle-counts/{id}:
+    get:
+      operationId: getNamedPartsCycleCount
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Cycle count with dealer-scoped part names and numbers on each line, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+        "404": { description: Count not found in current dealership }
+  /parts/operations/p05/cycle-counts/{id}/export:
+    get:
+      operationId: exportNamedPartsCycleCount
+      tags: [parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: format, in: query, required: true, schema: { type: string, enum: [csv, pdf] } }
+      responses:
+        "200": { description: Count sheet and variance export including part number and part name, content: { text/csv: { schema: { type: string } }, application/pdf: { schema: { type: string, format: binary } } } }
+  /parts/operations/p05/aging/export:
+    get:
+      operationId: exportNamedPartsAging
+      tags: [parts]
+      parameters:
+        - { name: format, in: query, required: true, schema: { type: string, enum: [csv, pdf] } }
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: category, in: query, schema: { type: string, minLength: 1, maxLength: 500 } }
+        - { name: thresholds, in: query, schema: { type: string }, description: "Ascending unique day thresholds separated by commas; default 30,60,90; at most 10." }
+      responses:
+        "200": { description: Aging export with part number and name, content: { text/csv: { schema: { type: string } }, application/pdf: { schema: { type: string, format: binary } } } }
+  /parts/operations/p05/valuation:
+    get:
+      operationId: getNamedPartsValuation
+      tags: [parts]
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [csv, pdf] } }
+        - { name: locationId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: asOf, in: query, schema: { type: string }, description: ISO date or timestamp; date-only uses end of day except today. }
+      responses:
+        "200": { description: Valuation with part names in both valued and unavailable rows; optional CSV/PDF export, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } }, text/csv: { schema: { type: string } }, application/pdf: { schema: { type: string, format: binary } } } }
+  /parts/operations/purchase-orders/{id}/review:
+    post:
+      operationId: reviewPartsPurchaseOrder
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartsPoReviewInput"
+      responses:
+        "200": { description: Audited review transition, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/purchase-orders/{id}/preview:
+    post:
+      operationId: previewPartsPurchaseOrderEmail
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartsPoPreviewInput"
+      responses:
+        "200": { description: Immutable PDF and editable email preview, content: { application/json: { schema: { $ref: "#/components/schemas/PartsPoEmailPreview" } } } }
+  /parts/operations/purchase-orders/{id}/email-history:
+    get:
+      operationId: getPartsPurchaseOrderEmailHistory
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Exact final send payload and provider result, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+  /parts/operations/purchase-orders/{id}/snapshots/{snapshotId}/pdf:
+    get:
+      operationId: getPartsPurchaseOrderSnapshotPdf
+      tags: [parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: snapshotId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200": { description: Private immutable PDF attachment, content: { application/pdf: { schema: { type: string, format: binary } } } }
+  /parts/operations/purchase-orders/{id}/close:
+    post:
+      operationId: closePartsPurchaseOrder
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Fully received and reconciled purchase order closed, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/purchase-orders/{id}/draft:
+    patch:
+      operationId: editPartsPurchaseOrderDraft
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsPoDraftUpdate" } } } }
+      responses:
+        "200": { description: Draft updated and audited, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/communication-settings/{locationId}:
+    get:
+      operationId: getPartsCommunicationSettings
+      tags: [parts]
+      parameters: [{ name: locationId, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Branch email templates and arrival notification settings, content: { application/json: { schema: { $ref: "#/components/schemas/PartsCommunicationSettings" } } } }
+    put:
+      operationId: updatePartsCommunicationSettings
+      tags: [parts]
+      parameters: [{ name: locationId, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsCommunicationSettings" } } } }
+      responses:
+        "200": { description: Settings saved by admin, content: { application/json: { schema: { $ref: "#/components/schemas/PartsCommunicationSettings" } } } }
+  /parts/operations/suppliers/{id}/cc-emails:
+    put:
+      operationId: updatePartsSupplierCcEmails
+      tags: [parts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartsSupplierCcInput"
+      responses:
+        "200": { description: Supplier CC recipients saved, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
   /parts/operations/notifications:
     get:
       operationId: listPartsNotificationDeliveries
@@ -13784,7 +14003,7 @@ components:
         invoiceId: { type: integer }
         customerName: { type: string }
         amount: { type: number }
-        method: { type: string, enum: [cash, card, bank_transfer, cheque, mobile_money, financing] }
+        method: { type: string, enum: [cash, card, bank_transfer, cheque, mobile_money, financing, account_credit] }
         reference: { type: ["string", "null"] }
         receivedBy: { type: ["string", "null"] }
         gateId: { type: ["integer", "null"] }
@@ -15449,6 +15668,7 @@ components:
       properties:
         id: { type: integer }
         name: { type: string }
+        ccEmails: { type: array, items: { type: string } }
         contactName: { type: ["string", "null"] }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
@@ -15765,6 +15985,10 @@ components:
         partId: { type: integer, minimum: 1 }
         quantity: { type: integer, minimum: 1 }
         unitCost: { type: number, minimum: 0 }
+        isSpecialOrder: { type: boolean, default: false }
+        customerId: { type: [integer, "null"], minimum: 1 }
+        jobCardId: { type: [integer, "null"], minimum: 1 }
+        requisitionLineId: { type: [integer, "null"], minimum: 1 }
         landedCostComponents: { $ref: "#/components/schemas/PartsOperationLandedCostComponents" }
     PartsOperationPurchaseOrderInput:
       type: object
@@ -15800,10 +16024,212 @@ components:
         supplierId: { type: integer, minimum: 1 }
     PartsOperationPurchaseOrderSendInput:
       type: object
-      required: [confirm]
+      required: [confirm, snapshotId, to, cc, subject, html]
       properties:
         confirm: { type: boolean, enum: [true] }
         resend: { type: boolean, default: false }
+        snapshotId: { type: integer, minimum: 1 }
+        to: { type: string, minLength: 3 }
+        cc: { type: string, maxLength: 2000 }
+        subject: { type: string, minLength: 1, maxLength: 300 }
+        html: { type: string, minLength: 1, maxLength: 100000 }
+    PartsPoEmailPreview:
+      type: object
+      required: [id, to, cc, subject, html, filename, sha256]
+      properties:
+        id: { type: integer }
+        to: { type: string }
+        cc: { type: string }
+        subject: { type: string }
+        html: { type: string }
+        filename: { type: string }
+        sha256: { type: string }
+    PartsPoReviewInput:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [submit, approve, return, cancel] }
+        comment: { type: string, maxLength: 2000 }
+    PartsPoPreviewInput:
+      type: object
+      properties:
+        resend: { type: boolean, default: false }
+    PartsSupplierCcInput:
+      type: object
+      required: [ccEmails]
+      properties:
+        ccEmails: { type: array, maxItems: 20, items: { type: string, minLength: 3 } }
+    PartsPoDraftUpdate:
+      type: object
+      required: [lines]
+      properties:
+        expectedDate: { type: [string, "null"], format: date }
+        notes: { type: string, maxLength: 2000 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [id, quantity, unitCost, isSpecialOrder, customerId, jobCardId, requisitionLineId]
+            properties:
+              id: { type: integer, minimum: 1 }
+              quantity: { type: integer, minimum: 1 }
+              unitCost: { type: number, minimum: 0 }
+              isSpecialOrder: { type: boolean }
+              customerId: { type: [integer, "null"] }
+              jobCardId: { type: [integer, "null"] }
+              requisitionLineId: { type: [integer, "null"] }
+    PartsBillingGenerateInput:
+      type: object
+      required: [previewFingerprint]
+      properties:
+        previewFingerprint: { type: string, pattern: "^[a-f0-9]{64}$" }
+        depositInvoiceId: { type: integer, minimum: 1 }
+        depositAmount: { $ref: "#/components/schemas/PartsBillingAmount", description: Required when depositInvoiceId is supplied. }
+    PartsBillingAmount:
+      description: Nonnegative decimal GYD amount. Prefer strings for exact decimal input.
+      oneOf:
+        - { type: string, pattern: '^[0-9]{1,12}(?:[.][0-9]{1,2})?$' }
+        - { type: number, minimum: 0, maximum: 999999999999.99, multipleOf: 0.01 }
+    PartsBillingInvoiceReference:
+      type: object
+      required: [id, invoiceNumber]
+      additionalProperties: true
+      properties:
+        id: { type: integer }
+        invoiceNumber: { type: string }
+    PartsBillingInvoiceResult:
+      type: object
+      required: [invoice]
+      properties:
+        invoice: { $ref: "#/components/schemas/PartsBillingInvoiceReference" }
+    PartsBillingPreviewResult:
+      type: object
+      required: [invoice]
+      properties:
+        invoice:
+          oneOf:
+            - { $ref: "#/components/schemas/PartsBillingInvoiceReference" }
+            - { type: "null" }
+        previewFingerprint: { type: string }
+        customer:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        locationId: { type: [integer, "null"] }
+        jobCardId: { type: [integer, "null"] }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [name, quantity, unitPrice]
+            properties:
+              partId: { type: [integer, "null"] }
+              name: { type: string }
+              sku: { type: [string, "null"] }
+              quantity: { type: integer }
+              unitPrice: { type: number }
+              requisitionLineId: { type: [integer, "null"] }
+              jobCardPartId: { type: [integer, "null"] }
+        subtotal: { type: number }
+        shippingTotal: { type: number }
+        dutiesTotal: { type: number }
+        total: { type: number }
+        tax: { type: object, additionalProperties: true }
+        canApplyDeposit: { type: boolean }
+        deposits:
+          type: array
+          items:
+            type: object
+            required: [id, invoiceNumber, available]
+            properties:
+              id: { type: integer }
+              invoiceNumber: { type: string }
+              available: { type: string, description: Decimal GYD available balance. }
+    PartsBillingEmailResult:
+      type: object
+      required: [status, emailLogId]
+      properties:
+        status: { type: string }
+        emailLogId: { type: integer }
+    PartsEstimateCharges:
+      type: object
+      required: [shippingTotal, dutiesTotal]
+      properties:
+        shippingTotal: { type: number, minimum: 0 }
+        dutiesTotal: { type: number, minimum: 0 }
+    PartsEstimateChargesInput:
+      type: object
+      required: [shippingAmount, dutiesAmount]
+      properties:
+        shippingAmount: { $ref: "#/components/schemas/PartsBillingAmount" }
+        dutiesAmount: { $ref: "#/components/schemas/PartsBillingAmount" }
+    PurchaseOrderImportUpload:
+      type: object
+      required: [file, locationId]
+      properties:
+        file: { type: string, format: binary }
+        locationId: { type: integer, minimum: 1 }
+        decisions: { type: string, description: "JSON object mapping source row numbers to create or skip; only for unknown parts." }
+    PurchaseOrderImportCommitUpload:
+      type: object
+      required: [file, locationId, fingerprint]
+      properties:
+        file: { type: string, format: binary }
+        locationId: { type: integer, minimum: 1 }
+        decisions: { type: string, description: Exact same JSON decisions used for preview. }
+        fingerprint: { type: string, minLength: 64, maxLength: 64 }
+    PurchaseOrderImportPreview:
+      type: object
+      required: [fingerprint, rows, ready, invalid, skipped]
+      properties:
+        fingerprint: { type: string }
+        ready: { type: integer }
+        invalid: { type: integer }
+        skipped: { type: integer }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/PurchaseOrderImportPreviewRow" }
+    PurchaseOrderImportPreviewRow:
+      type: object
+      required: [rowNumber, supplier_code, part_number, part_name, qty, unit_cost, special_order, customer_ref, ro_number, status, unknownPart, errors]
+      properties:
+        rowNumber: { type: integer }
+        supplier_code: { type: string }
+        part_number: { type: string }
+        part_name: { type: string }
+        qty: { type: string }
+        unit_cost: { type: string }
+        special_order: { type: string }
+        customer_ref: { type: string }
+        ro_number: { type: string }
+        status: { type: string, enum: [invalid, skipped, ready] }
+        unknownPart: { type: boolean }
+        errors: { type: array, items: { type: string } }
+        supplierId: { type: [integer, "null"] }
+        partId: { type: [integer, "null"] }
+        customerId: { type: [integer, "null"] }
+        jobCardId: { type: [integer, "null"] }
+    PurchaseOrderImportCommitted:
+      type: object
+      required: [purchaseOrderIds, importedRows, invalidRows]
+      properties:
+        purchaseOrderIds: { type: array, items: { type: integer } }
+        importedRows: { type: integer }
+        invalidRows: { type: integer }
+    PartsCommunicationSettings:
+      type: object
+      required: [subject, body_html, sms_enabled, parts_manager, service_manager, customer_sms]
+      properties:
+        subject: { type: string, minLength: 1, maxLength: 300 }
+        body_html: { type: string, minLength: 1, maxLength: 100000 }
+        sms_enabled: { type: boolean }
+        parts_manager: { type: boolean }
+        service_manager: { type: boolean }
+        customer_sms: { type: boolean }
     PartsOperationCycleCountInput:
       type: object
       required: [locationId]
@@ -15933,6 +16359,9 @@ components:
         partId: { type: ["integer", "null"] }
         source: { type: string, enum: [INTERNAL, EXTERNAL] }
         partName: { type: string }
+        isSpecialOrder: { type: boolean }
+        customerId: { type: [integer, "null"] }
+        requisitionLineId: { type: [integer, "null"] }
         quantity: { type: integer }
         qtyReceived: { type: integer }
         unitCost: { type: number }
@@ -15949,14 +16378,18 @@ components:
       required: [id, status, source, sendCount, needsSupplier, lines, createdAt]
       properties:
         id: { type: integer }
+        poNumber: { type: [string, "null"] }
         supplierId: { type: ["integer", "null"] }
-        status: { type: string, enum: [draft, ordered, partially_received, received, cancelled] }
-        source: { type: string, enum: [manual, low_stock_alert, special_order] }
+        status: { type: string, enum: [draft, pending_review, approved, sent, ordered, partially_received, received, closed, cancelled] }
+        source: { type: string, enum: [manual, import, low_stock_alert, special_order] }
         locationId: { type: ["integer", "null"] }
         jobCardId: { type: ["integer", "null"] }
         estimateId: { type: ["integer", "null"] }
         advisorId: { type: ["integer", "null"] }
         createdBy: { type: ["integer", "null"] }
+        reviewedBy: { type: ["integer", "null"] }
+        reviewedAt: { type: ["string", "null"], format: date-time }
+        reviewComment: { type: ["string", "null"] }
         sentAt: { type: ["string", "null"], format: date-time }
         sendCount: { type: integer, minimum: 0 }
         needsSupplier: { type: boolean, description: True when queued for supplier assignment }

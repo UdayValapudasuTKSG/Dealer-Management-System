@@ -4,7 +4,8 @@ import { ensureInventory, moveStock } from "../lib/parts-inventory";
 import { reserveJobPart } from "../lib/job-part-stock";
 import { createPartsImport } from "./parts-imports";
 import { partExportHeaders, partExportValues, partTemplateColumns } from "../lib/parts-import-format";
-import { postPartsReceipt, validateLocation } from "../lib/parts-operations";
+import { postPartsReceipt, validateLocation, operationAudit } from "../lib/parts-operations";
+import { queuePoArrivalAlerts } from "../lib/po-arrival-alerts";
 import { calculateLandedUnitCost, purchaseOrderReceiptUnitCost } from "../lib/parts-landed-cost";
 import { z } from "zod";
 import multer from "multer";
@@ -1347,12 +1348,18 @@ router.get("/purchase-orders/:id/pdf", async (req, res): Promise<void> => {
 });
 
 router.post("/purchase-orders", async (req, res): Promise<void> => {
+  if (!res.locals.user || !hasPermission(res.locals.user, "parts", "edit")) {
+    res.status(403).json({ error: "Parts edit permission required" }); return;
+  }
   const parsed = CreatePurchaseOrderBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
   const dealerId = activeDealerId(res);
+  if (parsed.data.status && parsed.data.status !== "draft") {
+    res.status(409).json({ error: "Purchase orders must begin as Draft and pass review before sending" }); return;
+  }
   if (parsed.data.supplierId != null) {
     const [supplier] = await db
       .select({ id: suppliersTable.id })
@@ -1439,6 +1446,9 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
 });
 
 router.patch("/purchase-orders/:id", async (req, res): Promise<void> => {
+  if (!res.locals.user || !hasPermission(res.locals.user, "parts", "edit")) {
+    res.status(403).json({ error: "Parts edit permission required" }); return;
+  }
   const params = UpdatePurchaseOrderParams.safeParse(req.params);
   const parsed = UpdatePurchaseOrderBody.safeParse(req.body);
   if (!params.success || !parsed.success) {
@@ -1461,8 +1471,12 @@ router.patch("/purchase-orders/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Purchase order not found" });
     return;
   }
-  if (parsed.data.status === "ordered" && order.status !== "draft") {
-    res.status(422).json({ error: `Only a draft PO can be placed — this one is ${order.status}` });
+  if (parsed.data.status) {
+    res.status(422).json({ error: "Use the purchase order review workflow to change status" });
+    return;
+  }
+  if (order.status !== "draft") {
+    res.status(409).json({ error: "Only draft purchase orders can be edited" });
     return;
   }
   if (
@@ -1475,7 +1489,7 @@ router.patch("/purchase-orders/:id", async (req, res): Promise<void> => {
     });
     return;
   }
-  await db
+  const edited = await db
     .update(purchaseOrdersTable)
     .set({
       ...(parsed.data.status ? { status: parsed.data.status } : {}),
@@ -1493,8 +1507,12 @@ router.patch("/purchase-orders/:id", async (req, res): Promise<void> => {
       and(
         eq(purchaseOrdersTable.id, order.id),
         eq(purchaseOrdersTable.dealerId, dealerId),
+        eq(purchaseOrdersTable.status, "draft"),
       ),
-    );
+    ).returning({ id: purchaseOrdersTable.id });
+  if (!edited.length) {
+    res.status(409).json({ error: "PO changed during editing; reload before trying again" }); return;
+  }
   // Status transitions (place / cancel) must reach the ERPNext PO too.
   if (parsed.data.status && parsed.data.status !== order.status) {
     enqueuePurchaseOrderSync(dealerId, order.id, "update");
@@ -1503,6 +1521,9 @@ router.patch("/purchase-orders/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
+  if (!res.locals.user || !hasPermission(res.locals.user, "parts", "edit")) {
+    res.status(403).json({ error: "Parts receive/edit permission required" }); return;
+  }
   const params = ReceivePurchaseOrderParams.safeParse(req.params);
   const parsed = ReceivePurchaseOrderBody.safeParse(req.body ?? {});
   if (!params.success || !parsed.success) {
@@ -1622,7 +1643,7 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
     res.json(ReceivePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, params.data.id)));
     return;
   }
-  if (order.status !== "ordered" && order.status !== "partially_received") {
+  if (order.status !== "ordered" && order.status !== "sent" && order.status !== "partially_received") {
     res.status(422).json({
       error: `PO is ${order.status} — ${order.status === "draft" ? "place the order first" : "nothing left to receive"}`,
     });
@@ -1631,6 +1652,7 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
   let receiptReplay = false;
   try {
     await db.transaction(async (tx) => {
+    const [lockedOrder] = await tx.select().from(purchaseOrdersTable).where(and(eq(purchaseOrdersTable.dealerId, dealerId), eq(purchaseOrdersTable.id, order.id))).for("update");
     const [receiptClaim] = await tx
       .insert(purchaseOrderReceiptsTable)
       .values({
@@ -1675,6 +1697,9 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
       }
       receiptReplay = true;
       return;
+    }
+    if (!lockedOrder || !["ordered", "sent", "partially_received"].includes(lockedOrder.status)) {
+      throw Object.assign(new Error("Purchase order is no longer receivable"), { status: 409 });
     }
     await tx.insert(purchaseOrderReceiptLinesTable).values(
       [...requested.entries()].map(([purchaseOrderLineId, quantity]) => ({
@@ -1946,7 +1971,7 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
         lineId: lockedLine.id,
       });
     }
-    await postPartsReceipt(tx, { dealerId, purchaseOrderId: order.id, actorId: res.locals.user?.id });
+    await queuePoArrivalAlerts(tx, { dealerId, purchaseOrderId: order.id, actorId: res.locals.user?.id, receiptId: receiptClaim.id, received: [...requested.entries()].map(([lineId, quantity]) => ({ lineId, quantity })) });
     const fresh = await tx
       .select()
       .from(purchaseOrderLinesTable)
@@ -1957,6 +1982,7 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
         ),
       );
     const complete = fresh.every((l) => l.qtyReceived >= l.quantity);
+    await operationAudit(tx, dealerId, res.locals.user?.id ?? null, "purchase_order", order.id, "Received purchase order shipment", { before: lockedOrder.status, after: complete ? "received" : "partially_received", receiptId: receiptClaim.id, received: [...requested.entries()] });
     await tx
       .update(purchaseOrdersTable)
       .set({ status: complete ? "received" : "partially_received" })

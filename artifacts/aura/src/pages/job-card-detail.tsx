@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PartsEstimateCharges } from "@/components/service/parts-estimate-charges";
 import { useRoute, Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -596,7 +597,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
       .reduce((total, line) => total + line.amount, 0) ?? 0;
   const previewSurchargeTotal =
     preview?.lines
-      .filter((line) => line.kind === "surcharge")
+      .filter((line) => line.kind === "surcharge" && !["Shipping", "Duties"].includes(line.description))
       .reduce((total, line) => total + line.amount, 0) ?? 0;
   const customerApprovedCurrent =
     preview?.decision.state === "approved" &&
@@ -1376,6 +1377,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                 ))}
                 <div className="space-y-1 bg-white/[0.02] px-3 py-3 text-xs">
                   <QuoteSummaryRow label="Parts" amount={previewPartsTotal} money={money.gyd} />
+                  <PartsEstimateCharges jobCardId={card.id} editable={canEditQuoteHours} />
                   <QuoteSummaryRow label="Servicing / labour" amount={previewLabourTotal} money={money.gyd} />
                   <QuoteSummaryRow label="Tax" amount={previewTaxTotal} money={money.gyd} />
                   <QuoteSummaryRow label="Surcharge" amount={previewSurchargeTotal} money={money.gyd} />
