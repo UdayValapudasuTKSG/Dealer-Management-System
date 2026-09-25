@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Clock, History, AlertTriangle, ArrowRightLeft, PackageMinus, PackagePlus, CheckCircle2, RotateCcw, Box, Loader2, Calendar, Plus, Receipt, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CreateRecordDialog } from "@/components/create-record-dialog";
+import { CreateRecordDialog, SearchableSelect } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useListParts } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
@@ -426,15 +426,16 @@ function TransactionDialog({ type }: { type: "issue" | "transfer" | "adjustment"
       span: "full",
       render: (value: string, set: (value: string) => void) => (
         <div className="flex flex-col gap-2 sm:flex-row">
-          <StyledSelect
+          <SearchableSelect
             value={value}
-            onValueChange={set}
+            onChange={set}
             options={[
-              { value: "", label: partsQuery.isLoading ? "Loading parts…" : "Select part…" },
               ...parts.map((part) => ({ value: String(part.id), label: `${part.sku} — ${part.name}` })),
             ]}
             disabled={partsQuery.isLoading || partsQuery.isError}
-            className="h-9 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm"
+            placeholder={partsQuery.isLoading ? "Loading parts…" : "Select part…"}
+            ariaLabel="Part"
+            className="flex-1 rounded-xl"
           />
           <PartBarcodeScanner
             disabled={partsQuery.isLoading || partsQuery.isError}
@@ -615,15 +616,16 @@ function CreateHoldDialog() {
           span: "full",
           render: (value: string, set: (value: string) => void) => (
             <div className="flex flex-col gap-2 sm:flex-row">
-              <StyledSelect
+              <SearchableSelect
                 value={value}
-                onValueChange={set}
+                onChange={set}
                 options={[
-                  { value: "", label: partsQuery.isLoading ? "Loading parts…" : "Select part…" },
                   ...parts.map((part) => ({ value: String(part.id), label: `${part.sku} — ${part.name}` })),
                 ]}
                 disabled={partsQuery.isLoading || partsQuery.isError}
-                className="h-9 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm"
+                placeholder={partsQuery.isLoading ? "Loading parts…" : "Select part…"}
+                ariaLabel="Part"
+                className="flex-1 rounded-xl"
               />
               <PartBarcodeScanner
                 disabled={partsQuery.isLoading || partsQuery.isError}
@@ -779,17 +781,18 @@ function OTCInvoiceDialog() {
             </div>
             {lines.map((line, i) => (
               <div key={i} className="grid grid-cols-[1fr_120px_80px_36px] gap-2">
-                <StyledSelect
+                <SearchableSelect
                   value={line.partId}
-                  onValueChange={(value) => setLine(i, { partId: value })}
+                  onChange={(value) => setLine(i, { partId: value })}
                   options={[
-                    { value: "", label: "Select part…" },
                     ...(parts?.map((p: any) => ({
                       value: String(p.id),
                       label: `${p.sku} — ${p.name}`,
                     })) ?? []),
                   ]}
-                  className="h-9 rounded-xl bg-white/[0.04] border border-white/10 px-3 text-sm min-w-0"
+                  placeholder="Select part…"
+                  ariaLabel={`Part for invoice line ${i + 1}`}
+                  className="rounded-xl"
                 />
                 <StyledSelect
                   value={line.locationId}

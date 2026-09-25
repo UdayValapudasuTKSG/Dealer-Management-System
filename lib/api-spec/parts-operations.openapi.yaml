@@ -102,6 +102,21 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationLevel" } }
+  /parts/operations/parts/{id}/storage:
+    post:
+      operationId: assignPartsInventoryStorage
+      tags: [Parts]
+      description: Assign a bin without moving any existing stock.
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationStorageInput" } } } }
+      responses: *objectResponse
+  /parts/operations/parts/{id}/initialize-storage:
+    post:
+      operationId: initializePartsInventoryStorage
+      tags: [Parts]
+      description: Adopt a legacy balance once at its default location.
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses: *arrayResponse
   /parts/operations/ledger:
     get:
       operationId: listPartsInventoryLedger
@@ -491,6 +506,12 @@ components:
       type: object
       additionalProperties: true
       description: See docs/parts-operations-api.md for exact domain record fields.
+    PartsOperationStorageInput:
+      type: object
+      required: [locationId, binId]
+      properties:
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: integer, minimum: 1 }
     PartsOperationLocationInput:
       type: object
       required: [name, type]

@@ -6441,6 +6441,23 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationPartMetadataUpdate" } } } }
       responses:
         "200": { description: Updated part metadata, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/parts/{id}/storage:
+    post:
+      operationId: assignPartsInventoryStorage
+      tags: [parts]
+      description: Record a zero-quantity bin assignment; never relocate existing inventory.
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationStorageInput" } } } }
+      responses:
+        "200": { description: Assigned inventory level, content: { application/json: { schema: { $ref: "#/components/schemas/PartsOperationRecord" } } } }
+  /parts/operations/parts/{id}/initialize-storage:
+    post:
+      operationId: initializePartsInventoryStorage
+      tags: [parts]
+      description: Adopt existing legacy stock once at its default location, without moving it.
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Current levels, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationLevel" } } } } }
   /parts/operations/suppliers/{id}:
     patch:
       operationId: updatePartsSupplierMetadata
@@ -15921,6 +15938,12 @@ components:
       type: object
       additionalProperties: true
       description: Tenant-scoped parts operation record.
+    PartsOperationStorageInput:
+      type: object
+      required: [locationId, binId]
+      properties:
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: integer, minimum: 1 }
     PartsOperationLocationInput:
       type: object
       required: [name, type]

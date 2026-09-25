@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StyledSelect } from "@/components/ui/styled-select";
+import { SearchableSelect } from "@/components/create-record-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -262,8 +263,7 @@ function SpecialOrderDialog() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label>Part</Label>
-            <StyledSelect value={partId} onValueChange={setPartId} options={[
-              { value: "", label: "Select part…" },
+            <SearchableSelect value={partId} onChange={setPartId} placeholder="Select part…" ariaLabel="Part" options={[
               ...(parts ?? []).map((part) => ({ value: String(part.id), label: `${part.sku} — ${part.name}` })),
             ]} />
           </div>

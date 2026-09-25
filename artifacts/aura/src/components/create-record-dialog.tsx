@@ -309,6 +309,7 @@ export function CreateRecordDialog({
                   onChange={(v) => set(f.name, v)}
                   options={f.options ?? []}
                   placeholder={f.placeholder ?? "Select"}
+                  ariaLabel={f.label}
                 />
               ) : f.type === "select" ? (
                 <Select value={values[f.name]} onValueChange={(v) => set(f.name, v)}>
@@ -393,17 +394,23 @@ export function CreateRecordDialog({
   );
 }
 
-/** Searchable combobox for long option lists (Popover + Command). */
-function SearchableSelect({
+/** Controlled, keyboard-searchable option selector. Labels are searched in full. */
+export function SearchableSelect({
   value,
   onChange,
   options,
   placeholder,
+  disabled,
+  ariaLabel,
+  className,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
   placeholder: string;
+  disabled?: boolean;
+  ariaLabel?: string;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
@@ -415,7 +422,9 @@ function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-8 w-full justify-between rounded-md bg-white/[0.04] border-white/10 px-3 text-xs font-normal hover:bg-white/[0.06]"
+          aria-label={ariaLabel}
+          disabled={disabled}
+          className={cn("h-9 w-full min-w-0 justify-between rounded-md bg-white/[0.04] border-white/10 px-3 text-xs font-normal hover:bg-white/[0.06]", className)}
         >
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
             {selected?.label ?? placeholder}
@@ -428,11 +437,12 @@ function SearchableSelect({
         align="start"
       >
         <Command>
-          <CommandInput placeholder="Type to search..." className="h-9 text-xs" />
+          <CommandInput aria-label={`Search ${ariaLabel ?? "options"}`} placeholder="Search by part number or name..." className="h-9 text-xs" />
           <CommandList className="max-h-56">
-            <CommandEmpty>No matches.</CommandEmpty>
+            <CommandEmpty>No matching parts. Try a different number or name.</CommandEmpty>
             <CommandGroup>
-              {options.map((o) => (
+              {value && <CommandItem value="Clear selection" onSelect={() => { onChange(""); setOpen(false); }}>Clear selection</CommandItem>}
+              {options.filter((o) => o.value).map((o) => (
                 <CommandItem
                   key={o.value}
                   value={o.label}

@@ -13,7 +13,7 @@ import {
   generateLowStockOrders, createSpecialOrder, expirePartsHolds, startCycleCount,
   approveCycleCount, queueSupplierEmail, releaseOperationalHold, holdReferenceIsTerminal, enqueueOperationalStockSync,
 } from "../lib/parts-operations";
-import { createHold, releaseHold, consumeHold, moveStock } from "../lib/parts-inventory";
+import { assignPartStorage, ensureInventory, createHold, releaseHold, consumeHold, moveStock, transferPartStock } from "../lib/parts-inventory";
 import { agingReport, valuationReport, replenishmentReport, reconciliationFlags, csv } from "../lib/parts-operations-reports";
 import { partsSmsReadiness } from "../lib/parts-operations-sms";
 import { issueJobParts } from "../lib/job-part-stock";
@@ -45,7 +45,7 @@ const endpoint = (permission: "view" | "edit" | "approve", fn: (req: any, res: a
     const e = error as { code?: string; message?: string; status?: number; statusCode?: number };
     if (e.code === "23505") { res.status(409).json({ error: "A record with this key already exists" }); return; }
     if (e.statusCode || e.status) { res.status(e.statusCode ?? e.status ?? 409).json({ error: e.message }); return; }
-    if (e.message && /^(This inventory|Insufficient|Inventory hold not found|Part not found|Location not found|Bin not found|Released hold|Idempotency key|Stock movement|Quantity|Non-sellable|Unit cost|Inventory level|Legacy inventory)/.test(e.message)) { res.status(409).json({ error: e.message }); return; }
+    if (e.message && /^(This inventory|Insufficient|Active inventory|Active bin|Invalid transfer|Transfer destination|Inventory hold not found|Part not found|Location not found|Bin not found|Released hold|Idempotency key|Stock movement|Quantity|Non-sellable|Unit cost|Inventory level|Legacy inventory)/.test(e.message)) { res.status(409).json({ error: e.message }); return; }
     res.status(500).json({ error: "Parts operation failed; no changes were committed" });
   }
 };
@@ -86,6 +86,28 @@ router.get("/levels", endpoint("view", async (req, _res, c) => {
   const rows = await db.select().from(inventoryLevelsTable).where(and(scope(inventoryLevelsTable, c.dealerId), req.query.locationId ? eq(inventoryLevelsTable.locationId, id.parse(req.query.locationId)) : undefined, req.query.binId ? eq(inventoryLevelsTable.binId, id.parse(req.query.binId)) : undefined, req.query.partId ? eq(inventoryLevelsTable.partId, id.parse(req.query.partId)) : undefined));
   return rows.map(r => ({ ...r, quantityAvailable: r.quantityOnHand - r.quantityReserved - r.quantityNonSellable }));
 }));
+// Zero-quantity placement is a storage assignment, not a stock movement.
+// Existing balances (including legacy default-location balances) remain untouched.
+router.post("/parts/:id/storage", endpoint("edit", async (req, _res, c) => {
+  const input = z.object({ locationId: id, binId: id }).strict().parse(req.body);
+  return db.transaction(async tx => {
+    const partId = id.parse(req.params.id);
+    await assignPartStorage(tx, c.dealerId, partId, input.locationId, input.binId);
+    const [level] = await tx.select().from(inventoryLevelsTable).where(and(
+      eq(inventoryLevelsTable.dealerId, c.dealerId), eq(inventoryLevelsTable.partId, partId),
+      eq(inventoryLevelsTable.locationId, input.locationId), eq(inventoryLevelsTable.binId, input.binId)));
+    await operationAudit(tx, c.dealerId, c.actorId, "part", partId, "Assigned part storage", input);
+    return level;
+  });
+}));
+router.post("/parts/:id/initialize-storage", endpoint("edit", async (req, _res, c) =>
+  db.transaction(async tx => {
+    const partId = id.parse(req.params.id);
+    await ensureInventory(tx, c.dealerId, partId);
+    return tx.select().from(inventoryLevelsTable).where(and(
+      eq(inventoryLevelsTable.dealerId, c.dealerId), eq(inventoryLevelsTable.partId, partId)));
+  })
+));
 router.get("/ledger", endpoint("view", async (req, _res, c) => {
   const where = and(scope(inventoryTransactionsTable, c.dealerId), req.query.locationId ? eq(inventoryTransactionsTable.locationId, id.parse(req.query.locationId)) : undefined, req.query.partId ? eq(inventoryTransactionsTable.partId, id.parse(req.query.partId)) : undefined, req.query.from ? sql`${inventoryTransactionsTable.createdAt} >= ${z.coerce.date().parse(req.query.from)}` : undefined, req.query.to ? sql`${inventoryTransactionsTable.createdAt} <= ${z.coerce.date().parse(req.query.to)}` : undefined);
   const limit = z.coerce.number().int().min(1).max(1000).default(250).parse(req.query.limit);
@@ -171,9 +193,15 @@ router.post("/transfers", endpoint("edit", async (req, _res, c) => {
   const input = stockInput.extend({ toLocationId: id, toBinId: id.nullable().optional() }).strict().parse(req.body);
   demand(input.locationId !== input.toLocationId || (input.binId ?? null) !== (input.toBinId ?? null), "Transfer destination must differ", 400);
   return db.transaction(async tx => {
-    await validateLocation(tx, c.dealerId, input.toLocationId, input.toBinId);
-    const outgoing = await moveStock(tx, { ...input, dealerId: c.dealerId, type: "transfer", quantityDelta: -input.quantity, referenceType: "transfer", createdBy: c.actorId, idempotencyKey: `${input.idempotencyKey}:out` });
-    const incoming = await moveStock(tx, { dealerId: c.dealerId, partId: input.partId, locationId: input.toLocationId, binId: input.toBinId, type: "transfer", quantityDelta: input.quantity, referenceType: "transfer", referenceId: input.referenceId, unitCost: outgoing.unitCostAtTransaction, createdBy: c.actorId, idempotencyKey: `${input.idempotencyKey}:in`, notes: input.notes });
+    const [previous] = await tx.select({ id: inventoryTransactionsTable.id }).from(inventoryTransactionsTable)
+      .where(and(eq(inventoryTransactionsTable.dealerId, c.dealerId),
+        eq(inventoryTransactionsTable.idempotencyKey, `${input.idempotencyKey}:in`)));
+    const { outgoing, incoming } = await transferPartStock(tx, { ...input, dealerId: c.dealerId, createdBy: c.actorId });
+    if (!previous) await operationAudit(tx, c.dealerId, c.actorId, "part", input.partId, "Transferred part storage", {
+      fromLocationId: input.locationId, fromBinId: input.binId ?? null,
+      toLocationId: input.toLocationId, toBinId: input.toBinId, quantity: input.quantity,
+      outgoingTransactionId: outgoing.id, incomingTransactionId: incoming.id,
+    });
     return { outgoing, incoming };
   });
 }));

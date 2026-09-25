@@ -757,6 +757,7 @@ export * from './partsOperationRecord';
 export * from './partsOperationSpecialOrderInput';
 export * from './partsOperationSpecialOrderInputReferenceType';
 export * from './partsOperationStockInput';
+export * from './partsOperationStorageInput';
 export * from './partsOperationSupplierAssignmentInput';
 export * from './partsOperationSupplierMetadataUpdate';
 export * from './partsOperationTransferInput';

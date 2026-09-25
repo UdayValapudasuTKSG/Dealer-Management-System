@@ -8629,6 +8629,13 @@ export interface PartsOperationPage {
   total: number;
 }
 
+export interface PartsOperationStorageInput {
+  /** @minimum 1 */
+  locationId: number;
+  /** @minimum 1 */
+  binId: number;
+}
+
 export type PartsOperationLocationInputType = typeof PartsOperationLocationInputType[keyof typeof PartsOperationLocationInputType];
 
 

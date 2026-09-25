@@ -366,6 +366,7 @@ import type {
   PartsOperationRecord,
   PartsOperationSpecialOrderInput,
   PartsOperationStockInput,
+  PartsOperationStorageInput,
   PartsOperationSupplierAssignmentInput,
   PartsOperationSupplierMetadataUpdate,
   PartsOperationTransferInput,
@@ -22624,6 +22625,143 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdatePartsInventoryMetadataMutationOptions(options));
+    }
+
+export const getAssignPartsInventoryStorageUrl = (id: number,) => {
+
+
+
+
+  return `/api/parts/operations/parts/${id}/storage`
+}
+
+/**
+ * Record a zero-quantity bin assignment; never relocate existing inventory.
+ */
+export const assignPartsInventoryStorage = async (id: number,
+    partsOperationStorageInput: PartsOperationStorageInput, options?: RequestInit): Promise<PartsOperationRecord> => {
+
+  return customFetch<PartsOperationRecord>(getAssignPartsInventoryStorageUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partsOperationStorageInput)
+  }
+);}
+
+
+
+
+
+export const getAssignPartsInventoryStorageMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignPartsInventoryStorage>>, TError,{id: number;data: BodyType<PartsOperationStorageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof assignPartsInventoryStorage>>, TError,{id: number;data: BodyType<PartsOperationStorageInput>}, TContext> => {
+
+const mutationKey = ['assignPartsInventoryStorage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof assignPartsInventoryStorage>>, {id: number;data: BodyType<PartsOperationStorageInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  assignPartsInventoryStorage(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AssignPartsInventoryStorageMutationResult = NonNullable<Awaited<ReturnType<typeof assignPartsInventoryStorage>>>
+    export type AssignPartsInventoryStorageMutationBody = BodyType<PartsOperationStorageInput>
+    export type AssignPartsInventoryStorageMutationError = ErrorType<unknown>
+
+    export const useAssignPartsInventoryStorage = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignPartsInventoryStorage>>, TError,{id: number;data: BodyType<PartsOperationStorageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof assignPartsInventoryStorage>>,
+        TError,
+        {id: number;data: BodyType<PartsOperationStorageInput>},
+        TContext
+      > => {
+      return useMutation(getAssignPartsInventoryStorageMutationOptions(options));
+    }
+
+export const getInitializePartsInventoryStorageUrl = (id: number,) => {
+
+
+
+
+  return `/api/parts/operations/parts/${id}/initialize-storage`
+}
+
+/**
+ * Adopt existing legacy stock once at its default location, without moving it.
+ */
+export const initializePartsInventoryStorage = async (id: number, options?: RequestInit): Promise<PartsOperationLevel[]> => {
+
+  return customFetch<PartsOperationLevel[]>(getInitializePartsInventoryStorageUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getInitializePartsInventoryStorageMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializePartsInventoryStorage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof initializePartsInventoryStorage>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['initializePartsInventoryStorage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof initializePartsInventoryStorage>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  initializePartsInventoryStorage(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InitializePartsInventoryStorageMutationResult = NonNullable<Awaited<ReturnType<typeof initializePartsInventoryStorage>>>
+
+    export type InitializePartsInventoryStorageMutationError = ErrorType<unknown>
+
+    export const useInitializePartsInventoryStorage = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializePartsInventoryStorage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof initializePartsInventoryStorage>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getInitializePartsInventoryStorageMutationOptions(options));
     }
 
 export const getUpdatePartsSupplierMetadataUrl = (id: number,) => {

@@ -15,6 +15,8 @@ export type StockMovement = Scope & {
   quantityDelta: number; referenceType: string; referenceId: string; unitCost?: number;
   nonSellableDelta?: number; createdBy?: number | null; idempotencyKey?: string; notes?: string;
   allowDuringCount?: boolean;
+  /** FIFO-only transfer receipt: retain the source layer costs in the destination. */
+  receiptLayers?: { quantity: number; unitCost: number }[];
 };
 function integer(value: number, label: string) {
   if (!Number.isSafeInteger(value)) throw new Error(`${label} must be an integer`);
@@ -53,13 +55,13 @@ export async function ensureInventory(tx: InventoryTx, dealerId: number, partId:
 }
 /** Validate a dealership's active storage pair and record a zero-stock assignment. */
 export async function assignPartStorage(tx: InventoryTx, dealerId: number, partId: number, locationId: number, binId: number) {
+  await ensureInventory(tx, dealerId, partId);
   const [location] = await tx.select({ id: locations.id }).from(locations)
     .where(and(eq(locations.id, locationId), eq(locations.dealerId, dealerId), eq(locations.active, true))).for("share");
   if (!location) throw Object.assign(new Error("Active inventory location not found in this dealership"), { status: 404 });
   const [bin] = await tx.select({ id: bins.id }).from(bins)
     .where(and(eq(bins.id, binId), eq(bins.locationId, locationId), eq(bins.dealerId, dealerId), eq(bins.active, true))).for("share");
   if (!bin) throw Object.assign(new Error("Active bin not found at this dealership location"), { status: 404 });
-  await ensureInventory(tx, dealerId, partId);
   await tx.insert(levels).values({ dealerId, partId, locationId, binId }).onConflictDoNothing();
 }
 async function resolveLevel(tx: InventoryTx, input: Scope) {
@@ -110,6 +112,14 @@ export async function moveStock(tx: InventoryTx, input: StockMovement) {
   }
   let unitCost = input.unitCost ?? level.averageUnitCost;
   if (!Number.isFinite(unitCost) || unitCost < 0) throw new Error("Unit cost must be finite and nonnegative");
+  if (input.receiptLayers) {
+    if (input.quantityDelta <= 0 || nsDelta !== 0 || input.type !== "transfer" ||
+        input.receiptLayers.some(layer => !Number.isSafeInteger(layer.quantity) || layer.quantity <= 0 ||
+          !Number.isFinite(layer.unitCost) || layer.unitCost < 0) ||
+        input.receiptLayers.reduce((sum, layer) => sum + layer.quantity, 0) !== input.quantityDelta)
+      throw new Error("Invalid transfer receipt cost layers");
+    unitCost = input.receiptLayers.reduce((sum, layer) => sum + layer.quantity * layer.unitCost, 0) / input.quantityDelta;
+  }
   const takes: { layer: typeof layers.$inferSelect; quantity: number }[] = [];
   let valueDelta = input.quantityDelta * unitCost;
   if (input.quantityDelta < 0) {
@@ -140,7 +150,12 @@ export async function moveStock(tx: InventoryTx, input: StockMovement) {
       quantity: take.quantity, unitCost: part.costingMethod === "fifo" ? take.layer.unitCost : unitCost });
   }
   if (input.quantityDelta > 0) {
-    for (const damaged of [false, true]) {
+    if (input.receiptLayers) {
+      for (const item of input.receiptLayers) await tx.insert(layers).values({
+        ...scope, receiptTransactionId: entry.id, quantityReceived: item.quantity,
+        quantityRemaining: item.quantity, unitCost: item.unitCost, nonSellable: false,
+      });
+    } else for (const damaged of [false, true]) {
       const quantity = damaged ? nsDelta : input.quantityDelta - nsDelta;
       if (quantity > 0) await tx.insert(layers).values({ ...scope, receiptTransactionId: entry.id, quantityReceived: quantity,
         quantityRemaining: quantity, unitCost, nonSellable: damaged });
@@ -154,6 +169,44 @@ export async function moveStock(tx: InventoryTx, input: StockMovement) {
   await tx.update(partsTable).set({ stock: aggregate.stock, unitCost: aggregate.stock > 0 ? aggregate.value / aggregate.stock : part.unitCost, updatedAt: new Date() })
     .where(and(eq(partsTable.id, input.partId), eq(partsTable.dealerId, input.dealerId)));
   return entry;
+}
+
+/** A paired, atomic transfer; both legs share the part lock and source FIFO costs. */
+export async function transferPartStock(tx: InventoryTx, input: {
+  dealerId: number; partId: number; locationId: number; binId?: number | null;
+  toLocationId: number; toBinId?: number | null; quantity: number;
+  referenceId: string; idempotencyKey: string; createdBy?: number | null; notes?: string;
+}) {
+  integer(input.quantity, "Quantity");
+  if (input.quantity <= 0) throw new Error("Quantity must be positive");
+  if (input.locationId === input.toLocationId && (input.binId ?? null) === (input.toBinId ?? null))
+    throw new Error("Transfer destination must differ");
+  await ensureInventory(tx, input.dealerId, input.partId);
+  const [location] = await tx.select().from(locations).where(and(eq(locations.id, input.toLocationId),
+    eq(locations.dealerId, input.dealerId), eq(locations.active, true))).for("share");
+  if (!location) throw new Error("Active inventory location not found in this dealership");
+  if (input.toBinId != null) {
+    const [bin] = await tx.select().from(bins).where(and(eq(bins.id, input.toBinId),
+      eq(bins.locationId, input.toLocationId), eq(bins.dealerId, input.dealerId), eq(bins.active, true))).for("share");
+    if (!bin) throw new Error("Active bin not found at this dealership location");
+  }
+  const outgoing = await moveStock(tx, { ...input, type: "transfer", quantityDelta: -input.quantity,
+    referenceType: "transfer", idempotencyKey: `${input.idempotencyKey}:out` });
+  const [part] = await tx.select({ costingMethod: partsTable.costingMethod }).from(partsTable)
+    .where(and(eq(partsTable.dealerId, input.dealerId), eq(partsTable.id, input.partId)));
+  const receiptLayers = part?.costingMethod === "fifo"
+    ? await tx.select({ quantity: consumptions.quantity, unitCost: layers.unitCost })
+        .from(consumptions).innerJoin(layers, and(eq(layers.id, consumptions.layerId),
+          eq(layers.dealerId, input.dealerId)))
+        .where(and(eq(consumptions.dealerId, input.dealerId), eq(consumptions.transactionId, outgoing.id)))
+        .orderBy(consumptions.id)
+    : undefined;
+  const incoming = await moveStock(tx, { dealerId: input.dealerId, partId: input.partId,
+    locationId: input.toLocationId, binId: input.toBinId, type: "transfer",
+    quantityDelta: input.quantity, referenceType: "transfer", referenceId: input.referenceId,
+    unitCost: outgoing.unitCostAtTransaction, receiptLayers,
+    createdBy: input.createdBy, idempotencyKey: `${input.idempotencyKey}:in`, notes: input.notes });
+  return { outgoing, incoming };
 }
 
 export async function createHold(tx: InventoryTx, input: Scope & {

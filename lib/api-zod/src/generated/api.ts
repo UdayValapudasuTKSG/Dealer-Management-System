@@ -12731,6 +12731,54 @@ export const UpdatePartsInventoryMetadataBody = zod.object({
 export const UpdatePartsInventoryMetadataResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
 
 
+/**
+ * Record a zero-quantity bin assignment; never relocate existing inventory.
+ */
+
+
+
+export const AssignPartsInventoryStorageParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+
+
+
+
+export const AssignPartsInventoryStorageBody = zod.object({
+  "locationId": zod.number().min(1),
+  "binId": zod.number().min(1)
+})
+
+export const AssignPartsInventoryStorageResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
+
+
+/**
+ * Adopt existing legacy stock once at its default location, without moving it.
+ */
+
+
+
+export const InitializePartsInventoryStorageParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const InitializePartsInventoryStorageResponseItem = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "partId": zod.number(),
+  "locationId": zod.number(),
+  "binId": zod.number().nullish(),
+  "quantityOnHand": zod.number(),
+  "quantityReserved": zod.number(),
+  "quantityNonSellable": zod.number(),
+  "quantityAvailable": zod.number(),
+  "averageUnitCost": zod.number(),
+  "updatedAt": zod.coerce.date().optional()
+})
+export const InitializePartsInventoryStorageResponse = zod.array(InitializePartsInventoryStorageResponseItem)
+
+
 
 
 

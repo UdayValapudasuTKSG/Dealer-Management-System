@@ -37,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useUpload } from "@workspace/object-storage-web";
 import { StyledSelect } from "@/components/ui/styled-select";
+import { SearchableSelect } from "@/components/create-record-dialog";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,7 @@ import {
 import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
 import { CreatePartDialog } from "@/components/parts/create-part-dialog";
+import { PartStorageDialog } from "@/components/parts/part-storage-dialog";
 import { PurchaseOrderImportDialog } from "@/components/parts/purchase-order-import-dialog";
 import { PartBarcodeScanner } from "@/components/parts/part-barcode-scanner";
 import {
@@ -561,6 +563,7 @@ function PartsTab() {
                     </td>
                     <td className="px-2 py-2 text-right">
                       <PricingBreakdownDialog part={p} />
+                      <PartStorageDialog part={p} />
                       <EditPartDialog part={p} />
                     </td>
                   </tr>
@@ -601,6 +604,7 @@ function PartsTab() {
                         </Badge>
                       )}
                       <PricingBreakdownDialog part={p} />
+                      <PartStorageDialog part={p} />
                       <EditPartDialog part={p} />
                     </div>
                   </div>
@@ -907,6 +911,7 @@ function CreatePurchaseDialog() {
           name: "partId",
           label: "Part",
           type: "select",
+          searchable: true,
           required: true,
           span: "full",
           options:
@@ -1155,9 +1160,9 @@ function CreatePurchaseOrderDialog() {
           {lines.map((line, i) => (
             <div key={i} className="space-y-1">
             <div className="grid grid-cols-[1fr_64px_92px_repeat(4,72px)_36px] gap-2">
-              <StyledSelect
+              <SearchableSelect
                 value={line.partId}
-                onValueChange={(value) => {
+                onChange={(value) => {
                   const part = parts?.find((p) => p.id === Number(value));
                   setLine(i, {
                     partId: value,
@@ -1165,13 +1170,14 @@ function CreatePurchaseOrderDialog() {
                   });
                 }}
                 options={[
-                  { value: "", label: "Select part…" },
                   ...(parts?.map((p) => ({
                     value: String(p.id),
                     label: `${p.sku} — ${p.name}`,
                   })) ?? []),
                 ]}
-                className="h-10 rounded-xl bg-white/[0.04] border border-white/10 px-3 text-sm min-w-0"
+                placeholder="Select part…"
+                ariaLabel={`Part for purchase order line ${i + 1}`}
+                className="h-10 rounded-xl"
               />
               <Input
                 type="number"
