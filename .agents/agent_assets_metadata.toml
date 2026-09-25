@@ -297,7 +297,7 @@ content_type = "application/pdf"
 [[outputs]]
 id = "FwQERFMU43t2Wyj0F8qLT"
 uri = "file://outputs/whatsapp-cloud-api-integration-handbook.html"
-type = "text"
+type = "html"
 title = "WhatsApp Cloud API Integration Handbook — Editable HTML"
 description = "Self-contained editable source edition with print-ready styling and copy-ready implementation examples."
 logical_id = "2f7f71c6-edc5-42c1-a95b-a9b0dc4e094a"
@@ -321,3 +321,17 @@ mtime_ms = 1789361199720
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/af82ac59-ba86-4427-a647-1eac556c3462/f3fef6d2-730b-4286-98ce-67ec328de1a9"
 storage_version_token = "1789362014226736"
 content_type = "text/csv"
+
+[[outputs]]
+id = "rH2bLlRNOBC86ZWgWpzOH"
+uri = "file://.agents/outputs/purchase-order-46.pdf"
+type = "pdf"
+title = "Dealer-branded purchase order preview"
+description = "Generated from existing development PO #46 using its dealership’s configured logo and contact details. No email was sent."
+logical_id = "77e2fb08-2487-4399-abd5-aa7344723a6c"
+content_hash = "sha256:5d907efc70bd3aca06f17d9d6f2ec6bcc2845ed241edb2d1224b7b3dff7c64aa"
+size = 15337
+mtime_ms = 1790308032522
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/77e2fb08-2487-4399-abd5-aa7344723a6c/0b69587b-baac-4852-9074-7e19e8cd4bb7"
+storage_version_token = "1790308059440082"
+content_type = "application/pdf"

@@ -6346,6 +6346,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /purchase-orders/{id}/pdf:
+    get:
+      operationId: downloadPurchaseOrderPdf
+      tags: [parts]
+      summary: Download a purchase order with active dealership branding
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Purchase order PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404":
+          description: Purchase order or its supplier not found for this dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /purchase-orders/{id}/receive:
     post:
       operationId: receivePurchaseOrder

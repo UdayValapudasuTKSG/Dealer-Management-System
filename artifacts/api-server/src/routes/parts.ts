@@ -13,6 +13,8 @@ import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import { idempotent } from "../middlewares/idempotency";
 import { dealerExchangeRate } from "../lib/invoicing";
 import { dealerTimezone, zonedParts } from "../lib/timezone";
+import { getDealerPdfBranding } from "../lib/dealer-branding";
+import { buildPurchaseOrderPdf } from "../lib/purchase-order-pdf";
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { queueInvoiceSync } from "../lib/erpnext/entities";
 import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
@@ -72,6 +74,7 @@ import {
   ReceivePurchaseOrderParams,
   ReceivePurchaseOrderBody,
   ReceivePurchaseOrderResponse,
+  DownloadPurchaseOrderPdfParams,
 } from "@workspace/api-zod";
 import {
   jobCardPartsTable,
@@ -1299,6 +1302,48 @@ router.get("/purchase-orders", async (_req, res): Promise<void> => {
       })),
     ),
   );
+});
+
+router.get("/purchase-orders/:id/pdf", async (req, res): Promise<void> => {
+  const params = DownloadPurchaseOrderPdfParams.safeParse(req.params);
+  if (!params.success || params.data.id < 1) {
+    res.status(400).json({ error: "Invalid purchase order ID" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const order = await loadPurchaseOrder(dealerId, params.data.id);
+  if (!order) {
+    res.status(404).json({ error: "Purchase order not found" });
+    return;
+  }
+  const [dealer] = await db.select({
+    address: dealersTable.address, city: dealersTable.city,
+    country: dealersTable.country, servicePhone: dealersTable.servicePhone,
+  }).from(dealersTable).where(eq(dealersTable.id, dealerId));
+  if (!dealer) {
+    res.status(404).json({ error: "Dealership not found" });
+    return;
+  }
+  const [supplier] = order.supplierId == null ? [] : await db.select({
+    name: suppliersTable.name, contactName: suppliersTable.contactName,
+    address: suppliersTable.address, phone: suppliersTable.phone, email: suppliersTable.email,
+  }).from(suppliersTable).where(and(
+    eq(suppliersTable.id, order.supplierId),
+    eq(suppliersTable.dealerId, dealerId),
+  ));
+  if (order.supplierId != null && !supplier) {
+    res.status(404).json({ error: "Supplier not found" });
+    return;
+  }
+  const pdf = await buildPurchaseOrderPdf(
+    order, dealer, supplier ?? null,
+    await getDealerPdfBranding(dealerId), await dealerTimezone(dealerId),
+  );
+  res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="purchase-order-${order.id}.pdf"`);
+  res.send(pdf);
 });
 
 router.post("/purchase-orders", async (req, res): Promise<void> => {

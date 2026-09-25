@@ -21100,6 +21100,83 @@ export const useUpdatePurchaseOrder = <TError = ErrorType<Error>,
       return useMutation(getUpdatePurchaseOrderMutationOptions(options));
     }
 
+export const getDownloadPurchaseOrderPdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/purchase-orders/${id}/pdf`
+}
+
+/**
+ * @summary Download a purchase order with active dealership branding
+ */
+export const downloadPurchaseOrderPdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadPurchaseOrderPdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadPurchaseOrderPdfQueryKey = (id: number,) => {
+    return [
+    `/api/purchase-orders/${id}/pdf`
+    ] as const;
+    }
+
+
+export const getDownloadPurchaseOrderPdfQueryOptions = <TData = Awaited<ReturnType<typeof downloadPurchaseOrderPdf>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPurchaseOrderPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadPurchaseOrderPdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadPurchaseOrderPdf>>> = ({ signal }) => downloadPurchaseOrderPdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadPurchaseOrderPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadPurchaseOrderPdfQueryResult = NonNullable<Awaited<ReturnType<typeof downloadPurchaseOrderPdf>>>
+export type DownloadPurchaseOrderPdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Download a purchase order with active dealership branding
+ */
+
+export function useDownloadPurchaseOrderPdf<TData = Awaited<ReturnType<typeof downloadPurchaseOrderPdf>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPurchaseOrderPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadPurchaseOrderPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getReceivePurchaseOrderUrl = (id: number,) => {
 
 

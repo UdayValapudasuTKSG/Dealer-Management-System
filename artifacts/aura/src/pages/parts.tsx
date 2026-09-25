@@ -28,6 +28,7 @@ import {
   type PurchaseOrder,
   getListPurchaseOrdersQueryKey,
   getListPartRequisitionsQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1381,6 +1382,39 @@ function PurchaseOrdersTab() {
   const update = useUpdatePurchaseOrder();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [receivingPo, setReceivingPo] = useState<PurchaseOrder | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  const downloadPdf = async (id: number) => {
+    setDownloadingId(id);
+    try {
+      const blob = await customFetch<Blob>(
+        `/api/purchase-orders/${id}/pdf?download=${Date.now()}`,
+        { responseType: "blob", cache: "no-store", headers: { "Cache-Control": "no-cache" } },
+      );
+      const signature = new TextDecoder().decode(await blob.slice(0, 5).arrayBuffer());
+      if (signature !== "%PDF-") {
+        const body = await blob.text();
+        let message = "The server did not return a PDF.";
+        try {
+          const error = JSON.parse(body) as { error?: string; message?: string };
+          message = error.message ?? error.error ?? message;
+        } catch { /* Non-JSON response. */ }
+        throw new Error(message);
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `purchase-order-${id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      toast({ title: "PDF download failed", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const supplierName = (id: number | null | undefined) =>
     id == null ? "No supplier" : (suppliers?.find((s) => s.id === id)?.name ?? `Supplier #${id}`);
@@ -1469,6 +1503,13 @@ function PurchaseOrdersTab() {
                     </span>
                   </div>
                 ))}
+              </div>
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" disabled={downloadingId === po.id}
+                  onClick={() => downloadPdf(po.id)} className="rounded-full px-5 border-white/15">
+                  <Download className="w-4 h-4 mr-2" />
+                  {downloadingId === po.id ? "Preparing PDF…" : "Download PDF"}
+                </Button>
               </div>
               {(po.status === "draft" ||
                 po.status === "ordered" ||

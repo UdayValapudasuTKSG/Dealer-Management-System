@@ -12325,6 +12325,16 @@ export const UpdatePurchaseOrderResponse = zod.object({
 
 
 /**
+ * @summary Download a purchase order with active dealership branding
+ */
+export const DownloadPurchaseOrderPdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DownloadPurchaseOrderPdfResponse = zod.unknown()
+
+
+/**
  * @summary Receive goods against an ordered PO (increments stock, releases backordered job-card lines)
  */
 export const ReceivePurchaseOrderParams = zod.object({
