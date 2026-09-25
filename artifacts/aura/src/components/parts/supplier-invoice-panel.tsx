@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useListPagination } from "./list-pagination";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFetch, useListPurchaseOrders } from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
@@ -22,6 +23,8 @@ export function SupplierInvoicePanel({purchaseOrderId,locationId}:{purchaseOrder
   const branch=locationId??order?.locationId;
   const query=useQuery({queryKey:["supplier-invoices",poId,branch],enabled:!!poId&&!!branch,
     queryFn:()=>customFetch<any>(`${base}/purchase-orders/${poId}?locationId=${branch}`)});
+  const editPaging = useListPagination(lines, `${poId}:${editingInvoice}`);
+  const invoicePaging = useListPagination((query.data?.invoices ?? []) as any[], String(poId));
   async function action(fn:()=>Promise<unknown>) {
     setBusy(true);setError("");
     try { await fn(); await qc.invalidateQueries({queryKey:["supplier-invoices"]}); }
@@ -69,13 +72,15 @@ export function SupplierInvoicePanel({purchaseOrderId,locationId}:{purchaseOrder
       <div className="grid gap-3 sm:grid-cols-3">{(["invoiceNumber","invoiceDate","shipping","duties","tax","total"] as const).map(key=><label key={key} className="text-sm">{({invoiceNumber:"Invoice number",invoiceDate:"Invoice date",shipping:"Shipping",duties:"Duties",tax:"Tax",total:"Invoice total"})[key]}
         <Input required type={key==="invoiceDate"?"date":"text"} value={header[key]} onChange={e=>setHeader({...header,[key]:e.target.value})}/></label>)}
         <label className="text-sm">Tolerance % (default 0)<Input type="number" min="0" max="100" step=".01" value={header.toleranceBps/100} onChange={e=>setHeader({...header,toleranceBps:Math.round(Number(e.target.value)*100)})}/></label></div>
-      <div className="overflow-auto"><table className="w-full text-sm"><thead><tr>{["Part number","Description","Invoiced qty","Unit cost",""].map(h=><th key={h} className="p-2 text-left">{h}</th>)}</tr></thead><tbody>{lines.map((line,i)=><tr key={i}>
-        {(["partNumber","description","quantity","unitCost"] as const).map(key=><td key={key} className="p-1"><Input required value={line[key]} type={key==="quantity"?"number":"text"} min="0" onChange={e=>setLines(lines.map((v,j)=>j===i?{...v,[key]:key==="quantity"?Number(e.target.value):e.target.value}:v))}/></td>)}
-        <td><Button type="button" variant="ghost" onClick={()=>setLines(lines.filter((_,j)=>i!==j))}>Remove</Button></td></tr>)}</tbody></table></div>
+      {editPaging.controls}
+      <div className="overflow-auto"><table className="w-full text-sm"><thead><tr>{["Part number","Description","Invoiced qty","Unit cost",""].map(h=><th key={h} className="p-2 text-left">{h}</th>)}</tr></thead><tbody>{editPaging.items.map((line,i)=><tr key={(editPaging.page-1)*editPaging.pageSize+i}>
+        {(["partNumber","description","quantity","unitCost"] as const).map(key=><td key={key} className="p-1"><Input required value={line[key]} type={key==="quantity"?"number":"text"} min="0" onChange={e=>setLines(lines.map((v,j)=>j===(editPaging.page-1)*editPaging.pageSize+i?{...v,[key]:key==="quantity"?Number(e.target.value):e.target.value}:v))}/></td>)}
+        <td><Button type="button" variant="ghost" onClick={()=>setLines(lines.filter((_,j)=>j!==(editPaging.page-1)*editPaging.pageSize+i))}>Remove</Button></td></tr>)}</tbody></table></div>
       <div className="flex gap-2"><Button type="button" variant="outline" onClick={()=>setLines([...lines,{partNumber:"",description:"",quantity:0,unitCost:"0.00"}])}>Add line</Button>
       <Button disabled={busy} type="submit">{busy?"Uploading…":"Save invoice"}</Button><Button type="button" variant="ghost" onClick={()=>setEditing(false)}>Cancel</Button></div>
     </form>}
-    {query.data?.invoices.map((invoice:any)=><article key={invoice.id} className="rounded-xl border border-border p-4 space-y-3">
+    {invoicePaging.controls}
+    {invoicePaging.items.map((invoice:any)=><article key={invoice.id} className="rounded-xl border border-border p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{invoice.invoice_number} · {String(invoice.invoice_date).slice(0,10)} · {invoice.status}</h3>
         <Button variant="outline" onClick={()=>void action(async()=>{const response=await customFetch<Blob>(`${base}/${invoice.id}/file?locationId=${branch}&v=${Date.now()}`,{responseType:"blob",cache:"no-store"}); const url=URL.createObjectURL(response);const anchor=document.createElement("a");anchor.href=url;anchor.download=invoice.file_name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),10000);})}>Download invoice</Button></div>
       <p className="text-sm">Subtotal {amount(invoice.subtotal_minor)} · Shipping {amount(invoice.shipping_minor)} · Duties {amount(invoice.duties_minor)} · Tax {amount(invoice.tax_minor)} · Total {amount(invoice.total_minor)}</p>

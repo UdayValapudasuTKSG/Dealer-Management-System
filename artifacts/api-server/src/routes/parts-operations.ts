@@ -1,6 +1,6 @@
 import { Router, type RequestHandler } from "express";
 import { z } from "zod/v4";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   db, partsTable, suppliersTable, purchaseOrdersTable, purchaseOrderLinesTable,
   inventoryLocationsTable, inventoryBinsTable, inventoryLevelsTable, inventoryTransactionsTable,
@@ -86,7 +86,17 @@ router.get("/levels", endpoint("view", async (req, _res, c) => {
   const rows = await db.select().from(inventoryLevelsTable).where(and(scope(inventoryLevelsTable, c.dealerId), req.query.locationId ? eq(inventoryLevelsTable.locationId, id.parse(req.query.locationId)) : undefined, req.query.binId ? eq(inventoryLevelsTable.binId, id.parse(req.query.binId)) : undefined, req.query.partId ? eq(inventoryLevelsTable.partId, id.parse(req.query.partId)) : undefined));
   return rows.map(r => ({ ...r, quantityAvailable: r.quantityOnHand - r.quantityReserved - r.quantityNonSellable }));
 }));
-router.get("/ledger", endpoint("view", async (req, _res, c) => db.select().from(inventoryTransactionsTable).where(and(scope(inventoryTransactionsTable, c.dealerId), req.query.locationId ? eq(inventoryTransactionsTable.locationId, id.parse(req.query.locationId)) : undefined, req.query.partId ? eq(inventoryTransactionsTable.partId, id.parse(req.query.partId)) : undefined, req.query.from ? sql`${inventoryTransactionsTable.createdAt} >= ${z.coerce.date().parse(req.query.from)}` : undefined, req.query.to ? sql`${inventoryTransactionsTable.createdAt} <= ${z.coerce.date().parse(req.query.to)}` : undefined)).orderBy(desc(inventoryTransactionsTable.id)).limit(z.coerce.number().int().min(1).max(1000).default(250).parse(req.query.limit))));
+router.get("/ledger", endpoint("view", async (req, _res, c) => {
+  const where = and(scope(inventoryTransactionsTable, c.dealerId), req.query.locationId ? eq(inventoryTransactionsTable.locationId, id.parse(req.query.locationId)) : undefined, req.query.partId ? eq(inventoryTransactionsTable.partId, id.parse(req.query.partId)) : undefined, req.query.from ? sql`${inventoryTransactionsTable.createdAt} >= ${z.coerce.date().parse(req.query.from)}` : undefined, req.query.to ? sql`${inventoryTransactionsTable.createdAt} <= ${z.coerce.date().parse(req.query.to)}` : undefined);
+  const limit = z.coerce.number().int().min(1).max(1000).default(250).parse(req.query.limit);
+  if (req.query.paged !== "1") return db.select().from(inventoryTransactionsTable).where(where).orderBy(desc(inventoryTransactionsTable.id)).limit(limit);
+  const offset = z.coerce.number().int().min(0).parse(req.query.offset ?? 0);
+  const [[total], items] = await Promise.all([
+    db.select({ value: count() }).from(inventoryTransactionsTable).where(where),
+    db.select().from(inventoryTransactionsTable).where(where).orderBy(desc(inventoryTransactionsTable.id)).limit(limit).offset(offset),
+  ]);
+  return { items, total: total.value };
+}));
 
 router.patch("/parts/:id", endpoint("edit", async (req, _res, c) => {
   const input = z.object({ description: z.string().max(10000).nullable().optional(), barcode: z.string().max(100).nullable().optional(), costingMethod: z.enum(["average", "fifo", "landed"]).optional(), reorderMax: qty.optional(), reorderLevel: qty.optional(), active: z.boolean().optional() }).strict().parse(req.body);
@@ -319,7 +329,17 @@ router.put("/communication-settings/:locationId", endpoint("edit", async (req, r
     return input;
   });
 }));
-router.get("/notifications", endpoint("view", async (req, _res, c) => db.select().from(partNotificationDeliveriesTable).where(and(scope(partNotificationDeliveriesTable, c.dealerId), req.query.status ? eq(partNotificationDeliveriesTable.status, z.enum(["pending", "sending", "sent", "failed"]).parse(req.query.status)) : undefined)).orderBy(desc(partNotificationDeliveriesTable.id)).limit(500)));
+router.get("/notifications", endpoint("view", async (req, _res, c) => {
+  const where = and(scope(partNotificationDeliveriesTable, c.dealerId), req.query.status ? eq(partNotificationDeliveriesTable.status, z.enum(["pending", "sending", "sent", "failed"]).parse(req.query.status)) : undefined);
+  if (req.query.paged !== "1") return db.select().from(partNotificationDeliveriesTable).where(where).orderBy(desc(partNotificationDeliveriesTable.id)).limit(500);
+  const limit = z.coerce.number().int().min(1).max(1000).default(25).parse(req.query.limit);
+  const offset = z.coerce.number().int().min(0).parse(req.query.offset ?? 0);
+  const [[total], items] = await Promise.all([
+    db.select({ value: count() }).from(partNotificationDeliveriesTable).where(where),
+    db.select().from(partNotificationDeliveriesTable).where(where).orderBy(desc(partNotificationDeliveriesTable.id)).limit(limit).offset(offset),
+  ]);
+  return { items, total: total.value };
+}));
 router.get("/notifications/sms-settings", endpoint("view", async (_req, _res, c) => partsSmsReadiness(c.dealerId)));
 router.post("/notifications/:id/retry", endpoint("approve", async (req, _res, c) => db.transaction(async tx => {
   const row = await owned(tx, partNotificationDeliveriesTable, c.dealerId, id.parse(req.params.id), true);

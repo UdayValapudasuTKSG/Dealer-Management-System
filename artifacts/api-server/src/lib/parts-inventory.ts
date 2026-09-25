@@ -51,6 +51,17 @@ export async function ensureInventory(tx: InventoryTx, dealerId: number, partId:
   }
   return { part, location };
 }
+/** Validate a dealership's active storage pair and record a zero-stock assignment. */
+export async function assignPartStorage(tx: InventoryTx, dealerId: number, partId: number, locationId: number, binId: number) {
+  const [location] = await tx.select({ id: locations.id }).from(locations)
+    .where(and(eq(locations.id, locationId), eq(locations.dealerId, dealerId), eq(locations.active, true))).for("share");
+  if (!location) throw Object.assign(new Error("Active inventory location not found in this dealership"), { status: 404 });
+  const [bin] = await tx.select({ id: bins.id }).from(bins)
+    .where(and(eq(bins.id, binId), eq(bins.locationId, locationId), eq(bins.dealerId, dealerId), eq(bins.active, true))).for("share");
+  if (!bin) throw Object.assign(new Error("Active bin not found at this dealership location"), { status: 404 });
+  await ensureInventory(tx, dealerId, partId);
+  await tx.insert(levels).values({ dealerId, partId, locationId, binId }).onConflictDoNothing();
+}
 async function resolveLevel(tx: InventoryTx, input: Scope) {
   const initialized = await ensureInventory(tx, input.dealerId, input.partId);
   const scope: Required<Scope> = { ...input, locationId: input.locationId ?? initialized.location.id, binId: input.binId ?? null };

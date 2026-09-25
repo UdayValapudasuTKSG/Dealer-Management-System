@@ -15,12 +15,13 @@ export const partTemplateColumns: { header: string; example: string | number | b
   { header: "Supplier ID", example: "" }, { header: "Description", example: "" },
   { header: "Category", example: "general" }, { header: "Reorder Min", example: 5 },
   { header: "Reorder Max", example: 10 }, { header: "Location", example: "" },
+  { header: "Location ID", example: "" }, { header: "Bin ID", example: "" },
   { header: "Active", example: true }, { header: "Pricing Quantity", example: "" },
 ];
 
 export const partExportHeaders = [
   "SKU", "Name", "Description", "Category", "Make", "Supplier ID", "Supplier", "Barcode",
-  "Costing Method", "Unit Cost", "Unit Price", "Stock", "Reorder Min", "Reorder Max", "Location", "Active",
+  "Costing Method", "Unit Cost", "Unit Price", "Stock", "Reorder Min", "Reorder Max", "Location", "Location ID", "Bin ID", "Active",
   "Pricing Quantity", "UNIT COST USD", "TOTAL USD", "CIF USD", "DUTY", "VAT", "DUTY GYD",
   "VAT GYD", "LAN/COST (GYD)", "14%VAT", "FINAL SP",
 ];
@@ -29,7 +30,7 @@ export function partExportValues(part: typeof partsTable.$inferSelect, supplierN
   return [
     part.sku, part.name, part.description ?? "", part.category, part.make ?? "", part.supplierId ?? "",
     supplierName ?? "", part.barcode ?? "", part.costingMethod, part.unitCost, part.unitPrice, part.stock,
-    part.reorderLevel, part.reorderMax, part.location ?? "", part.active,
+    part.reorderLevel, part.reorderMax, part.location ?? "", "", "", part.active,
     d?.quantity ?? "", d?.unitCostUsd ?? "", d?.totalUsd ?? "", d?.cifUsd ?? "", d?.dutyRate ?? "",
     d?.vatRate ?? "", d?.dutyGyd ?? "", d?.vatGyd ?? "", d?.landedCostGyd ?? "",
     d?.sellingVatGyd ?? "", d?.finalSellingPriceGyd ?? "",

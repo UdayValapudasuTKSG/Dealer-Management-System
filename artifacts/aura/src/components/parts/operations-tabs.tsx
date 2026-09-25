@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
+import { useListPagination, useServerPagination } from "./list-pagination";
 import { formatGuyanaDate, useMoney } from "@/lib/format";
-import { useGetInventoryLedger, useGetInventoryHolds, useExpireHolds, useReleaseHold, useCreateHold, useConsumeHold, useCreateIssue, useCreateAdjustment, useCreateTransfer, useGetLocations, useGetBins, useGetInventoryLevels, useCreateOtcInvoice } from "@/hooks/use-parts-operations";
+import { useGetInventoryHolds, useExpireHolds, useReleaseHold, useCreateHold, useConsumeHold, useCreateIssue, useCreateAdjustment, useCreateTransfer, useGetLocations, useGetBins, useGetInventoryLevels, useCreateOtcInvoice } from "@/hooks/use-parts-operations";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,7 +48,15 @@ function resolveScannedPart(parts: PartOption[], value: string) {
 }
 
 export function LedgerTab() {
-  const { data: ledger, isLoading, isError } = useGetInventoryLedger({ limit: 100 });
+  const { activeDealer } = useAuthz();
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+  const paging = useServerPagination(ledgerTotal);
+  const { data: ledgerPage, isLoading, isError } = useQuery<{ items: any[]; total: number }>({
+    queryKey: ["parts-ledger", "page", activeDealer?.dealerId, paging.offset, paging.pageSize],
+    queryFn: () => customFetch(`/api/parts/operations/ledger?paged=1&offset=${paging.offset}&limit=${paging.pageSize}`),
+  });
+  useEffect(() => { if (ledgerPage) setLedgerTotal(ledgerPage.total); }, [ledgerPage?.total]);
+  const ledger = ledgerPage?.items;
   const money = useMoney();
   const { can } = useAuthz();
   const canEdit = can("parts", "edit");
@@ -77,6 +88,7 @@ export function LedgerTab() {
         </div>
       </div>
       <InventoryDrilldown />
+      {paging.controls}
       {!ledger?.length ? (
         <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-12 flex flex-col items-center gap-3">
           <History className="w-8 h-8 text-muted-foreground" />
@@ -152,6 +164,7 @@ export function LedgerTab() {
 
 export function HoldsTab() {
   const { data: holds, isLoading, isError } = useGetInventoryHolds({ status: "active" });
+  const holdsPaging = useListPagination(holds ?? []);
   const expire = useExpireHolds();
   const release = useReleaseHold();
   const consume = useConsumeHold();
@@ -194,6 +207,7 @@ export function HoldsTab() {
         </div>
       </div>
 
+      {holdsPaging.controls}
       {!holds?.length ? (
         <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
           <CheckCircle2 className="w-8 h-8 text-muted-foreground" />
@@ -201,7 +215,7 @@ export function HoldsTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {holds.map(hold => {
+          {holdsPaging.items.map(hold => {
             const isAtRisk = hold.backorderRisk;
             const expiresSoon = new Date(hold.expiresAt).getTime() - Date.now() < 86400000;
             const part = parts.find((item) => item.id === hold.partId);
@@ -292,6 +306,7 @@ function InventoryDrilldown() {
   const locations = (locationsQuery.data ?? []) as LocationOption[];
   const bins = (binsQuery.data ?? []) as BinOption[];
   const levels = (levelsQuery.data ?? []) as InventoryLevel[];
+  const levelsPaging = useListPagination(levels, `${locationId}:${binId}`);
 
   return (
     <Card className="glass-panel border-white/10">
@@ -333,6 +348,7 @@ function InventoryDrilldown() {
         {(locationsQuery.isError || binsQuery.isError || levelsQuery.isError) && (
           <p role="alert" className="text-sm text-destructive">Could not load the inventory drilldown. Try again.</p>
         )}
+        {levelsPaging.controls}
         {levelsQuery.isLoading ? (
           <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading stock levels…
@@ -353,7 +369,7 @@ function InventoryDrilldown() {
                 </tr>
               </thead>
               <tbody>
-                {levels.map((level) => {
+                {levelsPaging.items.map((level) => {
                   const part = partOptions.find((item) => item.id === level.partId);
                   const location = locations.find((item) => item.id === level.locationId);
                   const bin = bins.find((item) => item.id === level.binId);

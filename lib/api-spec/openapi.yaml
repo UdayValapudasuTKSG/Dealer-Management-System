@@ -6005,8 +6005,10 @@ paths:
         - { name: from, in: query, schema: { type: string, format: date-time } }
         - { name: to, in: query, schema: { type: string, format: date-time } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 250 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: paged, in: query, schema: { type: string, enum: ["1"], description: "Return items and total instead of the legacy array" } }
       responses:
-        "200": { description: Inventory ledger, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+        "200": { description: Inventory ledger (legacy array or paged envelope), content: { application/json: { schema: { oneOf: [{ type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } }, { $ref: "#/components/schemas/PartsOperationPage" }] } } } }
   /parts/operations/holds:
     get:
       operationId: listPartsInventoryHolds
@@ -6313,9 +6315,13 @@ paths:
     get:
       operationId: listPartsNotificationDeliveries
       tags: [parts]
-      parameters: [{ name: status, in: query, schema: { type: string, enum: [pending, sending, sent, failed] } }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, sending, sent, failed] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 25 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: paged, in: query, schema: { type: string, enum: ["1"], description: "Return items and total instead of the legacy array" } }
       responses:
-        "200": { description: Notification deliveries, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } } } } }
+        "200": { description: Notification deliveries (legacy array or paged envelope), content: { application/json: { schema: { oneOf: [{ type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } }, { $ref: "#/components/schemas/PartsOperationPage" }] } } } }
   /parts/operations/notifications/sms-settings:
     get:
       operationId: getPartsSmsSettings
@@ -15620,17 +15626,19 @@ components:
         createdAt: { type: string, format: date-time }
     PartInput:
       type: object
-      required: [sku, name]
+      required: [sku, name, locationId, binId]
       properties:
         sku: { type: string, minLength: 1 }
         name: { type: string, minLength: 1 }
+        locationId: { type: integer, minimum: 1 }
+        binId: { type: integer, minimum: 1 }
         make: { type: ["string", "null"] }
         category: { type: string }
         supplierId: { type: integer }
         unitCost: { type: number }
         unitPrice: { type: number }
         pricingDetails: { $ref: "#/components/schemas/PartPricingDetails" }
-        stock: { type: integer }
+        stock: { type: integer, minimum: 0 }
         reorderLevel: { type: integer }
         status: { type: string, enum: [active, superseded, obsolete] }
         supersededByPartId: { type: integer }
@@ -15903,6 +15911,12 @@ components:
         reconciliationTolerancePercent: { type: number }
         holdExpiryDays: { type: integer }
         updatedAt: { type: string, format: date-time }
+    PartsOperationPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PartsOperationRecord" } }
+        total: { type: integer, minimum: 0 }
     PartsOperationRecord:
       type: object
       additionalProperties: true

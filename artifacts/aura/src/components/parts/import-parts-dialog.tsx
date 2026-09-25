@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { customFetch, getListPartsQueryKey, getListSuppliersQueryKey } from "@workspace/api-client-react";
+import { customFetch, getListPartsQueryKey, getListSuppliersQueryKey, useListPartsBins, useListPartsLocations } from "@workspace/api-client-react";
 import {
   Dialog,
   DialogContent,
@@ -57,6 +57,8 @@ type ImportField =
   | "supplier"
   | "supplierId"
   | "active"
+  | "locationId"
+  | "binId"
   | "unitCostUsd"
   | "totalUsd"
   | "cifUsd"
@@ -123,6 +125,8 @@ const FIELDS: FieldDefinition[] = [
   { key: "reorderMax", label: "Reorder maximum" },
   { key: "barcode", label: "Barcode" },
   { key: "location", label: "Location / bin" },
+  { key: "locationId", label: "Location ID (new parts required)" },
+  { key: "binId", label: "Bin ID (new parts required)" },
   { key: "stock", label: "Stock balance" },
   { key: "pricingQuantity", label: "Source pricing quantity" },
   { key: "supplier", label: "Supplier name" },
@@ -156,6 +160,8 @@ const aliases: Record<ImportField, string[]> = {
   reorderMax: ["reordermax"],
   barcode: ["barcode"],
   location: ["location", "bin", "binlocation"],
+  locationId: ["locationid"],
+  binId: ["binid"],
   stock: ["stock", "quantity", "qty"],
   pricingQuantity: ["pricingquantity", "sourcequantity"],
   supplier: ["supplier", "vendor", "suppliername"],
@@ -201,6 +207,8 @@ const WORKBOOK_HEADERS = [
   "Reorder Min",
   "Reorder Max",
   "Location",
+  "Location ID",
+  "Bin ID",
   "Active",
   "Pricing Quantity",
 ] as const;
@@ -232,6 +240,8 @@ function downloadTemplate() {
     3,
     10,
     "A-01",
+    "",
+    "",
     true,
     "",
   ];
@@ -412,6 +422,8 @@ export function ImportPartsDialog({
   markupPercent?: number;
 }) {
   const queryClient = useQueryClient();
+  const { data: locations } = useListPartsLocations();
+  const { data: bins } = useListPartsBins();
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const announcedSuccess = useRef<number | null>(null);
@@ -580,6 +592,20 @@ export function ImportPartsDialog({
                 case-insensitive name. Missing or ambiguous names are rejected and suppliers are never
                 created automatically. Leave both supplier columns blank when not assigning one.
               </p>
+              <p>
+                New parts require Location ID and Bin ID from Locations &amp; Bins, even with zero stock.
+                The legacy Location column is descriptive only. Existing parts need both IDs when
+                changing stock balances; leaving them blank preserves existing stock placement.
+              </p>
+              {locations && bins && (
+                <p>
+                  Active storage IDs: {locations.filter(location => location.active).flatMap(location =>
+                    bins.filter(bin => bin.active && bin.locationId === location.id).map(bin =>
+                      `${location.name} (Location ID ${location.id}) / ${String(bin.code)} (Bin ID ${bin.id})`
+                    )
+                  ).join("; ") || "No active location/bin pairs. Create one in Locations & Bins before importing new parts."}
+                </p>
+              )}
             </div>
             <Button type="button" size="sm" variant="outline" onClick={downloadTemplate} className="shrink-0">
               <Download className="h-4 w-4" />

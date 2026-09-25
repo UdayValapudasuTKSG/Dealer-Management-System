@@ -1,6 +1,6 @@
 import type { PartPricingDetails } from "@workspace/db";
 export const pricingFields = ["unitCostUsd", "totalUsd", "cifUsd", "dutyRate", "vatRate", "dutyGyd", "vatGyd", "landedCostGyd", "sellingVatGyd", "finalSellingPriceGyd", "pricingQuantity"] as const;
-export const importFields = ["sku", "name", "description", "category", "make", "supplier", "supplierId", "active", "unitCost", "unitPrice", "costingMethod", "reorderMin", "reorderMax", "barcode", "location", "stock", ...pricingFields] as const;
+export const importFields = ["sku", "name", "description", "category", "make", "supplier", "supplierId", "active", "unitCost", "unitPrice", "costingMethod", "reorderMin", "reorderMax", "barcode", "location", "locationId", "binId", "stock", ...pricingFields] as const;
 export type ImportField = typeof importFields[number];
 export type ImportOptions = { mode: "upsert" | "reject"; mapping?: Partial<Record<ImportField, string>>; applyStock?: boolean };
 export type ImportError = { row: number; field: string; message: string };
@@ -53,9 +53,10 @@ export function mapImportRows(matrix: string[][], options: ImportOptions): Recor
 
 export function validateImportRows(
   source: Record<string, string>[], options: ImportOptions, policies: PricingPolicy[],
-  existing: Map<string, { category: string; reorderMin?: number; reorderMax?: number | null }> = new Map(),
+  existing: Map<string, { category: string; reorderMin?: number; reorderMax?: number | null; stock?: number }> = new Map(),
   progress: { offset: number; seen: Map<string, number> } = { offset: 0, seen: new Map() },
   suppliers: ImportSupplier[] = [],
+  storage: { locations: { id: number; name: string; active: boolean }[]; bins: { id: number; locationId: number; code: string; active: boolean }[] } = { locations: [], bins: [] },
 ): { rows: ImportRow[]; errors: ImportError[] } {
   const errors: ImportError[] = [], rows: ImportRow[] = [];
   const seen = progress.seen;
@@ -69,6 +70,20 @@ export function validateImportRows(
     if (seen.has(sku)) error("sku", `Duplicate SKU in file (first seen on row ${seen.get(sku)})`);
     else seen.set(sku, row);
     const old = existing.get(sku);
+    for (const field of ["locationId", "binId"]) {
+      const raw = input[field]?.trim();
+      if (!raw) {
+        if (!old) error(field, "Required for new parts; use an active dealership location/bin ID");
+      } else if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw)) || Number(raw) <= 0) {
+        error(field, "Use a positive integer ID");
+      } else result[field] = Number(raw);
+    }
+    if (result.locationId !== undefined && !storage.locations.some(l => l.id === result.locationId && l.active))
+      error("locationId", "Active location not found in this dealership");
+    if (result.binId !== undefined && !storage.bins.some(b => b.id === result.binId && b.locationId === result.locationId && b.active))
+      error("binId", "Active bin not found at this dealership location");
+    if (old && (result.locationId !== undefined) !== (result.binId !== undefined))
+      error("binId", "Provide both location ID and bin ID together");
     if (result.active !== undefined) {
       const active = String(result.active).trim().toLowerCase();
       if (!["true", "false", "1", "0", "yes", "no"].includes(active)) error("active", "Use true/false, yes/no or 1/0");
@@ -102,6 +117,8 @@ export function validateImportRows(
       result[field] = value;
     }
     const hasPricing = pricingFields.some(field => result[field] !== undefined);
+    if (old && options.applyStock && result.stock !== undefined && Number(result.stock) !== old.stock && (result.locationId === undefined || result.binId === undefined))
+      error("binId", "Stock adjustments to existing parts require explicit location and bin IDs");
     if (result.stock !== undefined && !options.applyStock && !hasPricing) error("stock", "Stock adjustment requires explicit applyStock=true");
     const min = result.reorderMin ?? old?.reorderMin ?? 5;
     const max = result.reorderMax ?? old?.reorderMax;

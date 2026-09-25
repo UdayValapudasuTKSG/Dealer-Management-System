@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
+import { useListPagination } from "@/components/parts/list-pagination";
 import {
   useListParts,
-  useCreatePart,
   useUpdatePart,
   type Part,
-  type PartInput,
   type PartUpdate,
   getListPartsQueryKey,
   useListSuppliers,
@@ -71,6 +70,7 @@ import {
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
+import { CreatePartDialog } from "@/components/parts/create-part-dialog";
 import { PurchaseOrderImportDialog } from "@/components/parts/purchase-order-import-dialog";
 import { PartBarcodeScanner } from "@/components/parts/part-barcode-scanner";
 import {
@@ -294,101 +294,6 @@ export default function Parts() {
   );
 }
 
-function CreatePartDialog() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const create = useCreatePart();
-  const { data: suppliers } = useListSuppliers();
-  return (
-    <CreateRecordDialog
-      title="Add Part"
-      description="Register a stocked part with pricing and reorder level."
-      pending={create.isPending}
-      submitLabel="Add part"
-      trigger={
-        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-          <Plus className="w-5 h-5" />
-          Add Part
-        </Button>
-      }
-      fields={[
-        { name: "sku", label: "Part no.", type: "text", required: true, span: "half", placeholder: "13691814-00" },
-        { name: "barcode", label: "Barcode", type: "text", span: "half", placeholder: "Scan or enter..." },
-        { name: "name", label: "Part name", type: "text", required: true, span: "half", placeholder: "Engine oil filter" },
-        { name: "make", label: "Vehicle make", type: "text", span: "half", placeholder: "Toyota" },
-        { name: "description", label: "Description", type: "text", span: "half" },
-        { name: "category", label: "Category", type: "text", span: "half", placeholder: "Service parts" },
-        {
-          name: "supplierId",
-          label: "Supplier",
-          type: "select",
-          span: "half",
-          options: suppliers?.map((s) => ({ value: String(s.id), label: s.name })) ?? [],
-        },
-        { 
-          name: "costingMethod", 
-          label: "Costing Method", 
-          type: "select", 
-          span: "half", 
-          defaultValue: "average",
-          options: [{value: "average", label: "Average"}, {value: "fifo", label: "FIFO"}, {value: "landed", label: "Landed"}]
-        },
-        { name: "unitCost", label: "Unit cost (GYD)", type: "number", span: "half", placeholder: "53908.78" },
-        { name: "unitPrice", label: "Selling price pre-VAT (GYD)", type: "number", span: "half", placeholder: "80863.17" },
-        { name: "stock", label: "Current stock", type: "number", span: "half", min: 0, placeholder: "0" },
-        { name: "reorderLevel", label: "Reorder Min", type: "number", span: "half", placeholder: "3" },
-        { name: "reorderMax", label: "Reorder Max", type: "number", span: "half", placeholder: "10" },
-        { 
-          name: "active", 
-          label: "Status", 
-          type: "select", 
-          span: "half", 
-          defaultValue: "true",
-          options: [{value: "true", label: "Active"}, {value: "false", label: "Inactive"}]
-        },
-        {
-          name: "pricingDetailsDraft",
-          label: "Worksheet pricing details",
-          type: "custom",
-          span: "full",
-          section: "Reference pricing",
-          defaultValue: "{}",
-          validate: pricingDetailsDraftError,
-          render: (value, set) => <PricingDetailsEditor value={value} onChange={set} />,
-        },
-      ]}
-      onSubmit={async (values) => {
-        const v = values as Record<string, unknown>;
-        const pricingDetails = pricingDetailsFromDraft(v.pricingDetailsDraft);
-        const costingMethod =
-          v.costingMethod === "fifo" ? "fifo" : v.costingMethod === "landed" ? "landed" : "average";
-        const data: PartInput = {
-          sku: String(v.sku),
-          name: String(v.name),
-          ...(v.barcode ? { barcode: String(v.barcode) } : {}),
-          ...(v.description ? { description: String(v.description) } : {}),
-          ...(v.make ? { make: String(v.make) } : {}),
-          ...(v.category ? { category: String(v.category) } : {}),
-          ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
-          costingMethod,
-          ...(v.unitCost !== undefined ? { unitCost: Number(v.unitCost) } : {}),
-          ...(v.unitPrice !== undefined ? { unitPrice: Number(v.unitPrice) } : {}),
-          ...(v.stock !== undefined ? { stock: Number(v.stock) } : {}),
-          ...(v.reorderLevel !== undefined ? { reorderLevel: Number(v.reorderLevel) } : {}),
-          ...(v.reorderMax !== undefined ? { reorderMax: Number(v.reorderMax) } : {}),
-          ...(v.active !== undefined ? { active: v.active === "true" } : {}),
-          ...(pricingDetails !== undefined ? { pricingDetails } : {}),
-        };
-        await create.mutateAsync({
-          data,
-        });
-        queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
-        toast({ title: "Part added" });
-      }}
-    />
-  );
-}
-
 function EditPartDialog({ part }: { part: Part & { barcode?: string; description?: string; costingMethod?: string; reorderMax?: number; active?: boolean; quantityAvailable?: number; quantityReserved?: number } }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -534,13 +439,10 @@ function MarkupEditor() {
   );
 }
 
-const PARTS_PAGE_SIZE = 24;
-
 function PartsTab() {
   const money = useMoney();
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
-  const [page, setPage] = useState(1);
   const { data: settings } = useGetPartsSettings();
   const { data: allParts, isLoading } = useListParts({
     ...(search ? { search } : {}),
@@ -550,13 +452,8 @@ function PartsTab() {
   const lowCount = allParts?.filter((p) => p.stock <= p.reorderLevel).length ?? 0;
   const { density, setDensity, layout, setLayout } = useViewMode("parts");
 
-  const total = allParts?.length ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PARTS_PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
-  const parts = allParts?.slice(
-    (safePage - 1) * PARTS_PAGE_SIZE,
-    safePage * PARTS_PAGE_SIZE,
-  );
+  const paging = useListPagination(allParts ?? [], `${search}:${lowOnly}`);
+  const parts = paging.items;
 
   return (
     <div className="space-y-5">
@@ -567,7 +464,6 @@ function PartsTab() {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              setPage(1);
             }}
             placeholder="Search by name or SKU..."
             className="pl-10 rounded-full bg-white/[0.03] border-white/10"
@@ -577,7 +473,6 @@ function PartsTab() {
           variant={lowOnly ? "default" : "outline"}
           onClick={() => {
             setLowOnly((v) => !v);
-            setPage(1);
           }}
           className={cn(
             "rounded-full gap-2",
@@ -741,37 +636,7 @@ function PartsTab() {
         </div>
       )}
 
-      {total > PARTS_PAGE_SIZE && (
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <div className="text-xs text-muted-foreground tabular-nums">
-            Showing {(safePage - 1) * PARTS_PAGE_SIZE + 1}–
-            {Math.min(safePage * PARTS_PAGE_SIZE, total)} of {total} parts
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-full border-white/15 text-xs h-8"
-              disabled={safePage <= 1}
-              onClick={() => setPage(safePage - 1)}
-            >
-              Previous
-            </Button>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              Page {safePage} / {pageCount}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-full border-white/15 text-xs h-8"
-              disabled={safePage >= pageCount}
-              onClick={() => setPage(safePage + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      {paging.controls}
     </div>
   );
 }
@@ -814,6 +679,7 @@ function SuppliersTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: suppliers, isLoading } = useListSuppliers();
+  const paging = useListPagination(suppliers ?? []);
   const updateMetadata = useUpdatePartsSupplierMetadata();
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
   const [editingSupplierId, setEditingSupplierId] = useState<number | null>(null);
@@ -830,18 +696,22 @@ function SuppliersTab() {
       },
     },
   );
+  const deliveryPaging = useListPagination(history?.deliveries ?? [], String(selectedSupplierId));
   if (isLoading) return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
   if (!suppliers?.length)
     return (
-      <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
-        <Truck className="w-8 h-8 text-muted-foreground" />
-        <p className="text-muted-foreground">No suppliers registered yet.</p>
+      <div>
+        <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
+          <Truck className="w-8 h-8 text-muted-foreground" />
+          <p className="text-muted-foreground">No suppliers registered yet.</p>
+        </div>
+        {paging.controls}
       </div>
     );
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {suppliers.map((s) => (
+        {paging.items.map((s) => (
         <Card
           key={s.id}
           className="glass-panel border-none rounded-3xl cursor-pointer transition-transform hover:-translate-y-0.5"
@@ -882,6 +752,7 @@ function SuppliersTab() {
         </Card>
         ))}
       </div>
+      {paging.controls}
       <Dialog
         open={selectedSupplierId != null}
         onOpenChange={(open) => { if (!open) setSelectedSupplierId(null); }}
@@ -894,6 +765,7 @@ function SuppliersTab() {
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[72vh] overflow-y-auto pr-2 space-y-4">
+            {deliveryPaging.controls}
             {historyLoading ? (
               <div className="h-40 rounded-2xl bg-white/[0.04] animate-pulse" />
             ) : !history?.deliveries.length ? (
@@ -901,7 +773,7 @@ function SuppliersTab() {
                 No documented deliveries have been received from this supplier yet.
               </div>
             ) : (
-              history.deliveries.map((delivery) => {
+              deliveryPaging.items.map((delivery) => {
                 const units = delivery.lines.reduce((sum, line) => sum + line.quantity, 0);
                 const value = delivery.lines.reduce((sum, line) => sum + line.quantity * line.unitCost, 0);
                 return (
@@ -1386,6 +1258,7 @@ function PurchaseOrdersTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: orders, isLoading } = useListPurchaseOrders();
+  const paging = useListPagination(orders ?? []);
   const { data: suppliers } = useListSuppliers();
   const update = useUpdatePurchaseOrder();
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -1458,7 +1331,7 @@ function PurchaseOrdersTab() {
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      {orders.map((po) => {
+      {paging.items.map((po) => {
         const totalValue = po.lines.reduce((sum, l) => sum + l.quantity * l.unitCost, 0);
         const outstanding = po.lines.reduce(
           (sum, l) => sum + Math.max(0, l.quantity - l.qtyReceived),
@@ -1572,6 +1445,7 @@ function PurchaseOrdersTab() {
           </Card>
         );
       })}
+      {paging.controls}
       <ReceivePurchaseOrderDialog
         order={receivingPo}
         onOpenChange={(open) => { if (!open) setReceivingPo(null); }}
@@ -1774,15 +1648,19 @@ function ReceivePurchaseOrderDialog({
 function PurchasesTab() {
   const money = useMoney();
   const { data: purchases, isLoading } = useListPartPurchases();
+  const paging = useListPagination(purchases ?? []);
   const { data: parts } = useListParts();
   const { data: suppliers } = useListSuppliers();
 
   if (isLoading) return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
   if (!purchases?.length)
     return (
-      <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
-        <ShoppingCart className="w-8 h-8 text-muted-foreground" />
-        <p className="text-muted-foreground">No purchases recorded yet.</p>
+      <div>
+        <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
+          <ShoppingCart className="w-8 h-8 text-muted-foreground" />
+          <p className="text-muted-foreground">No purchases recorded yet.</p>
+        </div>
+        {paging.controls}
       </div>
     );
 
@@ -1792,7 +1670,7 @@ function PurchasesTab() {
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      {purchases.map((p) => (
+      {paging.items.map((p) => (
         <Card key={p.id} className="glass-panel border-none rounded-2xl">
           <CardContent className="p-5 flex items-center justify-between gap-4">
             <div>
@@ -1832,6 +1710,7 @@ function PurchasesTab() {
           </CardContent>
         </Card>
       ))}
+      {paging.controls}
     </div>
   );
 }

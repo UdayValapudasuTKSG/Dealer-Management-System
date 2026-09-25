@@ -11,15 +11,16 @@ const options = { mode: "upsert" as const, applyStock: false };
 test("complete template maps catalogue fields without requiring suppliers; identifiers remain text", () => {
   const source = mapImportRows([partTemplateColumns.map(c => c.header), partTemplateColumns.map(c => String(c.example))], options);
   const result = validateImportRows(source, options, []);
-  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.errors.map(e => e.field), ["locationId", "binId"]);
   assert.equal(result.rows[0].barcode, "001234567890");
   assert.equal(result.rows[0].active, true);
   assert.equal(result.rows[0].supplierId, undefined);
 });
 test("supplier exact trimmed case-insensitive lookup, ambiguity, foreign/missing ID and agreement", () => {
-  const base = { sku: "00123", name: "Part", unitCost: "1", unitPrice: "2", make: "Example", active: "no", barcode: "000009" };
+  const base = { sku: "00123", name: "Part", unitCost: "1", unitPrice: "2", make: "Example", active: "no", barcode: "000009", locationId: "7", binId: "9" };
+  const storage = { locations: [{ id: 7, name: "Main", active: true }], bins: [{ id: 9, locationId: 7, code: "A", active: true }] };
   const suppliers = [{ id: 1, name: " Acme ", status: "active" }, { id: 2, name: "Duplicate" }, { id: 3, name: "DUPLICATE" }, { id: 4, name: "Inactive", status: "inactive" }];
-  const validate = (fields: Record<string, string>) => validateImportRows([{ ...base, ...fields }], options, [], new Map(), undefined, suppliers);
+  const validate = (fields: Record<string, string>) => validateImportRows([{ ...base, ...fields }], options, [], new Map(), undefined, suppliers, storage);
   const valid = validate({ supplier: "ACME", supplierId: "1" });
   assert.deepEqual(valid.errors, []);
   assert.equal(valid.rows[0].supplierId, 1);
@@ -38,7 +39,8 @@ async function sample() {
 test("actual five-row workbook preserves cached precision, pre-VAT prices, variable duty and markup", async () => {
   const source = await sample();
   const { rows, errors } = validateImportRows(source, options, [{ category: null, markupFactor: 99 }]);
-  assert.deepEqual(errors, []);
+  assert.equal(errors.length, source.length * 2);
+  assert.ok(errors.every(e => e.field === "locationId" || e.field === "binId"));
   assert.equal(rows.length, 5);
   assert.equal(rows[0].unitCost, 206457.47);
   assert.equal(rows[0].unitPrice, 227103.21);
@@ -52,7 +54,7 @@ test("actual five-row workbook preserves cached precision, pre-VAT prices, varia
     assert.equal(row.pricingDetails?.quantity, 1);
   }
   const stock = validateImportRows(source, { ...options, applyStock: true }, []);
-  assert.deepEqual(stock.errors, []);
+  assert.equal(stock.errors.length, source.length * 2);
   assert.ok(stock.rows.every(row => row.stock === 1));
 });
 test("row-level malformed numbers, fractional quantities, rates and inconsistent cached arithmetic fail", async () => {
@@ -75,11 +77,12 @@ test("missing/nonnumeric cached results and Excel errors are explicit errors; ze
 });
 test("API schemas retain metadata, accept explicit clear, reject invalid values; legacy import omits metadata", async () => {
   const { rows } = validateImportRows(await sample(), options, []);
-  const input = { sku: "TEST", name: "Test", pricingDetails: rows[0].pricingDetails };
+  const input = { sku: "TEST", name: "Test", locationId: 7, binId: 9, pricingDetails: rows[0].pricingDetails };
   assert.deepEqual(CreatePartBody.parse(input).pricingDetails, input.pricingDetails);
   assert.equal(UpdatePartBody.parse({ pricingDetails: null }).pricingDetails, null);
   assert.equal(UpdatePartBody.parse({ name: "Changed" }).pricingDetails, undefined);
-  assert.equal(CreatePartBody.parse({ sku: "A", name: "A", make: "Descriptive make" }).make, "Descriptive make");
+  assert.equal(CreatePartBody.parse({ sku: "A", name: "A", locationId: 7, binId: 9, make: "Descriptive make" }).make, "Descriptive make");
+  assert.equal(CreatePartBody.safeParse({ sku: "A", name: "A" }).success, false);
   assert.equal(UpdatePartBody.parse({ make: null }).make, null);
   assert.equal(CreatePartBody.safeParse({ ...input, pricingDetails: { vatRate: 14 } }).success, false);
   assert.equal(CreatePartBody.safeParse({ ...input, pricingDetails: { quantity: 0.5 } }).success, false);

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useListPagination } from "./list-pagination";
 import { Plus, MapPin, Pencil } from "lucide-react";
 import { useGetLocations, useCreateLocation, useUpdateLocation, useGetBins, useCreateBin, useUpdateBin } from "@/hooks/use-parts-operations";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,8 @@ export function LocationsTab() {
   const [selectedLocation, setSelectedLocation] = useState<number | null>(null);
   
   const { data: bins, isLoading: binsLoading, isError: binsError } = useGetBins(selectedLocation ?? undefined);
+  const locationPaging = useListPagination(locations ?? []);
+  const binPaging = useListPagination(bins ?? [], String(selectedLocation));
   const updateLocation = useUpdateLocation();
   const updateBin = useUpdateBin();
   const { toast } = useToast();
@@ -115,7 +118,7 @@ export function LocationsTab() {
           />
         </div>
         <div className="space-y-2">
-          {locations?.map((loc) => (
+          {locationPaging.items.map((loc) => (
             <Card
               key={loc.id}
               className={`glass-panel border-none rounded-2xl cursor-pointer transition-colors ${selectedLocation === loc.id ? 'ring-1 ring-primary' : 'hover:bg-white/[0.08]'}`}
@@ -148,6 +151,7 @@ export function LocationsTab() {
               No locations configured.
             </div>
           )}
+          {locationPaging.controls}
         </div>
       </div>
       
@@ -171,7 +175,7 @@ export function LocationsTab() {
               <div role="alert" className="p-4 text-destructive">Bins could not be loaded. Please retry.</div>
             ) : bins?.length ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {bins.map((bin) => (
+                {binPaging.items.map((bin) => (
                   <div key={bin.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
                     <div>
                       <div className="font-medium text-sm">{bin.code}</div>
@@ -198,6 +202,7 @@ export function LocationsTab() {
                 No bins found in this location.
               </div>
             )}
+            {binPaging.controls}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02]">

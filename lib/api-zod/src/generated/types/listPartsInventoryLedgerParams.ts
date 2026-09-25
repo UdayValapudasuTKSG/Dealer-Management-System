@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListPartsInventoryLedgerPaged } from './listPartsInventoryLedgerPaged';
 
 export type ListPartsInventoryLedgerParams = {
 /**
@@ -22,4 +23,12 @@ to?: Date;
  * @maximum 1000
  */
 limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
+/**
+ * Return items and total instead of the legacy array
+ */
+paged?: ListPartsInventoryLedgerPaged;
 };

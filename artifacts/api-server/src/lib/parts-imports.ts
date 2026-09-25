@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, or, lt, sql } from "drizzle-orm";
-import { db, partImportJobsTable as jobs, partPricingPoliciesTable as policies, partsTable, suppliersTable } from "@workspace/db";
-import { ensureInventory, moveStock } from "./parts-inventory";
+import { db, partImportJobsTable as jobs, partPricingPoliciesTable as policies, partsTable, suppliersTable, inventoryLocationsTable, inventoryBinsTable } from "@workspace/db";
+import { assignPartStorage, ensureInventory, moveStock } from "./parts-inventory";
 import { enqueuePartItemSync, enqueueStockEntrySync } from "./erpnext/parts-sync";
 import { validateImportRows, type ImportOptions, type ImportError, type ImportRow } from "./parts-import-validation";
 import { logger } from "./logger";
@@ -8,18 +8,20 @@ import { logger } from "./logger";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** Transaction-only write path, shared by the worker and isolated regression. No external sends. */
 export async function persistImportedPart(tx: Tx, dealerId: number, jobId: number, row: ImportRow, options: ImportOptions, old?: typeof partsTable.$inferSelect, createdBy: number | null = null) {
-  const { stock, reorderMin, ...fields } = row;
+  const { stock, reorderMin, locationId, binId, ...fields } = row;
   if (old) await ensureInventory(tx, dealerId, old.id);
   const values = { ...fields, ...(fields.pricingDetails ? { pricingDetails: { ...old?.pricingDetails, ...fields.pricingDetails } } : {}), ...(reorderMin !== undefined ? { reorderLevel: Number(reorderMin) } : {}), updatedAt: new Date() } as Partial<typeof partsTable.$inferInsert>;
   const [part] = old
     ? await tx.update(partsTable).set(values).where(and(eq(partsTable.id, old.id), eq(partsTable.dealerId, dealerId))).returning()
     : await tx.insert(partsTable).values({ ...values, dealerId, sku: row.sku, name: row.name, unitCost: row.unitCost, unitPrice: row.unitPrice, stock: 0 }).returning();
+  if (!old) await assignPartStorage(tx, dealerId, part.id, Number(locationId), Number(binId));
   let delta = 0;
   if (options.applyStock && stock !== undefined) {
     await ensureInventory(tx, dealerId, part.id);
     delta = Number(stock) - part.stock;
     if (delta) await moveStock(tx, {
       dealerId, partId: part.id, type: "adjustment", quantityDelta: delta,
+      locationId: Number(locationId), binId: Number(binId),
       referenceType: "parts_import", referenceId: String(jobId), unitCost: row.unitCost,
       idempotencyKey: `parts-import:${jobId}:${part.id}`, notes: "Explicit imported stock adjustment", createdBy,
     });
@@ -34,7 +36,9 @@ async function context(tx: Tx, dealerId: number, source: Record<string, string>[
   const existing = skuList.length ? await tx.select().from(partsTable).where(and(eq(partsTable.dealerId, dealerId), inArray(partsTable.sku, skuList))).orderBy(asc(partsTable.id)).for("update") : [];
   const pricing = await tx.select().from(policies).where(eq(policies.dealerId, dealerId));
   const suppliers = await tx.select({ id: suppliersTable.id, name: suppliersTable.name, status: suppliersTable.status }).from(suppliersTable).where(eq(suppliersTable.dealerId, dealerId)).orderBy(asc(suppliersTable.id)).for("share");
-  return { existing, pricing, suppliers, map: new Map(existing.map(p => [p.sku, { category: p.category, reorderMin: p.reorderLevel, reorderMax: p.reorderMax }])) };
+  const locations = await tx.select({ id: inventoryLocationsTable.id, name: inventoryLocationsTable.name, active: inventoryLocationsTable.active }).from(inventoryLocationsTable).where(eq(inventoryLocationsTable.dealerId, dealerId));
+  const bins = await tx.select({ id: inventoryBinsTable.id, locationId: inventoryBinsTable.locationId, code: inventoryBinsTable.code, active: inventoryBinsTable.active }).from(inventoryBinsTable).where(eq(inventoryBinsTable.dealerId, dealerId));
+  return { existing, pricing, suppliers, storage: { locations, bins }, map: new Map(existing.map(p => [p.sku, { category: p.category, reorderMin: p.reorderLevel, reorderMax: p.reorderMax, stock: p.stock }])) };
 }
 
 /** One bounded worker; durable queue claims serialized across server instances. */
@@ -61,7 +65,7 @@ export async function processNextPartsImport(): Promise<boolean> {
       const ctx = await db.transaction(tx => context(tx, validationJob.dealerId, source));
       const errors: ImportError[] = [], seen = new Map<string, number>();
       for (let offset = 0; offset < source.length; offset += 500) {
-        const checked = validateImportRows(source.slice(offset, offset + 500), options, ctx.pricing, ctx.map, { offset, seen }, ctx.suppliers);
+        const checked = validateImportRows(source.slice(offset, offset + 500), options, ctx.pricing, ctx.map, { offset, seen }, ctx.suppliers, ctx.storage);
         errors.push(...checked.errors);
         // Heartbeat + token prevents a stale worker overwriting a reclaimed job.
         const updated = await db.update(jobs).set({ processedRows: Math.min(offset + 500, source.length), errors, startedAt: new Date() })
@@ -90,7 +94,7 @@ export async function processNextPartsImport(): Promise<boolean> {
       await tx.execute(sql`select pg_advisory_xact_lock(${job.dealerId}, 13014)`);
       await tx.update(jobs).set({ startedAt: new Date(), processedRows: 0 }).where(eq(jobs.id, job.id));
       const ctx = await context(tx, job.dealerId, payload.source);
-      const checked = validateImportRows(payload.source, payload.options, ctx.pricing, ctx.map, undefined, ctx.suppliers);
+      const checked = validateImportRows(payload.source, payload.options, ctx.pricing, ctx.map, undefined, ctx.suppliers, ctx.storage);
       if (checked.errors.length) {
         await tx.update(jobs).set({ status: "invalid", errors: checked.errors, processedRows: job.totalRows, completedAt: new Date() }).where(eq(jobs.id, job.id));
         return { changes: [] };

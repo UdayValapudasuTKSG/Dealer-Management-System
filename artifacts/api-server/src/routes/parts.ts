@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createHash } from "node:crypto";
-import { ensureInventory, moveStock } from "../lib/parts-inventory";
+import { assignPartStorage, ensureInventory, moveStock } from "../lib/parts-inventory";
 import { reserveJobPart } from "../lib/job-part-stock";
 import { createPartsImport } from "./parts-imports";
 import { partExportHeaders, partExportValues, partTemplateColumns } from "../lib/parts-import-format";
@@ -521,6 +521,7 @@ router.post("/parts", async (req, res): Promise<void> => {
     return;
   }
   const part = await db.transaction(async tx => {
+    const { locationId, binId, ...partData } = parsed.data;
     if (parsed.data.supplierId != null) {
       const [supplier] = await tx.select({ id: suppliersTable.id }).from(suppliersTable).where(and(
         eq(suppliersTable.id, parsed.data.supplierId), eq(suppliersTable.dealerId, activeDealerId(res)),
@@ -528,10 +529,11 @@ router.post("/parts", async (req, res): Promise<void> => {
       if (!supplier) throw Object.assign(new Error("Supplier not found in dealership"), { status: 422 });
     }
     const [created] = await tx.insert(partsTable)
-      .values({ ...parsed.data, stock: 0, dealerId: activeDealerId(res) }).returning();
-    await ensureInventory(tx, created.dealerId, created.id);
+      .values({ ...partData, stock: 0, dealerId: activeDealerId(res) }).returning();
+    await assignPartStorage(tx, created.dealerId, created.id, locationId, binId);
     if ((parsed.data.stock ?? 0) > 0) await moveStock(tx, {
       dealerId: created.dealerId, partId: created.id, type: "opening",
+      locationId, binId,
       quantityDelta: parsed.data.stock!, unitCost: created.unitCost,
       referenceType: "part_opening", referenceId: String(created.id),
       idempotencyKey: `part-opening:${created.dealerId}:${created.id}`,
@@ -1113,6 +1115,7 @@ router.get("/parts/export", async (_req, res): Promise<void> => {
   notes.addRow(["Edit and re-import this file to bulk-update parts."]);
   notes.addRow(["Match existing parts by SKU using upsert. Stock is current inventory; Pricing Quantity is original source quantity. Apply Stock must be explicitly enabled to adjust inventory."]);
   notes.addRow(["Supplier names/IDs must match existing suppliers in this dealership; no suppliers are created. Leave ambiguous names blank and use Supplier ID. Active is true/false; stock availability is derived, not imported as status."]);
+  notes.addRow(["New parts require Location ID and Bin ID from Locations & Bins, even at zero stock. Existing-part stock changes require both IDs; blank IDs never move existing inventory."]);
   const buffer = await workbook.xlsx.writeBuffer();
   res
     .setHeader(

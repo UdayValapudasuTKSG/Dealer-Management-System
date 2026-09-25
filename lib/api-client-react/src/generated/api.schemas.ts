@@ -8184,6 +8184,10 @@ export interface PartInput {
   sku: string;
   /** @minLength 1 */
   name: string;
+  /** @minimum 1 */
+  locationId: number;
+  /** @minimum 1 */
+  binId: number;
   /** @nullable */
   make?: string | null;
   category?: string;
@@ -8191,6 +8195,7 @@ export interface PartInput {
   unitCost?: number;
   unitPrice?: number;
   pricingDetails?: PartPricingDetails | null;
+  /** @minimum 0 */
   stock?: number;
   reorderLevel?: number;
   status?: PartInputStatus;
@@ -8617,6 +8622,12 @@ export interface PartPricingPolicy {
  * Tenant-scoped parts operation record.
  */
 export interface PartsOperationRecord { [key: string]: unknown }
+
+export interface PartsOperationPage {
+  items: PartsOperationRecord[];
+  /** @minimum 0 */
+  total: number;
+}
 
 export type PartsOperationLocationInputType = typeof PartsOperationLocationInputType[keyof typeof PartsOperationLocationInputType];
 
@@ -11874,7 +11885,22 @@ to?: string;
  * @maximum 1000
  */
 limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
+/**
+ * Return items and total instead of the legacy array
+ */
+paged?: ListPartsInventoryLedgerPaged;
 };
+
+export type ListPartsInventoryLedgerPaged = typeof ListPartsInventoryLedgerPaged[keyof typeof ListPartsInventoryLedgerPaged];
+
+
+export const ListPartsInventoryLedgerPaged = {
+  NUMBER_1: '1',
+} as const;
 
 export type ListPartsInventoryHoldsParams = {
 /**
@@ -12026,6 +12052,19 @@ export const GetNamedPartsValuationFormat = {
 
 export type ListPartsNotificationDeliveriesParams = {
 status?: ListPartsNotificationDeliveriesStatus;
+/**
+ * @minimum 1
+ * @maximum 1000
+ */
+limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
+/**
+ * Return items and total instead of the legacy array
+ */
+paged?: ListPartsNotificationDeliveriesPaged;
 };
 
 export type ListPartsNotificationDeliveriesStatus = typeof ListPartsNotificationDeliveriesStatus[keyof typeof ListPartsNotificationDeliveriesStatus];
@@ -12036,6 +12075,13 @@ export const ListPartsNotificationDeliveriesStatus = {
   sending: 'sending',
   sent: 'sent',
   failed: 'failed',
+} as const;
+
+export type ListPartsNotificationDeliveriesPaged = typeof ListPartsNotificationDeliveriesPaged[keyof typeof ListPartsNotificationDeliveriesPaged];
+
+
+export const ListPartsNotificationDeliveriesPaged = {
+  NUMBER_1: '1',
 } as const;
 
 export type GetPartsAgingReportParams = {

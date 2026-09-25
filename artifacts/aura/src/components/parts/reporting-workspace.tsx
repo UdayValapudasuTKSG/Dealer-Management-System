@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useListPagination } from "./list-pagination";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useMoney } from "@/lib/format";
@@ -82,6 +83,9 @@ function ValuationReport() {
     queryFn: () => customFetch(`/api/parts/operations/p05/valuation?${searchParams}`),
   });
   const money = useMoney();
+  const valuationPaging = useListPagination(filterAndSortParts(valuation?.rows ?? [], search, sortBy, descending), `${asOf}:${locationId}:${search}:${sortBy}:${descending}`);
+  const unavailablePaging = useListPagination(filterAndSortParts(valuation?.unavailable ?? [], search, sortBy, descending), `${asOf}:${locationId}:${search}:${sortBy}:${descending}`);
+  const locationPaging = useListPagination(valuation?.byLocation || valuation?.locations || [], `${asOf}:${locationId}`);
   const changeSort = (key: "sku" | "name") => { setDescending(sortBy === key ? !descending : false); setSortBy(key); };
   const exportReport = async (format: "csv" | "pdf") => {
     setDownloading(true);
@@ -125,6 +129,7 @@ function ValuationReport() {
       {isLoading && <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />}
       {!isError && !isLoading && valuation && (
         <div className="space-y-6">
+          {valuationPaging.controls}
           {valuation.incomplete && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -155,7 +160,7 @@ function ValuationReport() {
                 <PartHeadings sortBy={sortBy} descending={descending} setSort={changeSort} />
                 <th className="px-4 py-3">Location</th><th className="px-4 py-3 text-right">Quantity</th><th className="px-4 py-3 text-right">Value (GYD)</th>
               </tr></thead>
-              <tbody>{filterAndSortParts(valuation.rows ?? [], search, sortBy, descending).map((row: any) =>
+              <tbody>{valuationPaging.items.map((row: any) =>
                 <tr key={`${row.partId}-${row.locationId}`} className="border-b border-white/5">
                   <td className="px-4 py-3">{row.sku}</td><td className="px-4 py-3">{row.name}</td>
                   <td className="px-4 py-3">{row.locationId}</td><td className="px-4 py-3 text-right">{row.quantity}</td>
@@ -166,6 +171,7 @@ function ValuationReport() {
 
           {(valuation.byLocation || valuation.locations) && (
             <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+              {locationPaging.controls}
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -174,7 +180,7 @@ function ValuationReport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(valuation.byLocation || valuation.locations).map((loc: any) => (
+                  {locationPaging.items.map((loc: any) => (
                     <tr key={loc.locationId} className="border-b border-white/5">
                       <td className="px-4 py-3 font-medium">Location #{loc.locationId}</td>
                       <td className="px-4 py-3 text-right tabular-nums font-medium">{money.gyd(loc.value || loc.totalValue || 0)}</td>
@@ -187,6 +193,7 @@ function ValuationReport() {
 
           {valuation.unavailable?.length > 0 && (
             <div className="mt-8 space-y-3">
+              {unavailablePaging.controls}
               <h3 className="text-sm font-bold flex items-center gap-2">
                 <Info className="w-4 h-4 text-muted-foreground" />
                 Unavailable Valuations
@@ -202,7 +209,7 @@ function ValuationReport() {
                     </tr>
                   </thead>
                   <tbody>
-                     {filterAndSortParts(valuation.unavailable, search, sortBy, descending).map((u: any) => (
+                     {unavailablePaging.items.map((u: any) => (
                       <tr key={`${u.partId}-${u.sku}`} className="border-b border-white/5 text-muted-foreground">
                         <td className="px-4 py-3">{u.sku}</td>
                          <td className="px-4 py-3">{u.name}</td>
@@ -250,6 +257,7 @@ function AgingReport() {
 
   const rows = aging?.rows || [];
   const visibleRows = filterAndSortParts(rows, search, sortBy, descending);
+  const paging = useListPagination(visibleRows, `${locationId}:${search}:${sortBy}:${descending}`);
   const changeSort = (key: "sku" | "name") => { setDescending(sortBy === key ? !descending : false); setSortBy(key); };
 
   return (
@@ -344,6 +352,7 @@ function AgingReport() {
       
       {!isError && !isLoading && rows.length > 0 && (
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+          {paging.controls}
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -355,7 +364,7 @@ function AgingReport() {
               </tr>
             </thead>
             <tbody>
-               {visibleRows.map((row: any) => (
+               {paging.items.map((row: any) => (
                 <tr key={`${row.partId}-${row.locationId}`} className="border-b border-white/5 hover:bg-foreground/[0.03]">
                    <td className="px-4 py-3 font-medium">{row.sku}</td>
                    <td className="px-4 py-3">{row.name}</td>
@@ -390,6 +399,7 @@ function ReplenishmentReport() {
 
   const { data: suggestions, isLoading, isError } = useGetReplenishment(queryParams.locationId);
   const visibleSuggestions = filterAndSortParts(suggestions ?? [], search, sortBy, descending);
+  const paging = useListPagination(visibleSuggestions, `${locationId}:${search}:${sortBy}:${descending}`);
   const generateDrafts = async () => {
     if (!locationId || !window.confirm("Generate low-stock purchase-order drafts for this location? This applies low-stock rules, not individual seasonal suggestions. Nothing will be sent to suppliers.")) return;
     try {
@@ -444,8 +454,10 @@ function ReplenishmentReport() {
       )}
 
       {!isError && !isLoading && (suggestions?.length ?? 0) > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-           {visibleSuggestions.map((sug: any) => (
+        <div>
+          {paging.controls}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+           {paging.items.map((sug: any) => (
             <Card key={`${sug.partId}-${sug.locationId}`} className="glass-panel border-none rounded-2xl relative overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-1 bg-primary/40" />
               <CardContent className="p-5 space-y-4">
@@ -481,6 +493,7 @@ function ReplenishmentReport() {
               </CardContent>
             </Card>
           ))}
+        </div>
         </div>
       )}
     </div>

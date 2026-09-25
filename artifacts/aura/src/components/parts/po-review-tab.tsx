@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useListPagination } from "./list-pagination";
 import { PoLifecycleActions } from "./po-lifecycle-actions";
 import { CustomerInvoiceAction } from "./customer-invoice-action";
 import { PoDraftEditor } from "./po-draft-editor";
@@ -74,6 +75,8 @@ export function POReviewTab({ onReceive }: { onReceive?: (po: PurchaseOrder) => 
   const params = sourceFilter ? { source: sourceFilter } : undefined;
   const { data: queue, isLoading, isError, error, refetch } =
     useListPartsPurchaseOrderReviewQueue(params);
+  const filteredQueue = (queue ?? []).filter(po => (!statusFilter || po.status === statusFilter) && (!locationFilter || po.locationId === Number(locationFilter)) && (!supplierFilter || po.supplierId === Number(supplierFilter)) && (!fromDate || String(po.createdAt).slice(0, 10) >= fromDate) && (!toDate || String(po.createdAt).slice(0, 10) <= toDate));
+  const paging = useListPagination(filteredQueue, `${sourceFilter}:${statusFilter}:${locationFilter}:${supplierFilter}:${fromDate}:${toDate}`);
 
   if (isLoading) return <div className="h-64 rounded-3xl bg-white/[0.05] animate-pulse" />;
 
@@ -108,6 +111,7 @@ export function POReviewTab({ onReceive }: { onReceive?: (po: PurchaseOrder) => 
         <Label>Created from<Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} /></Label>
         <Label>Created through<Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} /></Label>
       </div>
+      {paging.controls}
       {isError ? (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive">
           {errorMessage(error)}
@@ -115,14 +119,14 @@ export function POReviewTab({ onReceive }: { onReceive?: (po: PurchaseOrder) => 
             Retry
           </Button>
         </div>
-      ) : !queue?.length ? (
+      ) : !filteredQueue.length ? (
         <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20">
           <Inbox className="h-8 w-8 text-muted-foreground" />
           <p className="text-muted-foreground">No draft purchase orders pending review.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {queue.filter(po => (!statusFilter || po.status === statusFilter) && (!locationFilter || po.locationId === Number(locationFilter)) && (!supplierFilter || po.supplierId === Number(supplierFilter)) && (!fromDate || String(po.createdAt).slice(0, 10) >= fromDate) && (!toDate || String(po.createdAt).slice(0, 10) <= toDate)).map((po) => <POReviewCard key={po.id} po={po} onReceive={onReceive} />)}
+          {paging.items.map((po) => <POReviewCard key={po.id} po={po} onReceive={onReceive} />)}
         </div>
       )}
     </div>

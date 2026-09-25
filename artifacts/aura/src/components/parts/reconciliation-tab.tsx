@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useListPagination } from "./list-pagination";
 import { SupplierInvoicePanel } from "./supplier-invoice-panel";
 import { AlertTriangle, Check, CheckCircle2, FileSpreadsheet, Loader2, X } from "lucide-react";
 import { useListPurchaseOrders, type PurchaseOrder } from "@workspace/api-client-react";
@@ -32,6 +33,7 @@ export function ReconciliationTab() {
   const canEdit = can("parts", "edit");
   const canApprove = can("parts", "approve");
   const queue = useGetReconciliationQueue(status === "all" ? undefined : status);
+  const paging = useListPagination((queue.data ?? []) as ReconciliationItem[], status);
 
   if (queue.isLoading) return <div className="space-y-6"><SupplierInvoicePanel /><div className="h-64 rounded-3xl bg-white/[0.05] animate-pulse" /></div>;
   if (queue.error) return <div className="space-y-6"><SupplierInvoicePanel /><div className="rounded-2xl border border-destructive/30 p-6 text-destructive" role="alert">Unable to load reconciliation records: {errorText(queue.error)}</div></div>;
@@ -51,8 +53,9 @@ export function ReconciliationTab() {
           <SelectContent><SelectItem value="flagged">Flagged</SelectItem><SelectItem value="matched">Matched</SelectItem><SelectItem value="resolved">Resolved</SelectItem><SelectItem value="all">All records</SelectItem></SelectContent>
         </Select>
       </div>
+      {paging.controls}
       {!items.length ? <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20"><CheckCircle2 className="h-8 w-8 text-muted-foreground" /><p className="text-muted-foreground">{status === "flagged" ? "No flagged discrepancies." : "No reconciliation records found."}</p></div> :
-        <div className="space-y-4">{items.map((item) => <ReconciliationCard key={item.id} item={item} canApprove={canApprove} />)}</div>}
+        <div className="space-y-4">{paging.items.map((item) => <ReconciliationCard key={item.id} item={item} canApprove={canApprove} />)}</div>}
     </div>
   );
 }
@@ -68,6 +71,7 @@ function SubmitInvoiceDialog() {
   const { toast } = useToast();
   const order = (orders ?? []).find((candidate) => String(candidate.id) === poId) as PurchaseOrder | undefined;
   const lines = order?.lines ?? [];
+  const linesPaging = useListPagination(lines, poId);
   const setLine = (id: number, field: "quantity" | "unitCost", value: string) =>
     setSelected((current) => ({ ...current, [id]: { quantity: current[id]?.quantity ?? "", unitCost: current[id]?.unitCost ?? "", [field]: value } }));
   const reset = () => { setPoId(""); setInvoiceNumber(""); setTolerance(""); setSelected({}); };
@@ -92,7 +96,7 @@ function SubmitInvoiceDialog() {
           </div>
           <div className="space-y-1"><Label htmlFor="recon-tolerance">Tolerance % (optional)</Label><Input id="recon-tolerance" type="number" min="0" max="100" step="0.01" value={tolerance} onChange={(event) => setTolerance(event.target.value)} placeholder="Use policy default" /></div>
           {poId && !lines.length && <p className="text-sm text-muted-foreground">This purchase order has no lines available for invoicing.</p>}
-          {lines.length > 0 && <div className="space-y-2"><p className="text-sm font-medium">Invoice lines</p><div className="overflow-x-auto rounded-lg border"><table className="w-full min-w-[650px] text-sm"><thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Include</th><th className="p-2">Part</th><th className="p-2">Ordered / received</th><th className="p-2">Invoice qty</th><th className="p-2">Invoice unit cost</th></tr></thead><tbody>{lines.map((line) => { const checked = !!selected[line.id]; return <tr key={line.id} className="border-b last:border-0"><td className="p-2"><Checkbox checked={checked} onCheckedChange={(value) => setSelected((current) => { if (value) return { ...current, [line.id]: { quantity: String(line.qtyReceived), unitCost: String(line.unitCost) } }; const next = { ...current }; delete next[line.id]; return next; })} aria-label={`Include ${line.partName}`} /></td><td className="p-2">{line.partName}<div className="text-xs text-muted-foreground">Line #{line.id}</div></td><td className="p-2">{line.quantity} / {line.qtyReceived}<div className="text-xs text-muted-foreground">{line.unitCost.toFixed(2)} ordered cost</div></td><td className="p-2"><Input type="number" min="0" step="0.001" disabled={!checked} value={selected[line.id]?.quantity ?? ""} onChange={(event) => setLine(line.id, "quantity", event.target.value)} aria-label={`${line.partName} invoice quantity`} /></td><td className="p-2"><Input type="number" min="0" step="0.01" disabled={!checked} value={selected[line.id]?.unitCost ?? ""} onChange={(event) => setLine(line.id, "unitCost", event.target.value)} aria-label={`${line.partName} invoice unit cost`} /></td></tr>; })}</tbody></table></div></div>}
+          {lines.length > 0 && <div className="space-y-2"><p className="text-sm font-medium">Invoice lines</p>{linesPaging.controls}<div className="overflow-x-auto rounded-lg border"><table className="w-full min-w-[650px] text-sm"><thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Include</th><th className="p-2">Part</th><th className="p-2">Ordered / received</th><th className="p-2">Invoice qty</th><th className="p-2">Invoice unit cost</th></tr></thead><tbody>{linesPaging.items.map((line) => { const checked = !!selected[line.id]; return <tr key={line.id} className="border-b last:border-0"><td className="p-2"><Checkbox checked={checked} onCheckedChange={(value) => setSelected((current) => { if (value) return { ...current, [line.id]: { quantity: String(line.qtyReceived), unitCost: String(line.unitCost) } }; const next = { ...current }; delete next[line.id]; return next; })} aria-label={`Include ${line.partName}`} /></td><td className="p-2">{line.partName}<div className="text-xs text-muted-foreground">Line #{line.id}</div></td><td className="p-2">{line.quantity} / {line.qtyReceived}<div className="text-xs text-muted-foreground">{line.unitCost.toFixed(2)} ordered cost</div></td><td className="p-2"><Input type="number" min="0" step="0.001" disabled={!checked} value={selected[line.id]?.quantity ?? ""} onChange={(event) => setLine(line.id, "quantity", event.target.value)} aria-label={`${line.partName} invoice quantity`} /></td><td className="p-2"><Input type="number" min="0" step="0.01" disabled={!checked} value={selected[line.id]?.unitCost ?? ""} onChange={(event) => setLine(line.id, "unitCost", event.target.value)} aria-label={`${line.partName} invoice unit cost`} /></td></tr>; })}</tbody></table></div></div>}
           <DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={submit.isPending || isLoading}>{submit.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Run match</Button></DialogFooter>
         </form>
       </DialogContent>

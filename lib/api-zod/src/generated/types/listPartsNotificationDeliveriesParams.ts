@@ -5,8 +5,22 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListPartsNotificationDeliveriesPaged } from './listPartsNotificationDeliveriesPaged';
 import type { ListPartsNotificationDeliveriesStatus } from './listPartsNotificationDeliveriesStatus';
 
 export type ListPartsNotificationDeliveriesParams = {
 status?: ListPartsNotificationDeliveriesStatus;
+/**
+ * @minimum 1
+ * @maximum 1000
+ */
+limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
+/**
+ * Return items and total instead of the legacy array
+ */
+paged?: ListPartsNotificationDeliveriesPaged;
 };

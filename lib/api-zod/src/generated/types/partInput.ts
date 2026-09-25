@@ -14,6 +14,10 @@ export interface PartInput {
   sku: string;
   /** @minLength 1 */
   name: string;
+  /** @minimum 1 */
+  locationId: number;
+  /** @minimum 1 */
+  binId: number;
   /** @nullable */
   make?: string | null;
   category?: string;
@@ -21,6 +25,7 @@ export interface PartInput {
   unitCost?: number;
   unitPrice?: number;
   pricingDetails?: PartPricingDetails | null;
+  /** @minimum 0 */
   stock?: number;
   reorderLevel?: number;
   status?: PartInputStatus;

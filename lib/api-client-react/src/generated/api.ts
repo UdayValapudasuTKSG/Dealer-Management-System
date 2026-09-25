@@ -359,6 +359,7 @@ import type {
   PartsOperationLocation,
   PartsOperationLocationInput,
   PartsOperationLocationUpdate,
+  PartsOperationPage,
   PartsOperationPartMetadataUpdate,
   PartsOperationPurchaseOrderInput,
   PartsOperationPurchaseOrderSendInput,
@@ -18570,9 +18571,9 @@ export const getListPartsInventoryLedgerUrl = (params?: ListPartsInventoryLedger
   return stringifiedParams.length > 0 ? `/api/parts/operations/ledger?${stringifiedParams}` : `/api/parts/operations/ledger`
 }
 
-export const listPartsInventoryLedger = async (params?: ListPartsInventoryLedgerParams, options?: RequestInit): Promise<PartsOperationRecord[]> => {
+export const listPartsInventoryLedger = async (params?: ListPartsInventoryLedgerParams, options?: RequestInit): Promise<PartsOperationRecord[] | PartsOperationPage> => {
 
-  return customFetch<PartsOperationRecord[]>(getListPartsInventoryLedgerUrl(params),
+  return customFetch<PartsOperationRecord[] | PartsOperationPage>(getListPartsInventoryLedgerUrl(params),
   {
     ...options,
     method: 'GET'
@@ -21514,9 +21515,9 @@ export const getListPartsNotificationDeliveriesUrl = (params?: ListPartsNotifica
   return stringifiedParams.length > 0 ? `/api/parts/operations/notifications?${stringifiedParams}` : `/api/parts/operations/notifications`
 }
 
-export const listPartsNotificationDeliveries = async (params?: ListPartsNotificationDeliveriesParams, options?: RequestInit): Promise<PartsOperationRecord[]> => {
+export const listPartsNotificationDeliveries = async (params?: ListPartsNotificationDeliveriesParams, options?: RequestInit): Promise<PartsOperationRecord[] | PartsOperationPage> => {
 
-  return customFetch<PartsOperationRecord[]>(getListPartsNotificationDeliveriesUrl(params),
+  return customFetch<PartsOperationRecord[] | PartsOperationPage>(getListPartsNotificationDeliveriesUrl(params),
   {
     ...options,
     method: 'GET'

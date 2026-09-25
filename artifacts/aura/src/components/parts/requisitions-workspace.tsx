@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { useListPagination } from "./list-pagination";
 import { CustomerInvoiceAction } from "./customer-invoice-action";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -84,6 +85,7 @@ export function RequisitionsWorkspace() {
       (req.jobCardId == null && "inventory restock".includes(lower))
     );
   });
+  const paging = useListPagination(filtered, `${statusFilter}:${urgencyFilter}:${search}`);
 
   return (
     <div className="space-y-4">
@@ -125,6 +127,7 @@ export function RequisitionsWorkspace() {
         </Select>
       </div>
 
+      {paging.controls}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
@@ -139,7 +142,7 @@ export function RequisitionsWorkspace() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(req => (
+          {paging.items.map(req => (
             <RequisitionCard key={req.id} req={req} />
           ))}
         </div>

@@ -10639,6 +10639,8 @@ export const ListPartsResponse = zod.array(ListPartsResponseItem)
 
 
 
+
+
 export const createPartBodyPricingDetailsQuantityMin = 0;
 export const createPartBodyPricingDetailsQuantityMultipleOf = 1;
 
@@ -10664,6 +10666,8 @@ export const createPartBodyPricingDetailsSellingVatGydMin = 0;
 
 export const createPartBodyPricingDetailsFinalSellingPriceGydMin = 0;
 
+export const createPartBodyStockMin = 0;
+
 export const createPartBodyReorderMaxMin = 0;
 
 
@@ -10671,6 +10675,8 @@ export const createPartBodyReorderMaxMin = 0;
 export const CreatePartBody = zod.object({
   "sku": zod.string().min(1),
   "name": zod.string().min(1),
+  "locationId": zod.number().min(1),
+  "binId": zod.number().min(1),
   "make": zod.string().nullish(),
   "category": zod.string().optional(),
   "supplierId": zod.number().optional(),
@@ -10689,7 +10695,7 @@ export const CreatePartBody = zod.object({
   "sellingVatGyd": zod.number().min(createPartBodyPricingDetailsSellingVatGydMin).optional(),
   "finalSellingPriceGyd": zod.number().min(createPartBodyPricingDetailsFinalSellingPriceGydMin).optional()
 }).nullish().describe('Reference pricing worksheet values. USD does not change document currency. Quantity is original worksheet quantity, not current stock. Selling VAT and final price are informational; unitPrice remains pre-VAT GYD.'),
-  "stock": zod.number().optional(),
+  "stock": zod.number().min(createPartBodyStockMin).optional(),
   "reorderLevel": zod.number().optional(),
   "status": zod.enum(['active', 'superseded', 'obsolete']).optional(),
   "supersededByPartId": zod.number().optional(),
@@ -11283,6 +11289,9 @@ export const ListPartsInventoryLevelsResponse = zod.array(ListPartsInventoryLeve
 export const listPartsInventoryLedgerQueryLimitDefault = 250;
 export const listPartsInventoryLedgerQueryLimitMax = 1000;
 
+export const listPartsInventoryLedgerQueryOffsetDefault = 0;
+export const listPartsInventoryLedgerQueryOffsetMin = 0;
+
 
 
 export const ListPartsInventoryLedgerQueryParams = zod.object({
@@ -11290,11 +11299,19 @@ export const ListPartsInventoryLedgerQueryParams = zod.object({
   "partId": zod.coerce.number().min(1).optional(),
   "from": zod.date().optional(),
   "to": zod.date().optional(),
-  "limit": zod.coerce.number().min(1).max(listPartsInventoryLedgerQueryLimitMax).default(listPartsInventoryLedgerQueryLimitDefault)
+  "limit": zod.coerce.number().min(1).max(listPartsInventoryLedgerQueryLimitMax).default(listPartsInventoryLedgerQueryLimitDefault),
+  "offset": zod.coerce.number().min(listPartsInventoryLedgerQueryOffsetMin).default(listPartsInventoryLedgerQueryOffsetDefault),
+  "paged": zod.enum(['1']).optional()
 })
 
-export const ListPartsInventoryLedgerResponseItem = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
-export const ListPartsInventoryLedgerResponse = zod.array(ListPartsInventoryLedgerResponseItem)
+export const listPartsInventoryLedgerResponseTwoTotalMin = 0;
+
+
+
+export const ListPartsInventoryLedgerResponse = zod.union([zod.array(zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')),zod.object({
+  "items": zod.array(zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')),
+  "total": zod.number().min(listPartsInventoryLedgerResponseTwoTotalMin)
+})])
 
 
 
@@ -12468,12 +12485,29 @@ export const UpdatePartsSupplierCcEmailsBody = zod.object({
 export const UpdatePartsSupplierCcEmailsResponse = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
 
 
+export const listPartsNotificationDeliveriesQueryLimitDefault = 25;
+export const listPartsNotificationDeliveriesQueryLimitMax = 1000;
+
+export const listPartsNotificationDeliveriesQueryOffsetDefault = 0;
+export const listPartsNotificationDeliveriesQueryOffsetMin = 0;
+
+
+
 export const ListPartsNotificationDeliveriesQueryParams = zod.object({
-  "status": zod.enum(['pending', 'sending', 'sent', 'failed']).optional()
+  "status": zod.enum(['pending', 'sending', 'sent', 'failed']).optional(),
+  "limit": zod.coerce.number().min(1).max(listPartsNotificationDeliveriesQueryLimitMax).default(listPartsNotificationDeliveriesQueryLimitDefault),
+  "offset": zod.coerce.number().min(listPartsNotificationDeliveriesQueryOffsetMin).default(listPartsNotificationDeliveriesQueryOffsetDefault),
+  "paged": zod.enum(['1']).optional()
 })
 
-export const ListPartsNotificationDeliveriesResponseItem = zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')
-export const ListPartsNotificationDeliveriesResponse = zod.array(ListPartsNotificationDeliveriesResponseItem)
+export const listPartsNotificationDeliveriesResponseTwoTotalMin = 0;
+
+
+
+export const ListPartsNotificationDeliveriesResponse = zod.union([zod.array(zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')),zod.object({
+  "items": zod.array(zod.record(zod.string(), zod.unknown()).describe('Tenant-scoped parts operation record.')),
+  "total": zod.number().min(listPartsNotificationDeliveriesResponseTwoTotalMin)
+})])
 
 
 export const GetPartsSmsSettingsResponse = zod.object({

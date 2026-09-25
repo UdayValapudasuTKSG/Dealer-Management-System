@@ -1,16 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
+import { useServerPagination } from "./list-pagination";
 import { formatGuyanaDate } from "@/lib/format";
-import { useGetNotifications, useGetNotificationSmsSettings, useRetryNotification } from "@/hooks/use-parts-operations";
+import { useGetNotificationSmsSettings, useRetryNotification } from "@/hooks/use-parts-operations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Bell, AlertTriangle, CheckCircle2, MessageSquare, Mail, Loader2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthz } from "@/lib/auth";
 
 export function NotificationsTab() {
+  const { activeDealer } = useAuthz();
   const [statusFilter, setStatusFilter] = useState<string>("failed");
-  const { data: notifications, isLoading } = useGetNotifications(statusFilter ? statusFilter : undefined);
+  const [total, setTotal] = useState(0);
+  const paging = useServerPagination(total, statusFilter);
+  const { data: notificationPage, isLoading, isError, error } = useQuery<{ items: any[]; total: number }>({
+    queryKey: ["parts-notifications", "page", activeDealer?.dealerId, statusFilter, paging.offset, paging.pageSize],
+    queryFn: () => customFetch(`/api/parts/operations/notifications?paged=1&offset=${paging.offset}&limit=${paging.pageSize}${statusFilter ? `&status=${encodeURIComponent(statusFilter)}` : ""}`),
+  });
+  useEffect(() => { if (notificationPage) setTotal(notificationPage.total); }, [notificationPage?.total]);
+  const notifications = notificationPage?.items;
   const { data: smsSettings } = useGetNotificationSmsSettings();
 
   if (isLoading) {
@@ -51,14 +63,16 @@ export function NotificationsTab() {
         </div>
       </div>
 
-      {!notifications?.length ? (
+      {isError && <p role="alert" className="text-sm text-destructive">Could not load notifications: {error instanceof Error ? error.message : "Please retry."}</p>}
+      {paging.controls}
+      {!isError && !notifications?.length ? (
         <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
           <CheckCircle2 className="w-8 h-8 text-muted-foreground" />
           <p className="text-muted-foreground">No notifications found for this filter.</p>
         </div>
-      ) : (
+      ) : !isError && (
         <div className="grid grid-cols-1 gap-3">
-          {notifications.map(notif => (
+          {notifications?.map(notif => (
             <NotificationCard key={notif.id} notification={notif} />
           ))}
         </div>

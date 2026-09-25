@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useListPagination } from "./list-pagination";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch, useListParts } from "@workspace/api-client-react";
 import { formatGuyanaDate } from "@/lib/format";
@@ -18,6 +19,7 @@ import { downloadPartsReport } from "./parts-analysis-export";
 export function CycleCountsTab() {
   const { data: counts, isLoading, isError } = useGetCycleCounts();
   const [activeCountId, setActiveCountId] = useState<number | null>(null);
+  const countPaging = useListPagination(counts ?? []);
 
   if (isLoading) {
     return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
@@ -37,6 +39,7 @@ export function CycleCountsTab() {
         <StartCountDialog />
       </div>
 
+      {countPaging.controls}
       {!counts?.length ? (
         <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
           <ClipboardCheck className="w-8 h-8 text-muted-foreground" />
@@ -44,7 +47,7 @@ export function CycleCountsTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {counts.map(count => (
+          {countPaging.items.map(count => (
             <Card 
               key={count.id} 
               className={cn(
@@ -161,13 +164,14 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
     isInitialized.current = true;
   }
 
-  if (isError) return <div role="alert" className="p-4 text-destructive">Count details could not be loaded. <Button variant="ghost" onClick={onBack}>Back</Button></div>;
-  if (isLoading || !count) return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
-  const editable = ["in_progress", "pending_approval"].includes(count.status);
-  const visibleLines = [...count.lines].filter((line: any) =>
+  const visibleLines = [...(count?.lines ?? [])].filter((line: any) =>
     `${line.partNumber} ${line.partName}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
   ).sort((a: any, b: any) => (descending ? -1 : 1) *
     String(a[sortBy]).localeCompare(String(b[sortBy]), undefined, { numeric: true, sensitivity: "base" }));
+  const linePaging = useListPagination(visibleLines, `${search}:${sortBy}:${descending}:${countStub.id}`);
+  if (isError) return <div role="alert" className="p-4 text-destructive">Count details could not be loaded. <Button variant="ghost" onClick={onBack}>Back</Button></div>;
+  if (isLoading || !count) return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
+  const editable = ["in_progress", "pending_approval"].includes(count.status);
   const exportSheet = async (format: "csv" | "pdf") => {
     setExporting(true);
     try {
@@ -295,6 +299,7 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
             <Input aria-label="Search count parts" placeholder="Search part number or name" value={search} onChange={e => setSearch(e.target.value)} />
             <span className="text-xs text-muted-foreground whitespace-nowrap">{visibleLines.length} parts</span>
           </div>
+          {linePaging.controls}
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground bg-white/[0.02]">
@@ -305,7 +310,7 @@ function ActiveCountView({ count: countStub, onBack }: { count: any; onBack: () 
               </tr>
             </thead>
             <tbody>
-               {visibleLines.map((line: any) => {
+               {linePaging.items.map((line: any) => {
                 const expected = line.expectedQty;
                 const counted = lines[line.id] === '' ? null : Number(lines[line.id]);
                 const variance = counted !== null ? counted - expected : null;
