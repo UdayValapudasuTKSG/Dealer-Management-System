@@ -207,6 +207,7 @@ export function coordinateCollisionClaim(input: CollisionAutomationInput): void 
       entityType: "collision_claim",
       entityId: input.id,
       dedupeKey: `collision:claim:${input.id}:${input.eventKey}:v1`,
+      internalRequiredModule: action.audience === "finance" ? "finance" : undefined,
       data: {
         action: action.title,
         claimRef: `Claim #${input.id}`,

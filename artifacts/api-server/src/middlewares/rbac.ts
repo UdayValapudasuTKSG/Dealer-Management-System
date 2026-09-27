@@ -758,7 +758,9 @@ const PATH_MODULES: Record<string, RouteRule> = {
   leads: {
     module: "leads",
     category: (req) =>
-      (isWhatsappReplyPath(req) || /^\/leads\/\d+\/call-centre-disposition\/?$/.test(req.path))
+      req.method === "POST" && /^\/leads\/\d+\/assign\/?$/.test(req.path)
+        ? "assign"
+        : (isWhatsappReplyPath(req) || /^\/leads\/\d+\/call-centre-disposition\/?$/.test(req.path))
         ? "edit"
         : (METHOD_CATEGORY[req.method] ?? "view"),
   },

@@ -11,7 +11,7 @@ const url = new URL(process.env.DATABASE_URL ?? process.env.DEV_DATABASE_URL ?? 
 if (!["helium", "localhost", "127.0.0.1"].includes(url.hostname)) throw new Error("Development database host is not allowlisted");
 const { db, pool, dealersTable, usersTable, rolesTable, dealerUsersTable, leadsTable, tasksTable, callLogsTable, timelineEventsTable } =
   await import("@workspace/db");
-const { recordCallCentreDisposition, validateFollowUpDate } = await import("../lib/call-centre");
+const { recordCallCentreDisposition, reassignCallCentreLead, validateFollowUpDate } = await import("../lib/call-centre");
 const { autoAssignLead, lockAssignmentQueue, nextRoundRobinCandidate } = await import("../lib/lead-assignment");
 const { zonedDayKey } = await import("../lib/timezone");
 const dealerIds: number[] = [], userIds: number[] = [], roleIds: number[] = [];
@@ -41,6 +41,13 @@ try {
     userIds.push(user!.id);
     await db.insert(dealerUsersTable).values({ dealerId, userId: user!.id, roleId: roleIds[i < 2 ? 0 : 1]! });
   }
+  const [foreignRep] = await db.insert(usersTable).values({
+    clerkId: `cc-test-${suffix}-foreign`, name: "Other dealer rep",
+  }).returning();
+  userIds.push(foreignRep!.id);
+  await db.insert(dealerUsersTable).values({
+    dealerId: dealerIds[1]!, userId: foreignRep!.id, roleId: roleIds[0]!,
+  });
   const rotation = await db.transaction(async (tx) => {
     await lockAssignmentQueue(tx, dealerId);
     const first = await nextRoundRobinCandidate(tx, dealerId, "call_centre");
@@ -66,6 +73,28 @@ try {
   assert.equal(task!.assigneeUserId, actor.id);
   assert.equal(task!.dueDate, day);
   assert.equal(task!.kind, "call_centre");
+  await assert.rejects(reassignCallCentreLead(dealerId, lead.id, userIds[2]!, actor), { status: 400 });
+  await assert.rejects(reassignCallCentreLead(dealerId, lead.id, foreignRep!.id, actor), { status: 400 });
+  await db.delete(dealerUsersTable).where(and(
+    eq(dealerUsersTable.dealerId, dealerIds[1]!), eq(dealerUsersTable.userId, foreignRep!.id),
+  ));
+  await assert.rejects(reassignCallCentreLead(dealerIds[1]!, lead.id, userIds[1]!, actor), { status: 404 });
+  const reassigned = await reassignCallCentreLead(dealerId, lead.id, userIds[1]!, actor);
+  assert.equal(reassigned.ownerUserId, userIds[1]);
+  assert.equal(reassigned.callCentreRepId, userIds[1]);
+  assert.equal(reassigned.assignedTo, "CC Test 1");
+  assert.equal(reassigned.callCentreFollowUpDate, day);
+  assert.equal(reassigned.callCentreStatus, "follow_up");
+  assert(reassigned.callCentreAssignedAt && reassigned.callCentreAssignedAt >= lead.callCentreAssignedAt!);
+  const [movedTask] = await db.select().from(tasksTable).where(eq(tasksTable.id, task!.id));
+  assert.equal(movedTask!.assigneeUserId, userIds[1]);
+  assert.equal(movedTask!.dueDate, day);
+  await db.update(usersTable).set({ status: "suspended" }).where(eq(usersTable.id, userIds[0]!));
+  await assert.rejects(reassignCallCentreLead(dealerId, lead.id, userIds[0]!, actor), { status: 400 });
+  await db.update(usersTable).set({ status: "active" }).where(eq(usersTable.id, userIds[0]!));
+  assert.equal((await reassignCallCentreLead(dealerId, lead.id, userIds[1]!, actor)).callCentreRepId, userIds[1]);
+  await assert.rejects(recordCallCentreDisposition(dealerId, lead.id, actor, { outcome: "interested", notes: "Former rep" }), { status: 403 });
+  await reassignCallCentreLead(dealerId, lead.id, actor.id, { name: "CC Test manager" });
   await assert.rejects(recordCallCentreDisposition(dealerIds[1]!, lead.id, actor, { outcome: "interested", notes: "Cross tenant" }), { status: 404 });
   await assert.rejects(recordCallCentreDisposition(dealerId, lead.id, { ...actor, id: userIds[1]! }, { outcome: "interested", notes: "Not owner" }), { status: 403 });
   const [call] = await db.select().from(callLogsTable).where(and(eq(callLogsTable.dealerId, dealerId), eq(callLogsTable.leadId, lead.id)));
@@ -74,13 +103,15 @@ try {
   const transfers = await Promise.all([lead, lead2].map((l) => recordCallCentreDisposition(
     dealerId, l.id, actor, { outcome: "interested", notes: "Interested in purchasing" },
   )));
-  assert.deepEqual(new Set(transfers.map((l) => l.ownerUserId)), new Set(userIds.slice(2)));
+  assert.deepEqual(new Set(transfers.map((l) => l.ownerUserId)), new Set(userIds.slice(2, 4)));
   assert(transfers.every((l) => l.callCentreStatus === "transferred" && l.phase === "contacted" && l.callCentreRepId === actor.id));
+  await assert.rejects(reassignCallCentreLead(dealerId, lead.id, userIds[0]!, actor), { status: 409 });
   await assert.rejects(recordCallCentreDisposition(dealerId, lead.id, { ...actor, roleName: "General Manager" }, { outcome: "interested", notes: "Duplicate transfer" }), { status: 409 });
   const lost = await newLead();
   const closed = await recordCallCentreDisposition(dealerId, lost.id, actor, { outcome: "not_interested", notes: "No longer buying" });
   assert.equal(closed.phase, "lost");
   assert.equal(closed.callCentreStatus, "not_interested");
+  await assert.rejects(reassignCallCentreLead(dealerId, lost.id, userIds[1]!, actor), { status: 409 });
   // No available advisor: the entire attempted call must roll back.
   await db.update(usersTable).set({ status: "suspended" }).where(inArray(usersTable.id, userIds.slice(2)));
   const waiting = await newLead();

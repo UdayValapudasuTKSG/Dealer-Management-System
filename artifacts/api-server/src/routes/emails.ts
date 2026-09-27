@@ -1,9 +1,11 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { and, desc, eq, count } from "drizzle-orm";
 import {
   db,
   emailLogsTable,
   emailTemplateOverridesTable,
+  internalEmailRecipientsTable,
   smtpConnectionsTable,
   EMAIL_TEMPLATES,
   type EmailTemplate,
@@ -12,6 +14,7 @@ import {
   RetryEmailLogParams,
   RetryEmailLogResponse,
   GetEmailSettingsResponse,
+  UpdateInternalEmailRecipientsBody,
   UpdateSmtpConnectionBody,
   UpdateSmtpConnectionResponse,
   DeleteSmtpConnectionResponse,
@@ -54,8 +57,77 @@ import { encryptSmtpPassword } from "../lib/smtp-crypto";
 import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { activeDealerId } from "../middlewares/rbac";
 import { logger } from "../lib/logger";
+import { eligibleInternalRecipients, internalRecipientPolicy, INTERNAL_EMAIL_TEMPLATES, INTERNAL_EMAIL_MODULES, validateInternalRecipientSelection } from "../lib/internal-email-recipients";
 
 const router: IRouter = Router();
+
+// This is intentionally separate from template-copy overrides. Absence means
+// built-in routing; [] means no staff email (bells remain unchanged).
+router.get("/emails/internal-recipients", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
+  const rows = await Promise.all(INTERNAL_EMAIL_TEMPLATES.map(async (template) => {
+    const [policy, eligible] = await Promise.all([
+      internalRecipientPolicy(dealerId, template),
+      eligibleInternalRecipients(dealerId, template),
+    ]);
+    return {
+      template, label: TEMPLATE_DEFS[template].label,
+      module: INTERNAL_EMAIL_MODULES[template],
+      mode: policy ? "custom" : "default",
+      userIds: policy?.userIds ?? [],
+      eligible,
+    };
+  }));
+  res.json(rows);
+});
+
+router.put("/emails/internal-recipients/:key", async (req, res): Promise<void> => {
+  if (!canManageEmail(res)) {
+    res.status(403).json({ error: "Only the general manager can manage email recipients" });
+    return;
+  }
+  const key = req.params.key as EmailTemplate;
+  if (!INTERNAL_EMAIL_TEMPLATES.includes(key)) {
+    res.status(404).json({ error: "Unknown internal email type" });
+    return;
+  }
+  const parsed = UpdateInternalEmailRecipientsBody.extend({
+    userIds: z.array(z.number().int().positive()).max(200),
+  }).strict().safeParse(req.body);
+  if (!parsed.success || new Set(parsed.data?.userIds).size !== parsed.data?.userIds.length) {
+    res.status(400).json({ error: "Provide a unique list of staff user IDs" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  if (!(await validateInternalRecipientSelection(dealerId, key, parsed.data.userIds))) {
+    res.status(400).json({ error: "Recipients must be active dealership staff with access to this email type" });
+    return;
+  }
+  await db.insert(internalEmailRecipientsTable).values({
+    dealerId, templateKey: key, userIds: parsed.data.userIds,
+  }).onConflictDoUpdate({
+    target: [internalEmailRecipientsTable.dealerId, internalEmailRecipientsTable.templateKey],
+    set: { userIds: parsed.data.userIds, updatedAt: new Date() },
+  });
+  res.json({ template: key, mode: "custom", userIds: parsed.data.userIds });
+});
+
+router.delete("/emails/internal-recipients/:key", async (req, res): Promise<void> => {
+  if (!canManageEmail(res)) {
+    res.status(403).json({ error: "Only the general manager can manage email recipients" });
+    return;
+  }
+  const key = req.params.key as EmailTemplate;
+  if (!INTERNAL_EMAIL_TEMPLATES.includes(key)) {
+    res.status(404).json({ error: "Unknown internal email type" });
+    return;
+  }
+  await db.delete(internalEmailRecipientsTable).where(and(
+    eq(internalEmailRecipientsTable.dealerId, activeDealerId(res)),
+    eq(internalEmailRecipientsTable.templateKey, key),
+  ));
+  res.json({ template: key, mode: "default", userIds: [] });
+});
 
 // ---------------------------------------------------------------------------
 // Per-dealer SMTP connection — GM/super-admin writes only (same rule as
@@ -329,6 +401,7 @@ router.post("/emails/test-send", async (req, res): Promise<void> => {
     template: "smtp_test",
     to: parsed.data.to,
     dealerId,
+    bypassInternalRouting: true,
   });
   res.json(SendTestEmailResponse.parse({ ok: true, error: null }));
 });
@@ -363,6 +436,7 @@ router.post(
       to: parsed.data.to,
       dealerId,
       data: TEMPLATE_DEFS[key].sample,
+      bypassInternalRouting: true,
     });
     res.json(SendTestEmailResponse.parse({ ok: true, error: null }));
   },
@@ -551,6 +625,7 @@ router.post("/emails/send", async (req, res): Promise<void> => {
     dealerId: activeDealerId(res),
     customerId: parsed.data.customerId ?? null,
     data: parsed.data.data ?? {},
+    bypassInternalRouting: true,
   });
   res.status(201).json(EnqueueEmailResponse.parse(row));
 });

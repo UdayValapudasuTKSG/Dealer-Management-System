@@ -28,6 +28,7 @@ import {
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { chooseInternalRecipients, customInternalDedupeKey, eligibleInternalRecipients, internalDeliveryAllowed, internalRecipientPolicy, INTERNAL_EMAIL_MODULES } from "./internal-email-recipients";
 import {
   isExplicitLeadOutboxSuppressed,
   legacyReviewedOutboxDisposition,
@@ -1474,7 +1475,26 @@ export type EnqueueOptions = {
   tx?: any;
   /** Do not start an outbox pass until the surrounding transaction commits. */
   deferProcessing?: boolean;
+  /** Explicitly addressed manual/test messages are not automated notifications. */
+  bypassInternalRouting?: boolean;
+  /** Private recursion guard for per-user custom fan-out. */
+  internalRouted?: boolean;
+  /** Trusted trigger-only additional visibility constraint. */
+  internalRequiredModule?: "finance" | "customers";
 };
+
+/** Routing metadata is server-owned; arbitrary merge fields from request data
+ * cannot impersonate a policy bypass or choose a weaker visibility check. */
+function safeEmailData(opts: EnqueueOptions): TemplateData {
+  const { internalRouted: _routed, internalRoutingBypass: _bypass,
+    internalRequiredModule: _required, ...data } = opts.data ?? {};
+  return {
+    ...data,
+    ...(opts.internalRouted ? { internalRouted: "1" } : {}),
+    ...(opts.bypassInternalRouting ? { internalRoutingBypass: "1" } : {}),
+    ...(opts.internalRequiredModule ? { internalRequiredModule: opts.internalRequiredModule } : {}),
+  };
+}
 
 /** Parse only positive integer lead ids; payload values remain untrusted text. */
 export function parseOutboxLeadId(value: unknown): number | null {
@@ -1574,15 +1594,55 @@ export async function preflightEmailRecipient(
 }
 
 export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
+  const data = safeEmailData(opts);
+  if (INTERNAL_EMAIL_MODULES[opts.template] && !opts.bypassInternalRouting && !opts.internalRouted) {
+    const policy = await internalRecipientPolicy(opts.dealerId, opts.template);
+    if (policy) {
+      const eligible = await eligibleInternalRecipients(
+        opts.dealerId, opts.template,
+        opts.internalRequiredModule,
+      );
+      const selected = chooseInternalRecipients(eligible, policy.userIds);
+      if (selected.length) {
+        // Existing matrix paths call enqueue once per default staff member.
+        // Strip their final :u<ID> before adding the chosen recipient's key,
+        // so fan-out is idempotent regardless of the original recipient count.
+        let first: EmailLog | undefined;
+        for (const user of selected) {
+          const row = await enqueueEmail({
+            ...opts, to: user.email, internalRouted: true,
+            dedupeKey: customInternalDedupeKey(opts.dedupeKey, user.id),
+          });
+          first ??= row;
+        }
+        return first!;
+      }
+      // Empty or now-ineligible selection explicitly suppresses this event;
+      // preserve a visible audit row without consuming the original dedupe key.
+      const { subject } = renderEmail(opts.template, data);
+      const outboxDb = opts.tx ?? db;
+      const [row] = await outboxDb.insert(emailLogsTable).values({
+        dealerId: opts.dealerId, recipient: opts.to, subject,
+        template: opts.template, channel: "email", status: "cancelled",
+        lastError: "suppressed: no eligible internal email recipients",
+        payload: data,
+        dedupeKey: opts.dedupeKey ? `${opts.dedupeKey.replace(/:u\d+$/, "")}:internal:off` : null,
+      }).onConflictDoNothing({ target: emailLogsTable.dedupeKey }).returning();
+      if (row) return row;
+      const [existing] = await outboxDb.select().from(emailLogsTable)
+        .where(eq(emailLogsTable.dedupeKey, `${opts.dedupeKey!.replace(/:u\d+$/, "")}:internal:off`));
+      return existing!;
+    }
+  }
   const outboxDb = opts.tx ?? db;
   const resolvedLeadId = await validatedOutboxLeadId(
     opts.dealerId,
     opts.leadId,
-    opts.data?.leadId,
+    data.leadId,
   );
   const { subject } = renderEmail(
     opts.template,
-    opts.data ?? {},
+    data,
     { name: await getDealerBrandName(opts.dealerId) },
     await getTemplateOverride(opts.dealerId, opts.template),
   );
@@ -1602,7 +1662,7 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
             customerId: opts.customerId ?? null,
             dealerId: opts.dealerId,
             leadId: resolvedLeadId,
-            payload: opts.data ?? {},
+            payload: data,
             recipient: opts.to,
             template: opts.template,
             createdAt: new Date(),
@@ -1627,7 +1687,7 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
         template: opts.template,
         channel: "email",
         status: "cancelled",
-        payload: opts.data ?? {},
+        payload: data,
         // Suffixed so a suppressed event never consumes the real dedupe key:
         // if email is re-enabled later, a legitimate re-send still goes out.
         dedupeKey: opts.dedupeKey ? `${opts.dedupeKey}:suppressed` : null,
@@ -1660,7 +1720,7 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
       channel: "email",
       status: "queued",
       payload: {
-        ...(opts.data ?? {}),
+        ...data,
         ...(opts.notifyUserId != null
           ? { notifyUserId: String(opts.notifyUserId) }
           : {}),
@@ -3440,6 +3500,26 @@ async function processWhatsappQueue(): Promise<void> {
   }
 }
 
+/** Shared by the real worker and dev-only fixtures. Does not contact SMTP. */
+export async function revalidateInternalEmailOutbox(item: EmailLog): Promise<boolean> {
+  if (!INTERNAL_EMAIL_MODULES[item.template as EmailTemplate] ||
+      item.payload?.internalRoutingBypass === "1") return true;
+  const policy = await internalRecipientPolicy(item.dealerId, item.template as EmailTemplate);
+  if (!policy && item.payload?.internalRouted !== "1") return true;
+  const extra = item.payload?.internalRequiredModule;
+  const eligible = policy
+    ? await eligibleInternalRecipients(item.dealerId, item.template as EmailTemplate,
+      extra === "finance" || extra === "customers" ? extra : undefined)
+    : [];
+  if (internalDeliveryAllowed(policy?.userIds ?? null, eligible, item.recipient, item.payload?.internalRouted === "1")) {
+    return true;
+  }
+  await db.update(emailLogsTable).set({
+    status: "cancelled", lastError: "suppressed: internal recipient settings changed",
+  }).where(and(eq(emailLogsTable.id, item.id), eq(emailLogsTable.status, item.status)));
+  return false;
+}
+
 export async function processQueue(): Promise<void> {
   // Test seam: verification suites that enqueue fixture emails set this so
   // no outbox pass (email or WhatsApp, fixture or otherwise) runs in their
@@ -3503,6 +3583,19 @@ export async function processQueue(): Promise<void> {
         )
         .returning();
       if (!item) continue; // another worker claimed it
+      try {
+        if (!(await revalidateInternalEmailOutbox(item))) continue;
+      } catch (err) {
+        if (INTERNAL_EMAIL_MODULES[item.template as EmailTemplate]) {
+          // A failed recipient check must NEVER turn into a staff information leak.
+          await db.update(emailLogsTable).set({
+            status: "failed", nextAttemptAt: backoffDate(item.attempts),
+            lastError: "Internal recipient validation temporarily unavailable",
+          }).where(and(eq(emailLogsTable.id, item.id), eq(emailLogsTable.status, "sending")));
+          logger.error({ err, id: item.id }, "internal recipient validation unavailable");
+          continue;
+        }
+      }
       if (item.template === "parts.purchase_order") {
         await (await import("./po-communications")).deliverClaimedPoEmail(item);
         continue;

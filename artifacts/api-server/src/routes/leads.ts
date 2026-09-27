@@ -108,8 +108,8 @@ import {
   RecordCallCentreDispositionBody,
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { CallCentreError, recordCallCentreDisposition } from "../lib/call-centre";
-import { isActiveCallCentreLead } from "../lib/call-centre-policy";
+import { CallCentreError, recordCallCentreDisposition, reassignCallCentreLead } from "../lib/call-centre";
+import { isActiveCallCentreLead, isCallCentreRole } from "../lib/call-centre-policy";
 import { ObjectStorageService } from "../lib/objectStorage";
 import {
   onLeadCreated,
@@ -247,6 +247,12 @@ router.use(async (req, res, next) => {
     next();
     return;
   }
+  // Assignment is explicitly authorized by leads:assign, not ownership.
+  // The route performs its own permission and queue-state checks.
+  if (req.method === "POST" && /^\/leads\/\d+\/assign\/?$/.test(req.path)) {
+    next();
+    return;
+  }
   const verdict = await checkLeadMutationOwnership(
     res.locals.user,
     activeDealerId(res),
@@ -259,7 +265,7 @@ router.use(async (req, res, next) => {
   const suffix = req.path.replace(/^\/leads\/\d+/, "").replace(/\/$/, "");
   const protectedPatch = req.method === "PATCH" && suffix === "" &&
     ["phase", "status", "ownerUserId", "assignedTo", "purchaseType", "closureReason"].some((key) => key in (req.body ?? {}));
-  const protectedAction = ["assign", "advance", "decision", "test-drive"].some((action) => suffix === `/${action}`);
+  const protectedAction = ["advance", "decision", "test-drive"].some((action) => suffix === `/${action}`);
   if (protectedPatch || protectedAction) {
     const [lead] = await db.select().from(leadsTable).where(and(
       eq(leadsTable.id, Number(match[1])), eq(leadsTable.dealerId, activeDealerId(res)),
@@ -433,7 +439,8 @@ router.get("/leads/sources", async (req, res): Promise<void> => {
 });
 
 // NOTE: must be declared before /leads/:id so "advisors" isn't parsed as an id.
-router.get("/leads/advisors", async (_req, res): Promise<void> => {
+router.get("/leads/advisors", async (req, res): Promise<void> => {
+  const callCentre = req.query.callCentre === "true";
   const rows = await db
     .select({
       id: usersTable.id,
@@ -456,7 +463,8 @@ router.get("/leads/advisors", async (_req, res): Promise<void> => {
       (r) =>
         r.roleName === "Sales Advisor" ||
         r.roleName === "Sales Manager" ||
-        r.roleName === "General Manager",
+        r.roleName === "General Manager" ||
+        (callCentre && isCallCentreRole(r.roleName)),
     )
     .map((r) => ({
       id: r.id,
@@ -1863,6 +1871,12 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
     return;
   }
 
+  // Lead assignment is an explicit grant, not a side effect of leads:create.
+  if (!res.locals.user || !hasPermission(res.locals.user, "leads", "assign")) {
+    res.status(403).json({ error: "Lead assignment permission required" });
+    return;
+  }
+
   const [existing] = await db
     .select()
     .from(leadsTable)
@@ -1874,6 +1888,22 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
     );
   if (!existing) {
     res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  if (isActiveCallCentreLead(existing)) {
+    try {
+      const lead = await reassignCallCentreLead(activeDealerId(res), existing.id, parsed.data.userId, res.locals.user);
+      if (lead.callCentreRepId === parsed.data.userId && (existing.ownerUserId !== lead.ownerUserId || existing.callCentreRepId !== lead.callCentreRepId)) {
+        notifyLeadAssigned(lead);
+      }
+      res.json(GetLeadResponse.parse(lead));
+    } catch (err) {
+      if (err instanceof CallCentreError) {
+        res.status(err.status).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
     return;
   }
 

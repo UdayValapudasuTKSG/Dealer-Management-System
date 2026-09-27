@@ -223,6 +223,8 @@ import type {
   ImpersonationGrant,
   ImpersonationRequest,
   ImportVehiclesParams,
+  InternalEmailRecipientResult,
+  InternalEmailRecipientSetting,
   InventoryBreakdown,
   InventoryPartRequisitionInput,
   Invoice,
@@ -287,6 +289,7 @@ import type {
   ListInvoicesParams,
   ListJobCardHistoryParams,
   ListJobCardsParams,
+  ListLeadAdvisorsParams,
   ListLeadSourcesParams,
   ListLeadsParams,
   ListPartRequisitionsParams,
@@ -486,6 +489,7 @@ import type {
   UpdateAmberSettingsRequest,
   UpdateDeal422,
   UpdateErpnextSettingsRequest,
+  UpdateInternalEmailRecipientsBody,
   UpdateMetaSettingsRequest,
   UpdateMyProfileRequest,
   UpdateSmtpConnectionRequest,
@@ -4236,20 +4240,27 @@ export const useBookTestDriveSlot = <TError = ErrorType<Error>,
       return useMutation(getBookTestDriveSlotMutationOptions(options));
     }
 
-export const getListLeadAdvisorsUrl = () => {
+export const getListLeadAdvisorsUrl = (params?: ListLeadAdvisorsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/leads/advisors`
+  return stringifiedParams.length > 0 ? `/api/leads/advisors?${stringifiedParams}` : `/api/leads/advisors`
 }
 
 /**
  * @summary List users assignable as lead owners
  */
-export const listLeadAdvisors = async ( options?: RequestInit): Promise<LeadAdvisor[]> => {
+export const listLeadAdvisors = async (params?: ListLeadAdvisorsParams, options?: RequestInit): Promise<LeadAdvisor[]> => {
 
-  return customFetch<LeadAdvisor[]>(getListLeadAdvisorsUrl(),
+  return customFetch<LeadAdvisor[]>(getListLeadAdvisorsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -4262,23 +4273,23 @@ export const listLeadAdvisors = async ( options?: RequestInit): Promise<LeadAdvi
 
 
 
-export const getListLeadAdvisorsQueryKey = () => {
+export const getListLeadAdvisorsQueryKey = (params?: ListLeadAdvisorsParams,) => {
     return [
-    `/api/leads/advisors`
+    `/api/leads/advisors`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListLeadAdvisorsQueryOptions = <TData = Awaited<ReturnType<typeof listLeadAdvisors>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadAdvisors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListLeadAdvisorsQueryOptions = <TData = Awaited<ReturnType<typeof listLeadAdvisors>>, TError = ErrorType<unknown>>(params?: ListLeadAdvisorsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadAdvisors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListLeadAdvisorsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListLeadAdvisorsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeadAdvisors>>> = ({ signal }) => listLeadAdvisors({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeadAdvisors>>> = ({ signal }) => listLeadAdvisors(params, { signal, ...requestOptions });
 
 
 
@@ -4296,11 +4307,11 @@ export type ListLeadAdvisorsQueryError = ErrorType<unknown>
  */
 
 export function useListLeadAdvisors<TData = Awaited<ReturnType<typeof listLeadAdvisors>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadAdvisors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListLeadAdvisorsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadAdvisors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListLeadAdvisorsQueryOptions(options)
+  const queryOptions = getListLeadAdvisorsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -32785,6 +32796,226 @@ export const useTestSmtpConnection = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getTestSmtpConnectionMutationOptions(options));
+    }
+
+export const getListInternalEmailRecipientsUrl = () => {
+
+
+
+
+  return `/api/emails/internal-recipients`
+}
+
+/**
+ * @summary List per-template internal email routing and eligible staff
+ */
+export const listInternalEmailRecipients = async ( options?: RequestInit): Promise<InternalEmailRecipientSetting[]> => {
+
+  return customFetch<InternalEmailRecipientSetting[]>(getListInternalEmailRecipientsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInternalEmailRecipientsQueryKey = () => {
+    return [
+    `/api/emails/internal-recipients`
+    ] as const;
+    }
+
+
+export const getListInternalEmailRecipientsQueryOptions = <TData = Awaited<ReturnType<typeof listInternalEmailRecipients>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInternalEmailRecipients>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInternalEmailRecipientsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInternalEmailRecipients>>> = ({ signal }) => listInternalEmailRecipients({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInternalEmailRecipients>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInternalEmailRecipientsQueryResult = NonNullable<Awaited<ReturnType<typeof listInternalEmailRecipients>>>
+export type ListInternalEmailRecipientsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List per-template internal email routing and eligible staff
+ */
+
+export function useListInternalEmailRecipients<TData = Awaited<ReturnType<typeof listInternalEmailRecipients>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInternalEmailRecipients>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInternalEmailRecipientsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateInternalEmailRecipientsUrl = (key: string,) => {
+
+
+
+
+  return `/api/emails/internal-recipients/${key}`
+}
+
+/**
+ * @summary Replace the custom staff list (an empty list turns off this email type)
+ */
+export const updateInternalEmailRecipients = async (key: string,
+    updateInternalEmailRecipientsBody: UpdateInternalEmailRecipientsBody, options?: RequestInit): Promise<InternalEmailRecipientResult> => {
+
+  return customFetch<InternalEmailRecipientResult>(getUpdateInternalEmailRecipientsUrl(key),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateInternalEmailRecipientsBody)
+  }
+);}
+
+
+
+
+
+export const getUpdateInternalEmailRecipientsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInternalEmailRecipients>>, TError,{key: string;data: BodyType<UpdateInternalEmailRecipientsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInternalEmailRecipients>>, TError,{key: string;data: BodyType<UpdateInternalEmailRecipientsBody>}, TContext> => {
+
+const mutationKey = ['updateInternalEmailRecipients'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInternalEmailRecipients>>, {key: string;data: BodyType<UpdateInternalEmailRecipientsBody>}> = (props) => {
+          const {key,data} = props ?? {};
+
+          return  updateInternalEmailRecipients(key,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInternalEmailRecipientsMutationResult = NonNullable<Awaited<ReturnType<typeof updateInternalEmailRecipients>>>
+    export type UpdateInternalEmailRecipientsMutationBody = BodyType<UpdateInternalEmailRecipientsBody>
+    export type UpdateInternalEmailRecipientsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Replace the custom staff list (an empty list turns off this email type)
+ */
+export const useUpdateInternalEmailRecipients = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInternalEmailRecipients>>, TError,{key: string;data: BodyType<UpdateInternalEmailRecipientsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInternalEmailRecipients>>,
+        TError,
+        {key: string;data: BodyType<UpdateInternalEmailRecipientsBody>},
+        TContext
+      > => {
+      return useMutation(getUpdateInternalEmailRecipientsMutationOptions(options));
+    }
+
+export const getResetInternalEmailRecipientsUrl = (key: string,) => {
+
+
+
+
+  return `/api/emails/internal-recipients/${key}`
+}
+
+/**
+ * @summary Restore built-in default routing for this email type
+ */
+export const resetInternalEmailRecipients = async (key: string, options?: RequestInit): Promise<InternalEmailRecipientResult> => {
+
+  return customFetch<InternalEmailRecipientResult>(getResetInternalEmailRecipientsUrl(key),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getResetInternalEmailRecipientsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetInternalEmailRecipients>>, TError,{key: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetInternalEmailRecipients>>, TError,{key: string}, TContext> => {
+
+const mutationKey = ['resetInternalEmailRecipients'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetInternalEmailRecipients>>, {key: string}> = (props) => {
+          const {key} = props ?? {};
+
+          return  resetInternalEmailRecipients(key,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetInternalEmailRecipientsMutationResult = NonNullable<Awaited<ReturnType<typeof resetInternalEmailRecipients>>>
+
+    export type ResetInternalEmailRecipientsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Restore built-in default routing for this email type
+ */
+export const useResetInternalEmailRecipients = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetInternalEmailRecipients>>, TError,{key: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetInternalEmailRecipients>>,
+        TError,
+        {key: string},
+        TContext
+      > => {
+      return useMutation(getResetInternalEmailRecipientsMutationOptions(options));
     }
 
 export const getUpdateEmailTemplateOverrideUrl = (key: string,) => {

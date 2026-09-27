@@ -10621,6 +10621,44 @@ export interface Customer360 {
   openGates: Gate[];
 }
 
+export type InternalEmailRecipientResultMode = typeof InternalEmailRecipientResultMode[keyof typeof InternalEmailRecipientResultMode];
+
+
+export const InternalEmailRecipientResultMode = {
+  default: 'default',
+  custom: 'custom',
+} as const;
+
+export interface InternalEmailRecipientResult {
+  template: string;
+  mode: InternalEmailRecipientResultMode;
+  userIds: number[];
+}
+
+export type InternalEmailRecipientSettingMode = typeof InternalEmailRecipientSettingMode[keyof typeof InternalEmailRecipientSettingMode];
+
+
+export const InternalEmailRecipientSettingMode = {
+  default: 'default',
+  custom: 'custom',
+} as const;
+
+export type InternalEmailRecipientSettingEligibleItem = {
+  id: number;
+  /** @nullable */
+  name: string | null;
+  email: string;
+};
+
+export interface InternalEmailRecipientSetting {
+  template: string;
+  label: string;
+  module: string;
+  mode: InternalEmailRecipientSettingMode;
+  userIds: number[];
+  eligible: InternalEmailRecipientSettingEligibleItem[];
+}
+
 /**
  * @nullable
  */
@@ -11707,6 +11745,13 @@ createdFrom?: string;
 createdTo?: string;
 };
 
+export type ListLeadAdvisorsParams = {
+/**
+ * Include active call-centre representatives for manual qualification-queue assignment.
+ */
+callCentre?: boolean;
+};
+
 export type ListLeadSourcesParams = {
 includeInactive?: boolean;
 };
@@ -12413,6 +12458,10 @@ action?: string;
 module?: string;
 search?: string;
 limit?: number;
+};
+
+export type UpdateInternalEmailRecipientsBody = {
+  userIds: number[];
 };
 
 export type ListEmailLogsParams = {

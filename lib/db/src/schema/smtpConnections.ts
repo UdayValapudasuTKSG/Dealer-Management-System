@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   serial,
   text,
@@ -110,3 +111,16 @@ export const emailTemplateOverridesTable = pgTable(
 
 export type EmailTemplateOverride =
   typeof emailTemplateOverridesTable.$inferSelect;
+
+/** Missing row = built-in recipient routing; empty userIds = deliberately off. */
+export const internalEmailRecipientsTable = pgTable(
+  "internal_email_recipients",
+  {
+    id: serial("id").primaryKey(),
+    dealerId: integer("dealer_id").notNull(),
+    templateKey: text("template_key").notNull(),
+    userIds: jsonb("user_ids").$type<number[]>().notNull().default([]),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("internal_email_recipients_dealer_key_uq").on(t.dealerId, t.templateKey)],
+);

@@ -131,7 +131,7 @@ export function LeadWorkflowDialog({
       enabled: open && leadId != null,
     },
   });
-  const advisors = useListLeadAdvisors({
+  const advisors = useListLeadAdvisors(undefined, {
     query: { queryKey: ["lead-advisors"], enabled: open },
   });
   const { data: vehicles } = useListVehicles();

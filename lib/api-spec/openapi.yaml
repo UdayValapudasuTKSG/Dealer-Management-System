@@ -1298,6 +1298,12 @@ paths:
       operationId: listLeadAdvisors
       tags: [leads]
       summary: List users assignable as lead owners
+      parameters:
+        - name: callCentre
+          in: query
+          required: false
+          description: Include active call-centre representatives for manual qualification-queue assignment.
+          schema: { type: boolean }
       responses:
         "200":
           description: Assignable advisors
@@ -9494,6 +9500,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /emails/internal-recipients:
+    get:
+      operationId: listInternalEmailRecipients
+      summary: List per-template internal email routing and eligible staff
+      tags: [emails]
+      responses:
+        "200":
+          description: Internal email recipient settings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InternalEmailRecipientSetting"
+  /emails/internal-recipients/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: updateInternalEmailRecipients
+      summary: Replace the custom staff list (an empty list turns off this email type)
+      tags: [emails]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userIds]
+              properties:
+                userIds:
+                  type: array
+                  items: { type: integer }
+      responses:
+        "200":
+          description: Custom recipients saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalEmailRecipientResult"
+    delete:
+      operationId: resetInternalEmailRecipients
+      summary: Restore built-in default routing for this email type
+      tags: [emails]
+      responses:
+        "200":
+          description: Defaults restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalEmailRecipientResult"
   /emails/templates/{key}/override:
     put:
       operationId: updateEmailTemplateOverride
@@ -17494,6 +17553,35 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Gate" }
 
+    InternalEmailRecipientResult:
+      type: object
+      required: [template, mode, userIds]
+      properties:
+        template: { type: string }
+        mode: { type: string, enum: [default, custom] }
+        userIds:
+          type: array
+          items: { type: integer }
+    InternalEmailRecipientSetting:
+      type: object
+      required: [template, label, module, mode, userIds, eligible]
+      properties:
+        template: { type: string }
+        label: { type: string }
+        module: { type: string }
+        mode: { type: string, enum: [default, custom] }
+        userIds:
+          type: array
+          items: { type: integer }
+        eligible:
+          type: array
+          items:
+            type: object
+            required: [id, name, email]
+            properties:
+              id: { type: integer }
+              name: { type: ["string", "null"] }
+              email: { type: string }
     EmailSettings:
       type: object
       required:

@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
   db, leadsTable, callLogsTable, tasksTable, dealerUsersTable, timelineEventsTable,
-  emailLogsTable, type Lead,
+  emailLogsTable, usersTable, rolesTable, type Lead,
 } from "@workspace/db";
 import { isActiveCallCentreLead, isCallCentreRole } from "./call-centre-policy";
 import { lockAssignmentQueue, nextRoundRobinCandidate } from "./lead-assignment";
@@ -26,6 +26,60 @@ export function validateFollowUpDate(value: string | undefined, today: string): 
     throw new CallCentreError(400, "Choose a valid follow-up date today or later in the dealership timezone");
   }
   return value;
+}
+
+/** Manual queue reassignment; never changes the lead's qualification state or follow-up date. */
+export async function reassignCallCentreLead(
+  dealerId: number,
+  leadId: number,
+  userId: number,
+  actor: { name: string | null },
+): Promise<Lead> {
+  return db.transaction(async (tx) => {
+    await lockAssignmentQueue(tx, dealerId);
+    const [lead] = await tx.select().from(leadsTable).where(and(
+      eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId), isNull(leadsTable.deletedAt),
+    )).for("update");
+    if (!lead) throw new CallCentreError(404, "Lead not found");
+    if (!isActiveCallCentreLead(lead) || lead.callCentreTransferredAt ||
+        !["new", "contacted"].includes(lead.phase) || ["lost", "converted"].includes(lead.status)) {
+      throw new CallCentreError(409, "This lead is no longer awaiting call-centre qualification");
+    }
+    const [rep] = await tx.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: rolesTable.name })
+      .from(dealerUsersTable)
+      .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
+      .innerJoin(rolesTable, eq(rolesTable.id, dealerUsersTable.roleId))
+      .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, userId),
+        eq(usersTable.status, "active")));
+    if (!rep || !isCallCentreRole(rep.role)) {
+      throw new CallCentreError(400, "Select an active Call Center or Centre Representative in this dealership");
+    }
+    if (lead.ownerUserId === rep.id && lead.callCentreRepId === rep.id) {
+      return lead;
+    }
+    const now = new Date();
+    const name = rep.name ?? rep.email ?? `User #${rep.id}`;
+    const [updated] = await tx.update(leadsTable).set({
+      ownerUserId: rep.id, assignedTo: name, callCentreRepId: rep.id,
+      callCentreAssignedAt: now,
+      status: lead.status === "new" ? "assigned" : lead.status,
+    }).where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId))).returning();
+    await tx.update(dealerUsersTable).set({ lastLeadAssignedAt: now }).where(and(
+      eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, rep.id),
+    ));
+    await tx.update(tasksTable).set({ assigneeUserId: rep.id, updatedAt: now }).where(and(
+      eq(tasksTable.dealerId, dealerId), eq(tasksTable.leadId, leadId),
+      inArray(tasksTable.kind, ["call_centre", "callback", "cadence"]),
+      inArray(tasksTable.status, ["open", "in_progress"]),
+    ));
+    await tx.insert(timelineEventsTable).values({
+      dealerId, customerId: lead.customerId, domain: "leads", kind: "advisor_assigned",
+      title: `Call centre reassigned to ${name}`,
+      detail: `${actor.name ?? "Staff"} reassigned the call-centre lead from ${lead.assignedTo ?? "Unassigned"} to ${name}.`,
+      actor: actor.name ?? "Staff", isAgent: false, refType: "lead", refId: leadId,
+    });
+    return updated!;
+  });
 }
 
 /** Call, ownership, follow-up task, timeline and queue clock commit together. */

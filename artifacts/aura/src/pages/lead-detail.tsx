@@ -10,6 +10,9 @@ import {
   useGetLeadQuote,
   useCreateLeadNote,
   useUpdateLead,
+  useAssignLead,
+  useListLeadAdvisors,
+  getListLeadAdvisorsQueryKey,
   useListVehicles,
   useListDeals,
   useListInvoices,
@@ -28,6 +31,9 @@ import {
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
   getListLeadsQueryKey,
+  getListTasksQueryKey,
+  getGetCallCentreReportQueryKey,
+  getGetReportQueryKey,
   getListDealsQueryKey,
   getListInvoicesQueryKey,
   getListOutstandingBalancesQueryKey,
@@ -808,8 +814,9 @@ function VehicleSwapDialog({
   );
 }
 
-function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
+function editLeadFields(lead: Lead, vehicles: Vehicle[], representative?: FieldDef): FieldDef[] {
   return [
+    ...(representative ? [representative] : []),
     {
       name: "name",
       label: "Name",
@@ -1035,6 +1042,18 @@ export default function LeadDetail() {
   const canEdit =
     can("leads", "edit") &&
     (!editRestrictedToOwn || (isCallCentreRep ? ownsAsRep : ownsLead));
+  const canReassignCallCentre = ccHeld && can("leads", "assign");
+  const { data: assignableStaff } = useListLeadAdvisors({ callCentre: true }, {
+    query: {
+      queryKey: getListLeadAdvisorsQueryKey({ callCentre: true }),
+      enabled: !!lead && (canReassignCallCentre || cc.callCentreRepId != null),
+    },
+  });
+  const callCentreReps = (assignableStaff ?? []).filter((staff) => isCallCentreRole(staff.roleName));
+  const repName = cc.callCentreRepId == null ? (lead?.assignedTo ?? "Unassigned")
+    : assignableStaff?.find((staff) => staff.id === cc.callCentreRepId)?.name
+      ?? (lead?.ownerUserId === cc.callCentreRepId ? lead.assignedTo : null)
+      ?? `Rep #${cc.callCentreRepId}`;
   const canDeskDeal =
     !ccHeld &&
     !isCallCentreRep &&
@@ -1081,6 +1100,19 @@ export default function LeadDetail() {
       },
       onError: () =>
         toast({ title: "Could not update lead", variant: "destructive" }),
+    },
+  });
+  const assignLead = useAssignLead({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+        qc.invalidateQueries({ queryKey: getListTasksQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetCallCentreReportQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetReportQueryKey() });
+        toast({ title: "Call-centre representative updated" });
+      },
     },
   });
 
@@ -1678,7 +1710,7 @@ export default function LeadDetail() {
                 </Button>
               </>
             )}
-            {canEdit && (
+            {(canEdit || canReassignCallCentre) && (
               <Button
                 variant="outline"
                 onClick={() => setEditOpen(true)}
@@ -1796,11 +1828,7 @@ export default function LeadDetail() {
           </div>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs flex-1">
             <CcFact label="Representative">
-              {cc.callCentreRepId == null
-                ? "Unassigned"
-                : isRepOfRecord
-                  ? "You"
-                  : `Rep #${cc.callCentreRepId}`}
+              {repName}
             </CcFact>
             <CcFact label="Queued">
               {cc.callCentreAssignedAt ? formatGuyanaDateTime(cc.callCentreAssignedAt) : "—"}
@@ -3785,7 +3813,7 @@ export default function LeadDetail() {
         onOpenChange={setWorkflowOpen}
       />
 
-      {canEdit && editOpen && (
+      {(canEdit || canReassignCallCentre) && editOpen && (
         <CreateRecordDialog
           title="Edit Lead"
           description="Update the record — changes apply immediately."
@@ -3793,10 +3821,22 @@ export default function LeadDetail() {
           open={editOpen}
           onOpenChange={setEditOpen}
           submitLabel="Save changes"
-          pending={updateLead.isPending}
-          fields={editLeadFields(lead, vehicles ?? [])}
+          pending={updateLead.isPending || assignLead.isPending}
+          fields={editLeadFields(lead, vehicles ?? [], canReassignCallCentre ? {
+            name: "callCentreReassignTo",
+            label: `Call-centre representative · Current: ${repName}`,
+            type: "select",
+            span: "full",
+            defaultValue: "keep",
+            options: [
+              { value: "keep", label: `Keep current representative (${repName})` },
+              ...callCentreReps.map((staff) => ({ value: String(staff.id), label: staff.name })),
+            ],
+          } : undefined).filter((field) => canEdit || field.name === "callCentreReassignTo")}
           onSubmit={async (values) => {
             const payload = { ...values };
+            const repChoice = payload.callCentreReassignTo;
+            delete payload.callCentreReassignTo;
             if (payload.vehicleInterests) {
               try {
                 const parsedInterests = JSON.parse(payload.vehicleInterests as string).map(
@@ -3808,7 +3848,27 @@ export default function LeadDetail() {
                 delete payload.vehicleInterests;
               }
             }
-            await updateLead.mutateAsync({ id: lead.id, data: payload as unknown as LeadUpdate });
+            let detailsSaved = false;
+            if (canEdit) {
+              await updateLead.mutateAsync({ id: lead.id, data: payload as unknown as LeadUpdate });
+              detailsSaved = true;
+            }
+            if (repChoice && repChoice !== "keep" && Number(repChoice) !== cc.callCentreRepId) {
+              try {
+                await assignLead.mutateAsync({ id: lead.id, data: { userId: Number(repChoice) } });
+              } catch (err) {
+                if (!detailsSaved) throw err;
+                const apiError = err as { data?: { error?: string; message?: string }; message?: string };
+                throw {
+                  partialSuccess: true,
+                  data: {
+                    error: `Lead details were saved, but the representative was not changed: ${
+                      apiError.data?.error ?? apiError.data?.message ?? apiError.message ?? "Please try again."
+                    } Your entries remain in this dialog.`,
+                  },
+                };
+              }
+            }
           }}
         />
       )}

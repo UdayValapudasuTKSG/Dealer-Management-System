@@ -81,3 +81,4 @@
 - [Parts specification boundaries](parts-spec-boundaries.md) — internal restock is non-billable; location context does not establish branch staff membership.
 - [Publish CHECK validation](publish-check-validation.md) — unvalidated CHECK definitions can serialize incorrectly; validate clean dev constraints, then recompute the publish diff.
 - [Call-centre qualification](call-centre-qualification.md) — interested means sales handover, not completion of sales qualification gates; historical rep attribution is not edit permission.
+- [Internal email recipient policy](internal-email-recipient-policy.md) — email-only dealer overrides; empty means off, defaults remain until customized, and queued mail respects current policy.

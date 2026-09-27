@@ -4,6 +4,7 @@ export * from './generated/types';
 // type named *Params too. Explicitly prefer the runtime path validator here;
 // client query types remain available from api-client-react.
 export {
+  UpdateInternalEmailRecipientsBody,
   AcceptSupplierInvoiceVarianceParams,
   DownloadSupplierInvoiceFileParams,
   EditSupplierPurchaseInvoiceParams,

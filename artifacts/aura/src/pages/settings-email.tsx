@@ -1,8 +1,13 @@
 import { PageHero } from "@/components/layout/page-hero";
 import { SettingsTabs } from "@/components/settings-nav";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  useListInternalEmailRecipients,
+  updateInternalEmailRecipients,
+  resetInternalEmailRecipients,
+  getListInternalEmailRecipientsQueryKey,
+  type InternalEmailRecipientSetting,
   useGetEmailSettings,
   useSendTestEmail,
   useSendTemplateTestEmail,
@@ -66,6 +71,78 @@ const STATUS_STYLE: Record<string, string> = {
   sending: "border-violet-500/40 text-violet-400",
   failed: "border-red-500/50 text-red-400",
 };
+
+function InternalRecipientsCard({ canManage }: { canManage: boolean }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data, isLoading, error } = useListInternalEmailRecipients();
+  const [drafts, setDrafts] = useState<Record<string, number[]>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  useEffect(() => {
+    if (data) setDrafts(Object.fromEntries(data.map(row => [row.template, row.userIds])));
+  }, [data]);
+  const save = async (row: InternalEmailRecipientSetting, reset = false) => {
+    setSaving(row.template);
+    try {
+      if (reset) await resetInternalEmailRecipients(row.template);
+      else await updateInternalEmailRecipients(row.template, { userIds: drafts[row.template] ?? [] });
+      await qc.invalidateQueries({ queryKey: getListInternalEmailRecipientsQueryKey() });
+      toast({ title: reset ? "Default recipients restored" : "Internal email recipients saved" });
+    } catch (e) {
+      toast({
+        title: "Could not update recipients",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(null);
+    }
+  };
+  return <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+    <div>
+      <h2 className="text-sm font-semibold">Internal email recipients</h2>
+      <p className="text-xs text-muted-foreground mt-1">
+        Default keeps existing recipients. Custom sends only to selected active staff with module access.
+        Save with nobody selected to turn off that email type. In-app notifications and customer emails are unchanged.
+        Pending staff emails are checked again before dispatch; messages already sent cannot be recalled.
+      </p>
+    </div>
+    {isLoading && <p className="text-xs text-muted-foreground">Loading recipients…</p>}
+    {error && <p className="text-xs text-red-400">Could not load recipients: {String(error)}</p>}
+    <div className="grid gap-3 md:grid-cols-2">
+      {data?.map(row => {
+        const chosen = drafts[row.template] ?? row.userIds;
+        const dirty = JSON.stringify(chosen) !== JSON.stringify(row.userIds);
+        return <div key={row.template} className="rounded-xl border border-white/10 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div><div className="text-sm font-semibold">{row.label}</div>
+              <div className="text-[11px] text-muted-foreground">{row.template} · {row.module} access</div></div>
+            <Badge variant="outline">{row.mode === "default" ? "Default" : chosen.length ? "Custom" : "Off"}</Badge>
+          </div>
+          {canManage && <>
+            <div className="max-h-36 overflow-auto space-y-1" aria-label={`${row.label} recipients`}>
+              {row.eligible.map(user => <label key={user.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={chosen.includes(user.id)}
+                  onChange={e => setDrafts(prev => ({
+                    ...prev, [row.template]: e.target.checked
+                      ? [...chosen, user.id] : chosen.filter(id => id !== user.id),
+                  }))} />
+                <span>{user.name || user.email} <span className="text-muted-foreground">({user.email})</span></span>
+              </label>)}
+              {row.eligible.length === 0 && <p className="text-xs text-muted-foreground">No active staff with {row.module} visibility.</p>}
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={saving !== null || (row.mode === "custom" && !dirty)}
+                onClick={() => void save(row)}>Save custom list</Button>
+              {row.mode === "custom" && <Button size="sm" variant="outline" disabled={saving !== null}
+                onClick={() => void save(row, true)}>Reset to default</Button>}
+            </div>
+          </>}
+        </div>;
+      })}
+    </div>
+  </section>;
+}
 
 export default function SettingsEmail() {
   const { toast } = useToast();
@@ -234,6 +311,8 @@ export default function SettingsEmail() {
       <ServiceSummaryCadenceCard />
 
       <LeadSourceReportCard />
+
+      <InternalRecipientsCard canManage={canManage} />
 
       {/* Templates */}
       <div className="space-y-3">

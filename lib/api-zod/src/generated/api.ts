@@ -2300,6 +2300,10 @@ export const BookTestDriveSlotResponse = zod.object({
 /**
  * @summary List users assignable as lead owners
  */
+export const ListLeadAdvisorsQueryParams = zod.object({
+  "callCentre": zod.coerce.boolean().optional().describe('Include active call-centre representatives for manual qualification-queue assignment.')
+})
+
 export const ListLeadAdvisorsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -17496,6 +17500,56 @@ export const DeleteSmtpConnectionResponse = zod.object({
 export const TestSmtpConnectionResponse = zod.object({
   "ok": zod.boolean(),
   "error": zod.string().nullable()
+})
+
+
+/**
+ * @summary List per-template internal email routing and eligible staff
+ */
+export const ListInternalEmailRecipientsResponseItem = zod.object({
+  "template": zod.string(),
+  "label": zod.string(),
+  "module": zod.string(),
+  "mode": zod.enum(['default', 'custom']),
+  "userIds": zod.array(zod.number()),
+  "eligible": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string().nullable(),
+  "email": zod.string()
+}))
+})
+export const ListInternalEmailRecipientsResponse = zod.array(ListInternalEmailRecipientsResponseItem)
+
+
+/**
+ * @summary Replace the custom staff list (an empty list turns off this email type)
+ */
+export const UpdateInternalEmailRecipientsParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const UpdateInternalEmailRecipientsBody = zod.object({
+  "userIds": zod.array(zod.number())
+})
+
+export const UpdateInternalEmailRecipientsResponse = zod.object({
+  "template": zod.string(),
+  "mode": zod.enum(['default', 'custom']),
+  "userIds": zod.array(zod.number())
+})
+
+
+/**
+ * @summary Restore built-in default routing for this email type
+ */
+export const ResetInternalEmailRecipientsParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const ResetInternalEmailRecipientsResponse = zod.object({
+  "template": zod.string(),
+  "mode": zod.enum(['default', 'custom']),
+  "userIds": zod.array(zod.number())
 })
 
 

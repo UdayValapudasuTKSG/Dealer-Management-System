@@ -16,6 +16,7 @@ import {
   usersWithPermission,
 } from "./notify-matrix";
 import { logger } from "./logger";
+import { eligibleInternalRecipients, internalRecipientPolicy } from "./internal-email-recipients";
 
 /**
  * R6.2 trigger fan-out helpers. Each function implements one row of the
@@ -56,12 +57,12 @@ export async function notifyInternal(opts: {
   entityId: number;
   dedupeKey: string;
   data?: TemplateData;
+  internalRequiredModule?: "finance" | "customers";
   /** Skip the email leg (In-App only rows of the matrix). */
   inAppOnly?: boolean;
 }): Promise<void> {
   const ids = [...new Set(opts.userIds)];
-  if (ids.length === 0) return;
-  await notifyUsers(ids, {
+  if (ids.length > 0) await notifyUsers(ids, {
     dealerId: opts.dealerId,
     type: opts.type,
     title: opts.title,
@@ -71,6 +72,21 @@ export async function notifyInternal(opts: {
     entityId: opts.entityId,
   });
   if (opts.inAppOnly) return;
+  // A custom recipient set may include staff even when default routing
+  // resolves nobody. Do not manufacture in-app recipients for those staff.
+  if (ids.length === 0) {
+    const policy = await internalRecipientPolicy(opts.dealerId, opts.template);
+    if (!policy) return;
+    const [first] = await eligibleInternalRecipients(opts.dealerId, opts.template);
+    if (!first) return;
+    await enqueueEmail({
+      template: opts.template, to: first.email, dealerId: opts.dealerId,
+      data: { title: opts.title, body: opts.body, ...(opts.data ?? {}) },
+      dedupeKey: opts.dedupeKey,
+      internalRequiredModule: opts.internalRequiredModule,
+    });
+    return;
+  }
   const emails = await userEmails(ids);
   for (const id of ids) {
     const to = emails.get(id);
@@ -81,6 +97,7 @@ export async function notifyInternal(opts: {
       dealerId: opts.dealerId,
       data: { title: opts.title, body: opts.body, ...(opts.data ?? {}) },
       dedupeKey: `${opts.dedupeKey}:u${id}`,
+      internalRequiredModule: opts.internalRequiredModule,
     });
   }
 }
@@ -103,7 +120,6 @@ export function notifyPartLowStock(part: {
   fire("part.low_stock", async () => {
     let users = await usersWithPermission(part.dealerId, "parts");
     if (users.length === 0) users = await serviceUsers(part.dealerId);
-    if (users.length === 0) return;
     await notifyInternal({
       dealerId: part.dealerId,
       userIds: users,
@@ -133,7 +149,15 @@ export function notifyPartsRequisitionSubmitted(requisition: {
   lineCount: number;
 }): void {
   fire("parts.requisition.submitted", async () => {
-    const users = await usersWithPermission(requisition.dealerId, "parts");
+    let users = await usersWithPermission(requisition.dealerId, "parts");
+    if (users.length === 0) {
+      const policy = await internalRecipientPolicy(requisition.dealerId, "parts.requisition.submitted");
+      if (policy) {
+        const [seed] = (await eligibleInternalRecipients(requisition.dealerId, "parts.requisition.submitted"))
+          .filter(u => policy.userIds.includes(u.id));
+        if (seed) users = [seed.id];
+      }
+    }
     if (users.length === 0) return;
     const context = requisition.jobCardId == null
       ? "for inventory restocking"
@@ -531,6 +555,7 @@ export function notifyManagerNote(opts: {
       entityId: opts.noteId,
       dedupeKey: `note:${opts.noteId}:${opts.advisorUserId}`,
       inAppOnly: !opts.urgent,
+      internalRequiredModule: opts.link.startsWith("/customers/") ? "customers" : undefined,
       data: { author: opts.authorName, note: opts.excerpt },
     });
   });

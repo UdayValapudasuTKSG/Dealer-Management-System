@@ -35,6 +35,7 @@ import {
 import { divisionSalesManagers } from "./notify-matrix";
 import { autoAssignLead } from "./lead-assignment";
 import { logger } from "./logger";
+import { chooseInternalRecipients, eligibleInternalRecipients, internalRecipientPolicy } from "./internal-email-recipients";
 import { withEffectiveContactDates } from "./lead-contact";
 import { suppressesCustomerCommunications } from "./delivery-import-provenance";
 import {
@@ -137,6 +138,26 @@ async function sweepLeadSla(): Promise<void> {
                 lead.divisionId ?? null,
               );
         managers = managers.filter((id) => id !== advisorId);
+        if (managers.length === 0) {
+          const escalationPolicy = await internalRecipientPolicy(lead.dealerId, "lead.sla.breach.manager");
+          if (escalationPolicy) {
+            const [seed] = chooseInternalRecipients(
+              await eligibleInternalRecipients(lead.dealerId, "lead.sla.breach.manager"),
+              escalationPolicy.userIds,
+            );
+            if (seed) {
+              // Email-only seed. Do not give custom recipients an in-app bell
+              // when the normal manager resolution found nobody.
+              await enqueueInternalEmail({
+                dealerId: lead.dealerId,
+                userId: seed.id,
+                template: "lead.sla.breach.manager",
+                dedupeKey: `lead:sla24:breach:${lead.id}:manager:u${seed.id}`,
+                data: { name: lead.name },
+              });
+            }
+          }
+        }
         for (const managerId of managers) {
           await notifyUser({
             userId: managerId,
@@ -415,8 +436,10 @@ const SUMMARY_LOOKAHEAD_DAYS: Record<"daily" | "weekly", number> = {
   weekly: 7,
 };
 
-async function sweepServiceSummaries(): Promise<void> {
-  const dealers = await db.select({ id: dealersTable.id }).from(dealersTable);
+export async function sweepServiceSummaries(onlyDealerIds?: number[]): Promise<void> {
+  const dealers = onlyDealerIds
+    ? onlyDealerIds.map(id => ({ id }))
+    : await db.select({ id: dealersTable.id }).from(dealersTable);
   const now = new Date();
 
   for (const dealer of dealers) {
@@ -439,6 +462,16 @@ async function sweepServiceSummaries(): Promise<void> {
         "approve",
       ]);
       if (managers.length === 0) managers = await generalManagers(dealer.id);
+      const summaryPolicy = await internalRecipientPolicy(dealer.id, "service.summary.management");
+      if (summaryPolicy) {
+        // The central enqueue fans out once to the custom set. Do not require
+        // a manager to exist for the dealer (or send once per default manager).
+        const [seed] = chooseInternalRecipients(
+          await eligibleInternalRecipients(dealer.id, "service.summary.management"),
+          summaryPolicy.userIds,
+        );
+        managers = seed ? [seed.id] : [];
+      }
       if (managers.length === 0) continue;
 
       const upcoming = await db
@@ -555,7 +588,15 @@ export async function sweepLeadSourceReports(
       const parts = zonedParts(now, tz);
       if (parts.hour * 60 + parts.minute < sendH * 60 + sendM) continue;
 
-      const recipients = await generalManagers(dealer.id);
+      let recipients = await generalManagers(dealer.id);
+      const reportPolicy = await internalRecipientPolicy(dealer.id, "leads.source.report.daily");
+      if (reportPolicy) {
+        const [seed] = chooseInternalRecipients(
+          await eligibleInternalRecipients(dealer.id, "leads.source.report.daily"),
+          reportPolicy.userIds,
+        );
+        recipients = seed ? [seed.id] : [];
+      }
       if (recipients.length === 0) continue;
 
       // Yesterday's dealer-local calendar day as UTC bounds.

@@ -194,14 +194,16 @@ export function CreateRecordDialog({
     try {
       await onSubmit(payload);
     } catch (err: unknown) {
-      // Never fail silently — the record was NOT saved.
-      const apiErr = err as { data?: { message?: string; error?: string } };
+      // Keep entered values on failure; callers can identify multi-step partial saves.
+      const apiErr = err as { partialSuccess?: boolean; data?: { message?: string; error?: string } };
       toast({
-        title: "Could not save",
+        title: apiErr?.partialSuccess ? "Partially saved" : "Could not save",
         description:
           apiErr?.data?.message ||
           apiErr?.data?.error ||
-          "The record was not saved. Please try again.",
+          (apiErr?.partialSuccess
+            ? "Some changes were saved. Review the record and try again."
+            : "The record was not saved. Please try again."),
         variant: "destructive",
       });
       return; // keep the dialog open with the entered values
