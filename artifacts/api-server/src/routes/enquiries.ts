@@ -166,6 +166,9 @@ router.post("/enquiries", async (req, res): Promise<void> => {
       phone: phone ?? null,
       channel: "web",
       source: source ?? "website",
+      // Public website provenance takes precedence over the editable marketing
+      // source label (e.g. a referral submitted through the enquiry form).
+      callCentreStatus: "pending",
       priority: "medium",
       phase: "new",
       status: "new",

@@ -27,6 +27,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Phone, PhoneCall, PhoneOff, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  useCallCentreDisposition,
+  dispositionErrorMessage,
+  type CallCentreOutcome,
+} from "@/hooks/use-call-centre";
 import { cn } from "@/lib/utils";
 
 type Direction = "outbound" | "inbound";
@@ -50,6 +55,29 @@ const STATUS_OPTIONS: { value: CallStatus; label: string }[] = [
   { value: "callback", label: "Callback requested" },
 ];
 
+const CC_OUTCOMES: { value: CallCentreOutcome; label: string; hint: string }[] = [
+  {
+    value: "interested",
+    label: "Interested",
+    hint: "Transferred automatically to the next Sales Advisor in the round-robin.",
+  },
+  {
+    value: "follow_up",
+    label: "Follow up",
+    hint: "Stays with you. Pick the follow-up date and note what was agreed.",
+  },
+  {
+    value: "not_interested",
+    label: "Not interested",
+    hint: "The lead is closed as lost.",
+  },
+];
+
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 const SENTIMENT_STYLE: Record<Sentiment, string> = {
   positive: "bg-emerald-500/15 text-emerald-500 ring-emerald-500/30",
   neutral: "bg-foreground/[0.06] text-foreground/70 ring-white/15",
@@ -68,13 +96,20 @@ export function CallDialog({
   leadPhone,
   open,
   onOpenChange,
+  callCentre = false,
 }: {
   leadId: number;
   leadName: string;
   leadPhone: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** First-call qualification mode for leads held by the call centre. */
+  callCentre?: boolean;
 }) {
+  const disposition = useCallCentreDisposition(leadId);
+  const [ccOutcome, setCcOutcome] = useState<CallCentreOutcome | null>(null);
+  const [ccFollowUp, setCcFollowUp] = useState("");
+  const submittingRef = useRef(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createCall = useCreateLeadCall();
@@ -131,6 +166,8 @@ export function CallDialog({
     setCallbackAt("");
     setNotes("");
     setRationale(null);
+    setCcOutcome(null);
+    setCcFollowUp("");
     setLiveState("idle");
     setElapsed(0);
     setLiveCallLogId(null);
@@ -353,6 +390,79 @@ export function CallDialog({
     }
   };
 
+  // Call-centre decision: one atomic request. After a live browser call the
+  // server-created call log is referenced via existingCallId (no duplicate).
+  const saveDisposition = async (fromLiveCall: boolean) => {
+    if (submittingRef.current || disposition.isPending) return;
+    if (!ccOutcome) {
+      toast({ title: "Choose a call outcome", variant: "destructive" });
+      return;
+    }
+    if (ccOutcome === "follow_up") {
+      if (!ccFollowUp) {
+        toast({ title: "Pick a follow-up date", variant: "destructive" });
+        return;
+      }
+      if (ccFollowUp < todayKey()) {
+        toast({ title: "Follow-up date cannot be in the past", variant: "destructive" });
+        return;
+      }
+    }
+    if (!notes.trim()) {
+      toast({
+        title: "Add call notes",
+        description: "Note what was said so the next person picks up from here.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (fromLiveCall && liveCallLogId == null) {
+      toast({
+        title: "Call record still syncing",
+        description: "Give it a moment and try saving again.",
+      });
+      return;
+    }
+    const mins = minutes.trim() === "" ? null : Number(minutes);
+    submittingRef.current = true;
+    try {
+      await disposition.mutateAsync({ id: leadId, data: {
+        outcome: ccOutcome,
+        notes: notes.trim(),
+        ...(ccOutcome === "follow_up" ? { followUpDate: ccFollowUp } : {}),
+        ...(fromLiveCall && liveCallLogId != null
+          ? { existingCallId: liveCallLogId }
+          : mins != null && Number.isFinite(mins) && mins >= 0
+            ? { durationSeconds: Math.round(mins * 60) }
+            : {}),
+      } });
+      toast({
+        title:
+          ccOutcome === "interested"
+            ? "Transferred to a Sales Advisor"
+            : ccOutcome === "follow_up"
+              ? "Follow-up scheduled"
+              : "Marked not interested",
+        description:
+          ccOutcome === "interested"
+            ? `${leadName} was assigned to the next Sales Advisor in rotation.`
+            : ccOutcome === "follow_up"
+              ? `${leadName} stays in your queue for ${ccFollowUp}.`
+              : `${leadName} was closed as lost.`,
+      });
+      reset();
+      onOpenChange(false);
+    } catch (err) {
+      toast({
+        title: "Could not save the call decision",
+        description: dispositionErrorMessage(err),
+        variant: "destructive",
+      });
+    } finally {
+      submittingRef.current = false;
+    }
+  };
+
   const liveActive = liveState === "connecting" || liveState === "ringing" || liveState === "in_call";
   const afterLiveCall = liveState === "ended";
 
@@ -436,6 +546,7 @@ export function CallDialog({
         <div className="space-y-4">
           {!afterLiveCall && (
             <div className="grid grid-cols-2 gap-3">
+              {!callCentre && (
               <div>
                 <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
                   Direction
@@ -458,6 +569,7 @@ export function CallDialog({
                   ))}
                 </div>
               </div>
+              )}
               <div>
                 <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
                   Duration (min)
@@ -473,7 +585,52 @@ export function CallDialog({
             </div>
           )}
 
-          {!afterLiveCall && (
+          {callCentre && (
+            <div data-testid="section-call-centre-decision">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
+                Call centre decision
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {CC_OUTCOMES.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setCcOutcome(o.value)}
+                    data-testid={`button-cc-outcome-${o.value}`}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-colors",
+                      ccOutcome === o.value
+                        ? "bg-primary text-white ring-primary"
+                        : "bg-foreground/[0.04] text-muted-foreground ring-white/10 hover:text-foreground",
+                    )}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              {ccOutcome && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {CC_OUTCOMES.find((o) => o.value === ccOutcome)?.hint}
+                </p>
+              )}
+              {ccOutcome === "follow_up" && (
+                <div className="mt-3">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
+                    Follow-up date <span className="text-primary">*</span>
+                  </div>
+                  <Input
+                    type="date"
+                    min={todayKey()}
+                    value={ccFollowUp}
+                    onChange={(e) => setCcFollowUp(e.target.value)}
+                    data-testid="input-cc-follow-up-date"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {!afterLiveCall && !callCentre && (
             <div>
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
                 Outcome
@@ -498,7 +655,7 @@ export function CallDialog({
             </div>
           )}
 
-          {!afterLiveCall && status === "callback" && (
+          {!afterLiveCall && !callCentre && status === "callback" && (
             <div>
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
                 Callback time
@@ -517,6 +674,9 @@ export function CallDialog({
           <div>
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
               Notes
+              {callCentre && (
+                <span className="text-primary"> *</span>
+              )}
             </div>
             <Textarea
               value={notes}
@@ -530,7 +690,7 @@ export function CallDialog({
             />
           </div>
 
-          {!afterLiveCall && (
+          {!afterLiveCall && !callCentre && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -607,11 +767,25 @@ export function CallDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={createCall.isPending || updateCall.isPending}
+            disabled={createCall.isPending || updateCall.isPending || disposition.isPending}
           >
             Cancel
           </Button>
-          {afterLiveCall ? (
+          {callCentre ? (
+            <Button
+              onClick={() => void saveDisposition(afterLiveCall)}
+              disabled={disposition.isPending || liveActive || !ccOutcome}
+              className="gap-1.5"
+              data-testid="button-save-cc-decision"
+            >
+              {disposition.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Phone className="w-4 h-4" />
+              )}
+              {afterLiveCall ? "Save decision" : "Log call & save decision"}
+            </Button>
+          ) : afterLiveCall ? (
             <Button
               onClick={saveLiveAnnotation}
               disabled={updateCall.isPending}

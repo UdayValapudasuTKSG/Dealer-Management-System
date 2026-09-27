@@ -7,6 +7,7 @@ import {
   timestamp,
   jsonb,
   boolean,
+  date,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -66,6 +67,11 @@ export const leadsTable = pgTable("leads", {
   preferredBranch: text("preferred_branch"),
   assignedTo: text("assigned_to"),
   ownerUserId: integer("owner_user_id"),
+  callCentreStatus: text("call_centre_status"),
+  callCentreRepId: integer("call_centre_rep_id"),
+  callCentreAssignedAt: timestamp("call_centre_assigned_at", { withTimezone: true }),
+  callCentreTransferredAt: timestamp("call_centre_transferred_at", { withTimezone: true }),
+  callCentreFollowUpDate: date("call_centre_follow_up_date", { mode: "string" }),
   testDriveAt: timestamp("test_drive_at", { withTimezone: true }),
   testDriveBranch: text("test_drive_branch"),
   // Public self-service booking link token (emailed to the customer).
@@ -134,6 +140,11 @@ export const leadsTable = pgTable("leads", {
 export const insertLeadSchema = createInsertSchema(leadsTable, {
   phase: z.enum(LEAD_PHASES),
 }).omit({ dealerId: true,
+  callCentreStatus: true,
+  callCentreRepId: true,
+  callCentreAssignedAt: true,
+  callCentreTransferredAt: true,
+  callCentreFollowUpDate: true,
   id: true,
   createdAt: true,
 });

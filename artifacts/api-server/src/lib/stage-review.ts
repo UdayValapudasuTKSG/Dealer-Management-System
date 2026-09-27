@@ -77,6 +77,8 @@ export const CHECK_OWNER: Record<string, string> = {
 
 /** The next stage this lead could advance to, or null when at the end. */
 export function nextAdvanceStage(lead: Lead): AdvanceStage | null {
+  // Qualification is a human call outcome, never a checklist/agent shortcut.
+  if (lead.callCentreStatus === "pending" || lead.callCentreStatus === "follow_up") return null;
   const fromIdx = PHASE_ORDER.indexOf(lead.phase);
   for (const stage of Object.keys(ADVANCE_TARGET_PHASE) as AdvanceStage[]) {
     if (PHASE_ORDER.indexOf(ADVANCE_TARGET_PHASE[stage]) === fromIdx + 1)

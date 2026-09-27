@@ -18,6 +18,7 @@ import type {
   GetReportFollowUp as WorkshopFollowUp,
 } from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
+import { CallCentreKpis } from "@/components/reports/call-centre-kpis";
 import { dealerDayKey, dealerDayKeyPlus } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -320,6 +321,10 @@ export default function Reports() {
             onWaitingReason={setWorkshopWaitingReason}
             onFollowUp={setWorkshopFollowUp}
           />
+        )}
+
+        {(active === "sales_pipeline" || active === "sales_advisor_activity") && (
+          <CallCentreKpis />
         )}
 
         {isLoading ? (

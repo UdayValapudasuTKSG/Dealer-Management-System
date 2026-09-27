@@ -2629,6 +2629,43 @@ export type LeadVehicleInterest = LeadVehicleInterestInput & ({
   vehicleId: number | null;
 });
 
+export interface CallCentreReport {
+  /** @minimum 0 */
+  activeFollowUp: number;
+  /** @minimum 0 */
+  qualifiedTransferred: number;
+}
+
+export type CallCentreDispositionInputOutcome = typeof CallCentreDispositionInputOutcome[keyof typeof CallCentreDispositionInputOutcome];
+
+
+export const CallCentreDispositionInputOutcome = {
+  interested: 'interested',
+  follow_up: 'follow_up',
+  not_interested: 'not_interested',
+} as const;
+
+export interface CallCentreDispositionInput {
+  outcome: CallCentreDispositionInputOutcome;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  notes: string;
+  /**
+     * @minimum 0
+     * @maximum 86400
+     */
+  durationSeconds?: number;
+  /**
+     * Dealership-local calendar date YYYY-MM-DD
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  followUpDate?: string;
+  /** @minimum 1 */
+  existingCallId?: number;
+}
+
 /**
  * Intake channel, including the immutable provenance channel for reviewed historical delivery imports
  */
@@ -2680,6 +2717,19 @@ export const LeadStatus = {
   engaged: 'engaged',
   converted: 'converted',
   lost: 'lost',
+} as const;
+
+/**
+ * @nullable
+ */
+export type LeadCallCentreStatus = typeof LeadCallCentreStatus[keyof typeof LeadCallCentreStatus] | null;
+
+
+export const LeadCallCentreStatus = {
+  pending: 'pending',
+  follow_up: 'follow_up',
+  transferred: 'transferred',
+  not_interested: 'not_interested',
 } as const;
 
 /**
@@ -2740,6 +2790,19 @@ export interface Lead {
   assignedTo?: string | null;
   /** @nullable */
   ownerUserId?: number | null;
+  /** @nullable */
+  callCentreStatus?: LeadCallCentreStatus;
+  /** @nullable */
+  callCentreRepId?: number | null;
+  /** @nullable */
+  callCentreAssignedAt?: string | null;
+  /** @nullable */
+  callCentreTransferredAt?: string | null;
+  /**
+     * Dealership-local calendar date YYYY-MM-DD
+     * @nullable
+     */
+  callCentreFollowUpDate?: string | null;
   /** @nullable */
   testDriveAt?: string | null;
   /** @nullable */
@@ -11651,6 +11714,13 @@ includeInactive?: boolean;
 export type ListCapacityBlocksParams = {
 from?: string;
 to?: string;
+};
+
+export type GetCallCentreReportParams = {
+/**
+ * @minimum 1
+ */
+divisionId?: number;
 };
 
 export type ListCustomersParams = {

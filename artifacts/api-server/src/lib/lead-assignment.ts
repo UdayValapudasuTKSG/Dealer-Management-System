@@ -14,6 +14,35 @@ import {
 import { enqueueEmail, notifyUser } from "./email";
 import { notifyLeadAssigned } from "./notify-triggers";
 import { logger } from "./logger";
+import { isCallCentreRole, isCallCentreSource } from "./call-centre-policy";
+
+export type AssignmentTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** All automated intake and handoff queues share the same dealer lock. */
+export async function lockAssignmentQueue(tx: AssignmentTransaction, dealerId: number): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(73129, ${dealerId})`);
+}
+
+export async function nextRoundRobinCandidate(
+  tx: AssignmentTransaction,
+  dealerId: number,
+  queue: "call_centre" | "sales" | "legacy_sales",
+): Promise<Candidate | undefined> {
+  const members = await tx.select({
+    id: usersTable.id, name: usersTable.name, email: usersTable.email,
+    roleName: rolesTable.name, lastLeadAssignedAt: dealerUsersTable.lastLeadAssignedAt,
+  }).from(dealerUsersTable)
+    .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
+    .innerJoin(rolesTable, eq(rolesTable.id, dealerUsersTable.roleId))
+    .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(usersTable.status, "active")));
+  let eligible = members.filter((r) => queue === "call_centre"
+    ? isCallCentreRole(r.roleName) : r.roleName?.trim().toLowerCase() === "sales advisor");
+  if (queue === "legacy_sales" && eligible.length === 0) {
+    eligible = members.filter((r) => r.roleName === "Sales Manager");
+  }
+  return eligible.sort((a, b) =>
+    (a.lastLeadAssignedAt?.getTime() ?? 0) - (b.lastLeadAssignedAt?.getTime() ?? 0) || a.id - b.id)[0];
+}
 
 // ---------------------------------------------------------------------------
 // Sales agent — automatic lead routing.
@@ -38,29 +67,6 @@ type Candidate = {
   roleName: string | null;
   lastLeadAssignedAt: Date | null;
 };
-
-async function candidateAdvisors(dealerId: number): Promise<Candidate[]> {
-  const rows = await db
-    .select({
-      id: usersTable.id,
-      name: usersTable.name,
-      email: usersTable.email,
-      roleName: rolesTable.name,
-      lastLeadAssignedAt: dealerUsersTable.lastLeadAssignedAt,
-    })
-    .from(dealerUsersTable)
-    .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))
-    .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
-    .where(
-      and(
-        eq(dealerUsersTable.dealerId, dealerId),
-        eq(usersTable.status, "active"),
-        inArray(rolesTable.name, ["Sales Advisor", "Sales Manager"]),
-      ),
-    );
-  const advisors = rows.filter((r) => r.roleName === "Sales Advisor");
-  return advisors.length > 0 ? advisors : rows;
-}
 
 /**
  * Stamp the round-robin clock for a dealer member. Exported so the manual
@@ -188,42 +194,49 @@ export async function assignLeadToCreator(
 export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
   if (lead.ownerUserId != null) return null;
   try {
-    const candidates = await candidateAdvisors(lead.dealerId);
-    if (candidates.length === 0) {
+    const callCentre = lead.callCentreStatus === "pending" || lead.callCentreStatus === "follow_up" || isCallCentreSource(lead.source);
+    const assignment = await db.transaction(async (tx) => {
+      await lockAssignmentQueue(tx, lead.dealerId);
+      const [current] = await tx.select().from(leadsTable)
+        .where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)))
+        .for("update");
+      if (!current || current.ownerUserId != null || current.deletedAt ||
+          ["won", "lost"].includes(current.phase) || current.callCentreTransferredAt) return null;
+      const advisor = await nextRoundRobinCandidate(tx, lead.dealerId, callCentre ? "call_centre" : "legacy_sales");
+      if (!advisor) {
+        if (callCentre) {
+          const [pending] = await tx.update(leadsTable).set({ callCentreStatus: "pending" })
+            .where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId))).returning();
+          logger.warn({ dealerId: lead.dealerId, leadId: lead.id }, "Call-centre lead queued unassigned: no active representatives");
+          return { updated: pending!, advisor: null, advisorName: null };
+        }
+        return null;
+      }
+      const now = new Date();
+      const advisorName = advisor.name ?? advisor.email ?? `User #${advisor.id}`;
+      const [updated] = await tx.update(leadsTable).set({
+        ownerUserId: advisor.id, assignedTo: advisorName,
+        status: current.status === "new" ? "assigned" : current.status,
+        phase: callCentre ? current.phase : current.phase === "new" ? "contacted" : current.phase,
+        stageEnteredAt: now,
+        ...(callCentre ? { callCentreStatus: "pending", callCentreRepId: advisor.id, callCentreAssignedAt: now } : {}),
+      }).where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId))).returning();
+      await tx.update(dealerUsersTable).set({ lastLeadAssignedAt: now })
+        .where(and(eq(dealerUsersTable.dealerId, lead.dealerId), eq(dealerUsersTable.userId, advisor.id)));
+      return { updated: updated!, advisor, advisorName };
+    });
+    if (!assignment) {
       logger.warn(
         { leadId: lead.id },
-        "Sales agent: no active advisors to auto-assign lead",
+        "Automatic routing: no eligible owner or lead already assigned (call-centre sources never fall back to sales)",
       );
       return null;
     }
 
     // Timestamp-based round robin: least-recently-assigned first (never
     // assigned sorts before everyone), ties broken by user id — deterministic.
-    const ranked = [...candidates].sort((a, b) => {
-      const at = a.lastLeadAssignedAt?.getTime() ?? 0;
-      const bt = b.lastLeadAssignedAt?.getTime() ?? 0;
-      return at !== bt ? at - bt : a.id - b.id;
-    });
-    const advisor = ranked[0]!;
-    const advisorName = advisor.name ?? advisor.email ?? `User #${advisor.id}`;
-
-    const [updated] = await db
-      .update(leadsTable)
-      .set({
-        ownerUserId: advisor.id,
-        assignedTo: advisorName,
-        status:
-          lead.status === "new" || lead.status === "assigned"
-            ? "assigned"
-            : lead.status,
-        phase: lead.phase === "new" ? "contacted" : lead.phase,
-        ...(lead.phase === "new" ? { stageEnteredAt: new Date() } : {}),
-      })
-      .where(and(eq(leadsTable.id, lead.id), sql`owner_user_id is null`))
-      .returning();
-    if (!updated) return null; // raced with a manual assignment
-
-    await stampLeadAssignment(updated.dealerId, advisor.id);
+    if (!assignment.advisor) return assignment.updated;
+    const { updated, advisor, advisorName } = assignment;
 
     // R6.2 #2 Assigned Lead → advisor (In-App + Email, keyed per assignee).
     notifyLeadAssigned(updated);
@@ -264,7 +277,7 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
       link: `/lead/${updated.id}`,
     });
 
-    if (updated.email) {
+    if (updated.email && !callCentre) {
       await enqueueEmail({
         template: "lead_assignment",
         to: updated.email,

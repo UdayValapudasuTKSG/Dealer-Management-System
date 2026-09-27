@@ -65,6 +65,8 @@ import type {
   BookingInput,
   BookingUpdate,
   CalendarResponse,
+  CallCentreDispositionInput,
+  CallCentreReport,
   CallLog,
   CallLogInput,
   CallLogUpdate,
@@ -197,6 +199,7 @@ import type {
   GateResolution,
   GenerateQuoteInput,
   GetCalendarParams,
+  GetCallCentreReportParams,
   GetDailyTechnicianTimesheetParams,
   GetNamedPartsValuationParams,
   GetPartsAgingReportParams,
@@ -6293,6 +6296,162 @@ export const useSendLeadQuote = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getSendLeadQuoteMutationOptions(options));
+    }
+
+export const getGetCallCentreReportUrl = (params?: GetCallCentreReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/reports/call-centre?${stringifiedParams}` : `/api/reports/call-centre`
+}
+
+/**
+ * @summary Call centre active follow-up and qualified transfer volumes
+ */
+export const getCallCentreReport = async (params?: GetCallCentreReportParams, options?: RequestInit): Promise<CallCentreReport> => {
+
+  return customFetch<CallCentreReport>(getGetCallCentreReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCallCentreReportQueryKey = (params?: GetCallCentreReportParams,) => {
+    return [
+    `/api/reports/call-centre`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCallCentreReportQueryOptions = <TData = Awaited<ReturnType<typeof getCallCentreReport>>, TError = ErrorType<unknown>>(params?: GetCallCentreReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCallCentreReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCallCentreReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCallCentreReport>>> = ({ signal }) => getCallCentreReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCallCentreReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCallCentreReportQueryResult = NonNullable<Awaited<ReturnType<typeof getCallCentreReport>>>
+export type GetCallCentreReportQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Call centre active follow-up and qualified transfer volumes
+ */
+
+export function useGetCallCentreReport<TData = Awaited<ReturnType<typeof getCallCentreReport>>, TError = ErrorType<unknown>>(
+ params?: GetCallCentreReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCallCentreReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCallCentreReportQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRecordCallCentreDispositionUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/call-centre-disposition`
+}
+
+/**
+ * @summary Log qualification call and atomically transfer, follow up, or close a call-centre lead
+ */
+export const recordCallCentreDisposition = async (id: number,
+    callCentreDispositionInput: CallCentreDispositionInput, options?: RequestInit): Promise<Lead> => {
+
+  return customFetch<Lead>(getRecordCallCentreDispositionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(callCentreDispositionInput)
+  }
+);}
+
+
+
+
+
+export const getRecordCallCentreDispositionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordCallCentreDisposition>>, TError,{id: number;data: BodyType<CallCentreDispositionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordCallCentreDisposition>>, TError,{id: number;data: BodyType<CallCentreDispositionInput>}, TContext> => {
+
+const mutationKey = ['recordCallCentreDisposition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordCallCentreDisposition>>, {id: number;data: BodyType<CallCentreDispositionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  recordCallCentreDisposition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordCallCentreDispositionMutationResult = NonNullable<Awaited<ReturnType<typeof recordCallCentreDisposition>>>
+    export type RecordCallCentreDispositionMutationBody = BodyType<CallCentreDispositionInput>
+    export type RecordCallCentreDispositionMutationError = ErrorType<void>
+
+    /**
+ * @summary Log qualification call and atomically transfer, follow up, or close a call-centre lead
+ */
+export const useRecordCallCentreDisposition = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordCallCentreDisposition>>, TError,{id: number;data: BodyType<CallCentreDispositionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordCallCentreDisposition>>,
+        TError,
+        {id: number;data: BodyType<CallCentreDispositionInput>},
+        TContext
+      > => {
+      return useMutation(getRecordCallCentreDispositionMutationOptions(options));
     }
 
 export const getListLeadCallsUrl = (id: number,) => {

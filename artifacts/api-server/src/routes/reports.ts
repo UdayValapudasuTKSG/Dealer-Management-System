@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -1581,6 +1581,61 @@ const builders: Record<string, Builder> = {
 /* ------------------------------------------------------------------ */
 /* Route                                                               */
 /* ------------------------------------------------------------------ */
+
+// The call-centre queue includes unassigned pending leads for managers; a
+// representative only sees leads attributed to their callCentreRepId, even
+// after the sales owner changes. A transfer is historical, not a current phase.
+router.get("/reports/call-centre", async (req, res): Promise<void> => {
+  const user = res.locals.user as AuthedUser;
+  // Reports are auth-only in the global middleware and use a per-report module
+  // gate. Match the sales pipeline's leads:view requirement here.
+  if (!hasPermission(user, "leads", "view")) {
+    res.status(403).json({ error: "forbidden", module: "leads" });
+    return;
+  }
+
+  const rawDivision = req.query.divisionId;
+  if (
+    rawDivision !== undefined &&
+    (typeof rawDivision !== "string" || !/^[1-9]\d*$/.test(rawDivision) ||
+      !Number.isSafeInteger(Number(rawDivision)))
+  ) {
+    res.status(400).json({ error: "invalid_division_id" });
+    return;
+  }
+  const requestedDivision = rawDivision === undefined ? null : Number(rawDivision);
+  const dealerId = activeDealerId(res);
+  const scope = await resolvePersonaScope(user, dealerId);
+  const role = (user.roleName ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  const isCallCentreRep =
+    role === "call center representative" || role === "call centre representative";
+  const divisionId = scope.tier === "manager" ? scope.divisionId : null;
+  // Never use sales ownership for this metric: a custom rep role must not
+  // inherit the advisor scope's owner-based fallback.
+  const repId = isCallCentreRep || scope.tier === "advisor" ? user.id : null;
+  const where = and(
+    eq(leadsTable.dealerId, dealerId),
+    isNull(leadsTable.deletedAt),
+    divisionId != null ? eq(leadsTable.divisionId, divisionId) : undefined,
+    requestedDivision != null
+      ? eq(leadsTable.divisionId, requestedDivision)
+      : undefined,
+    repId != null ? eq(leadsTable.callCentreRepId, repId) : undefined,
+  );
+  const [totals] = await db.select({
+    activeFollowUp: sql<number>`count(*) filter (
+      where ${inArray(leadsTable.callCentreStatus, ["pending", "follow_up"])}
+      and ${notInArray(leadsTable.phase, ["lost", "won"])}
+    )::int`,
+    qualifiedTransferred: sql<number>`count(*) filter (
+      where ${isNotNull(leadsTable.callCentreTransferredAt)}
+    )::int`,
+  }).from(leadsTable).where(where);
+  res.json({
+    activeFollowUp: totals?.activeFollowUp ?? 0,
+    qualifiedTransferred: totals?.qualifiedTransferred ?? 0,
+  });
+});
 
 router.get("/reports", async (req, res): Promise<void> => {
   const type = String(req.query.type ?? "");

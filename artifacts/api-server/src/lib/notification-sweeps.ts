@@ -799,12 +799,26 @@ async function sweepUnassignedLeads(): Promise<void> {
         isNull(leadsTable.deletedAt),
         lte(leadsTable.createdAt, cutoff),
         inArray(leadsTable.phase, ["new", "contacted"]),
+        // Avoid starving later dealers behind an unstaffed queue. Only retry
+        // call-centre leads when this dealer now has an active representative.
+        sql`(
+          (coalesce(${leadsTable.callCentreStatus}, '') <> 'pending'
+            AND lower(trim(${leadsTable.source})) NOT IN ('website','web','whatsapp','facebook','instagram','meta','meta_lead_ads','facebook_lead_ads'))
+          OR EXISTS (
+            SELECT 1 FROM dealer_users du
+            JOIN users u ON u.id = du.user_id
+            JOIN roles r ON r.id = du.role_id
+            WHERE du.dealer_id = ${leadsTable.dealerId} AND u.status = 'active'
+              AND lower(regexp_replace(trim(r.name), '\\s+', ' ', 'g'))
+                IN ('call center representative', 'call centre representative')
+          )
+        )`,
       ),
     )
     .limit(50);
   for (const lead of strays) {
     const assigned = await autoAssignLead(lead);
-    if (assigned)
+    if (assigned?.ownerUserId)
       logger.info(
         { leadId: lead.id, ownerUserId: assigned.ownerUserId },
         "assignment catch-up: routed stranded lead",

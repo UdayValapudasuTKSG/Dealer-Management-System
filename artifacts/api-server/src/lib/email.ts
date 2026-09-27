@@ -3914,6 +3914,9 @@ async function runTaskReminderPass(): Promise<void> {
     const tz = await dealerTimezone(task.dealerId);
     const today = zonedDayKey(now, tz);
     const tomorrow = zonedAddDays(now, tz, 1);
+    // Qualification follow-ups are promises for the selected dealer-local
+    // day, not the generic 24-hour heads-up (which would suppress that day's bell).
+    if (task.kind === "call_centre" && task.dueDate! > today) continue;
     if (task.dueDate! > tomorrow) continue;
     const assigneeId = task.assigneeUserId!;
     const dueDate = task.dueDate!;

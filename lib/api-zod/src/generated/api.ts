@@ -1564,6 +1564,11 @@ export const ListLeadsResponseItem = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -1698,6 +1703,11 @@ export const CreateLeadResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -1786,6 +1796,11 @@ export const GetLeadResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -1941,6 +1956,11 @@ export const UpdateLeadResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -2053,6 +2073,11 @@ export const RestoreLeadResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -2155,6 +2180,11 @@ export const CreateEnquiryResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -2354,6 +2384,11 @@ export const AssignLeadResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -2470,6 +2505,11 @@ export const AdvanceLeadStageResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -2598,6 +2638,11 @@ export const ScheduleTestDriveResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -2702,6 +2747,11 @@ export const CheckLeadAvailabilityResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -2796,6 +2846,11 @@ export const RecordLeadDecisionResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -3016,6 +3071,11 @@ export const LinkLeadAccountResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
@@ -3572,6 +3632,138 @@ export const SendLeadQuoteResponse = zod.object({
   "emailQueued": zod.boolean(),
   "whatsappStatus": zod.enum(['not_requested', 'queued', 'already_sent', 'blocked']),
   "whatsappBlockedReason": zod.string().nullish()
+})
+
+
+/**
+ * @summary Call centre active follow-up and qualified transfer volumes
+ */
+
+
+
+export const GetCallCentreReportQueryParams = zod.object({
+  "divisionId": zod.coerce.number().min(1).optional()
+})
+
+export const getCallCentreReportResponseActiveFollowUpMin = 0;
+
+export const getCallCentreReportResponseQualifiedTransferredMin = 0;
+
+
+
+export const GetCallCentreReportResponse = zod.object({
+  "activeFollowUp": zod.number().min(getCallCentreReportResponseActiveFollowUpMin),
+  "qualifiedTransferred": zod.number().min(getCallCentreReportResponseQualifiedTransferredMin)
+})
+
+
+/**
+ * @summary Log qualification call and atomically transfer, follow up, or close a call-centre lead
+ */
+export const RecordCallCentreDispositionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const recordCallCentreDispositionBodyNotesMax = 10000;
+
+export const recordCallCentreDispositionBodyDurationSecondsMin = 0;
+export const recordCallCentreDispositionBodyDurationSecondsMax = 86400;
+
+export const recordCallCentreDispositionBodyFollowUpDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+
+export const RecordCallCentreDispositionBody = zod.object({
+  "outcome": zod.enum(['interested', 'follow_up', 'not_interested']),
+  "notes": zod.string().min(1).max(recordCallCentreDispositionBodyNotesMax),
+  "durationSeconds": zod.number().min(recordCallCentreDispositionBodyDurationSecondsMin).max(recordCallCentreDispositionBodyDurationSecondsMax).optional(),
+  "followUpDate": zod.string().regex(recordCallCentreDispositionBodyFollowUpDateRegExp).optional().describe('Dealership-local calendar date YYYY-MM-DD'),
+  "existingCallId": zod.number().min(1).optional()
+})
+
+
+
+export const recordCallCentreDispositionResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const recordCallCentreDispositionResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const recordCallCentreDispositionResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const recordCallCentreDispositionResponseVehicleInterestsItemOnePositionDefault = 0;
+export const recordCallCentreDispositionResponseVehicleInterestsItemOnePositionMin = 0;
+
+
+
+
+
+export const RecordCallCentreDispositionResponse = zod.object({
+  "id": zod.number(),
+  "divisionId": zod.number().nullish(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email', 'reviewed_delivery_import']).describe('Intake channel, including the immutable provenance channel for reviewed historical delivery imports'),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "vehicleInterests": zod.array(zod.object({
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(recordCallCentreDispositionResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(recordCallCentreDispositionResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(recordCallCentreDispositionResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(recordCallCentreDispositionResponseVehicleInterestsItemOnePositionMin).default(recordCallCentreDispositionResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
+  "selectedModel": zod.string().nullish(),
+  "interestedModelText": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "emailOptOut": zod.boolean().optional(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
+  "createdAt": zod.coerce.date()
 })
 
 
@@ -14658,6 +14850,11 @@ export const GetCustomerOverviewResponse = zod.object({
   "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
   "ownerUserId": zod.number().nullish(),
+  "callCentreStatus": zod.union([zod.literal('pending'),zod.literal('follow_up'),zod.literal('transferred'),zod.literal('not_interested'),zod.literal(null)]).nullish(),
+  "callCentreRepId": zod.number().nullish(),
+  "callCentreAssignedAt": zod.coerce.date().nullish(),
+  "callCentreTransferredAt": zod.coerce.date().nullish(),
+  "callCentreFollowUpDate": zod.string().nullish().describe('Dealership-local calendar date YYYY-MM-DD'),
   "testDriveAt": zod.coerce.date().nullish(),
   "testDriveBranch": zod.string().nullish(),
   "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),

@@ -105,8 +105,11 @@ import {
   SuggestCallSentimentResponse,
   ListLeadSourcesQueryParams,
   ListLeadSourcesResponse,
+  RecordCallCentreDispositionBody,
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { CallCentreError, recordCallCentreDisposition } from "../lib/call-centre";
+import { isActiveCallCentreLead } from "../lib/call-centre-policy";
 import { ObjectStorageService } from "../lib/objectStorage";
 import {
   onLeadCreated,
@@ -253,7 +256,40 @@ router.use(async (req, res, next) => {
     res.status(403).json(LEAD_NOT_OWNED);
     return;
   }
+  const suffix = req.path.replace(/^\/leads\/\d+/, "").replace(/\/$/, "");
+  const protectedPatch = req.method === "PATCH" && suffix === "" &&
+    ["phase", "status", "ownerUserId", "assignedTo", "purchaseType", "closureReason"].some((key) => key in (req.body ?? {}));
+  const protectedAction = ["assign", "advance", "decision", "test-drive"].some((action) => suffix === `/${action}`);
+  if (protectedPatch || protectedAction) {
+    const [lead] = await db.select().from(leadsTable).where(and(
+      eq(leadsTable.id, Number(match[1])), eq(leadsTable.dealerId, activeDealerId(res)),
+    ));
+    if (lead && isActiveCallCentreLead(lead)) {
+      res.status(409).json({ error: "Record the call-centre outcome before changing ownership or advancing this lead", code: "call_centre_qualification_required" });
+      return;
+    }
+  }
   next(); // "missing" falls through: route's own lookup produces the 404
+});
+
+router.post("/leads/:id/call-centre-disposition", async (req, res): Promise<void> => {
+  const params = GetLeadParams.safeParse(req.params);
+  const body = RecordCallCentreDispositionBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid call-centre outcome, notes, or date" });
+    return;
+  }
+  try {
+    const lead = await recordCallCentreDisposition(activeDealerId(res), params.data.id, res.locals.user!, body.data);
+    if (lead.callCentreStatus === "transferred") notifyLeadAssigned(lead);
+    res.json(GetLeadResponse.parse(lead));
+  } catch (err) {
+    if (err instanceof CallCentreError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
 });
 
 async function logLeadEvent(

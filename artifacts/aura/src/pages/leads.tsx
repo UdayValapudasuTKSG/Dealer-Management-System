@@ -74,6 +74,8 @@ import {
   PIPELINE_STAGE_LABEL,
   matchesPipelinePhase,
   parsePipelinePhase,
+  callCentreStage,
+  isCallCentreRole,
   pipelinePhaseLabel,
   type PipelinePhaseFilter,
   type PipelineStage,
@@ -85,6 +87,8 @@ type Stage = PipelineStage;
 type Macro = "lead" | "prebooking" | "payment" | "delivery";
 
 const MACRO_OF: Record<Stage, Macro> = {
+  call_centre: "lead",
+  transferred: "lead",
   new_lead: "lead",
   contacted: "lead",
   engaged: "lead",
@@ -330,7 +334,10 @@ export default function Leads() {
       id: number;
       phase: string;
       customerId?: number | null;
+      callCentreStatus?: string | null;
     }): Stage | null => {
+      const cc = callCentreStage(l);
+      if (cc) return cc;
       switch (l.phase) {
         case "new":
           return "new_lead";
@@ -360,8 +367,16 @@ export default function Leads() {
   const isMine = (l: {
     ownerUserId?: number | null;
     assignedTo?: string | null;
+    callCentreRepId?: number | null;
+    callCentreStatus?: string | null;
+    phase?: string;
   }) =>
     (myId != null && l.ownerUserId === myId) ||
+    // Call-centre reps own a lead only while it awaits qualification.
+    (myId != null &&
+      l.callCentreRepId === myId &&
+      (l.callCentreStatus === "pending" || l.callCentreStatus === "follow_up") &&
+      (l.phase === "new" || l.phase === "contacted")) ||
     (l.ownerUserId == null &&
       myName != null &&
       (l.assignedTo ?? "").trim().toLowerCase() === myName);
@@ -1243,7 +1258,7 @@ export default function Leads() {
                       Account
                       <ArrowUpRight className="w-3 h-3" />
                     </Link>
-                  ) : me?.roleName === "Sales Advisor" && !isMine(r.lead) ? null : (
+                  ) : (me?.roleName === "Sales Advisor" || isCallCentreRole(me?.roleName)) && !isMine(r.lead) ? null : (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

@@ -80,3 +80,4 @@
 - [PO template branding](po-template-branding.md) — use active-dealership branding; sample contacts and payment terms are not universal defaults.
 - [Parts specification boundaries](parts-spec-boundaries.md) — internal restock is non-billable; location context does not establish branch staff membership.
 - [Publish CHECK validation](publish-check-validation.md) — unvalidated CHECK definitions can serialize incorrectly; validate clean dev constraints, then recompute the publish diff.
+- [Call-centre qualification](call-centre-qualification.md) — interested means sales handover, not completion of sales qualification gates; historical rep attribution is not edit permission.

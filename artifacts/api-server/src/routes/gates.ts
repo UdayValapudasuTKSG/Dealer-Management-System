@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { isActiveCallCentreLead } from "../lib/call-centre-policy";
 import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import {
   db,
@@ -1200,7 +1201,19 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
         ? "adjusted"
         : "dismissed";
 
+  let callCentreBlocked = false;
   const updated = await db.transaction(async (tx) => {
+    // A proposal may predate intake routing. Lock and recheck the actual lead
+    // before resolving the gate, so stale approvals cannot skip qualification.
+    if (action !== "dismiss" && gate.type === "stage_advance" && gate.refType === "lead" && gate.refId) {
+      const [lead] = await tx.select().from(leadsTable).where(and(
+        eq(leadsTable.id, gate.refId), eq(leadsTable.dealerId, dealerId),
+      )).for("update");
+      if (lead && isActiveCallCentreLead(lead)) {
+        callCentreBlocked = true;
+        return null;
+      }
+    }
     const [row] = await tx
       .update(gatesTable)
       .set({
@@ -1281,6 +1294,10 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
     return row;
   });
 
+  if (callCentreBlocked) {
+    res.status(409).json({ error: "Record the call-centre outcome before advancing this lead", code: "call_centre_qualification_required" });
+    return;
+  }
   if (!updated) {
     res.status(400).json({ error: "Gate already resolved" });
     return;

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isCallCentreRole } from "@/lib/pipeline-phase-filter";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -315,6 +316,15 @@ const ROLE_WORKSPACE: Record<string, NavItem[]> = {
   "Marketing Advisor": [ITEM.reports, ITEM.myDay, ITEM.pipeline, ITEM.customers],
 };
 
+/* Call Centre Representative (custom role, Centre/Center spelling tolerant).
+   Reports is gated on leads:view — the Reports page itself shows only the
+   lead-module report tabs such a role can open, so this grants nothing new. */
+const CALL_CENTRE_WORKSPACE: NavItem[] = [
+  ITEM.pipeline,
+  ITEM.myDay,
+  { ...ITEM.reports, module: "leads" },
+];
+
 const DEFAULT_WORKSPACE: NavItem[] = [
   ITEM.myDay,
   ITEM.pipeline,
@@ -333,7 +343,9 @@ function useNavClusters() {
      been granted "view" on via RBAC (settings → roles). The persona list is
      only a curated starting point — permission grants are the source of
      truth, so granting e.g. deals:view to Sales Advisor surfaces Deals. */
-  const base = ROLE_WORKSPACE[me?.roleName ?? ""] ?? DEFAULT_WORKSPACE;
+  const base =
+    ROLE_WORKSPACE[me?.roleName ?? ""] ??
+    (isCallCentreRole(me?.roleName) ? CALL_CENTRE_WORKSPACE : DEFAULT_WORKSPACE);
   const extras = CLUSTERS.flatMap((c) => c.items).filter(
     (i) =>
       i.module !== "" &&

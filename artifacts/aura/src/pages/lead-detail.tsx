@@ -29,6 +29,9 @@ import {
   getGetLeadTimelineQueryKey,
   getListLeadsQueryKey,
   getListDealsQueryKey,
+  getListInvoicesQueryKey,
+  getListOutstandingBalancesQueryKey,
+  getListDeliveriesQueryKey,
 } from "@workspace/api-client-react";
 import type { Lead, LeadUpdate, Vehicle, Deal } from "@workspace/api-client-react";
 import {
@@ -117,6 +120,9 @@ import {
   DocumentPrefillBanner,
 } from "@/components/documents-card";
 import { CallDialog } from "@/components/lead/call-dialog";
+import { isCallCentreRole } from "@/lib/pipeline-phase-filter";
+import { isHeldByCallCentre } from "@/hooks/use-call-centre";
+import { Headset } from "lucide-react";
 import { TestDriveCard } from "@/components/lead/test-drive-card";
 import { useAuthz } from "@/lib/auth";
 import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
@@ -897,6 +903,32 @@ function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
   ];
 }
 
+const CC_STATUS_LABEL: Record<string, string> = {
+  pending: "Awaiting first call",
+  follow_up: "Follow-up scheduled",
+  transferred: "Transferred to Sales Advisor",
+  not_interested: "Not interested",
+};
+
+function formatDateOnly(value: string): string {
+  const [y, m, d] = String(value).slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return String(value);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function CcFact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</dt>
+      <dd className="font-medium truncate">{children}</dd>
+    </div>
+  );
+}
+
 export default function LeadDetail() {
   const [, params] = useRoute("/lead/:id");
   const id = params ? Number(params.id) : NaN;
@@ -916,10 +948,24 @@ export default function LeadDetail() {
   const { data: quote } = useGetLeadQuote(id);
   const { data: quoteVersions } = useListLeadQuotes(id);
   const sendInvite = useSendTestDriveInvite();
-  const { data: allDeals } = useListDeals();
-  const { data: allInvoices } = useListInvoices();
-  const { data: outstandingBalances } = useListOutstandingBalances();
-  const { data: allDeliveries } = useListDeliveries();
+  // Skip module-wide lists the role cannot view (avoids eager 403s, e.g.
+  // for Call Centre Representatives who only hold leads:view).
+  const { can: canView } = useAuthz();
+  const { data: allDeals } = useListDeals(undefined, {
+    query: { queryKey: getListDealsQueryKey(), enabled: canView("deals", "view") },
+  });
+  const { data: allInvoices } = useListInvoices(undefined, {
+    query: { queryKey: getListInvoicesQueryKey(), enabled: canView("finance", "view") },
+  });
+  const { data: outstandingBalances } = useListOutstandingBalances({
+    query: {
+      queryKey: getListOutstandingBalancesQueryKey(),
+      enabled: canView("finance", "view"),
+    },
+  });
+  const { data: allDeliveries } = useListDeliveries(undefined, {
+    query: { queryKey: getListDeliveriesQueryKey(), enabled: canView("deliveries", "view") },
+  });
   const { data: calls } = useListLeadCalls(id);
   const gatesQuery = useListGates();
 
@@ -968,9 +1014,30 @@ export default function LeadDetail() {
         !!me.name &&
         (lead.assignedTo ?? "").trim().toLowerCase() ===
           me.name.trim().toLowerCase()));
-  const editRestrictedToOwn = me?.roleName === "Sales Advisor";
-  const canEdit = can("leads", "edit") && (!editRestrictedToOwn || ownsLead);
+  const isCallCentreRep = isCallCentreRole(me?.roleName);
+  const cc = {
+    callCentreStatus: lead?.callCentreStatus ?? null,
+    callCentreRepId: lead?.callCentreRepId ?? null,
+    callCentreAssignedAt: lead?.callCentreAssignedAt ?? null,
+    callCentreTransferredAt: lead?.callCentreTransferredAt ?? null,
+    callCentreFollowUpDate: lead?.callCentreFollowUpDate ?? null,
+  };
+  // While the call centre holds the lead, qualification happens only through
+  // the first-call decision; assignment / advance / decision are hidden.
+  const ccHeld = isHeldByCallCentre(lead);
+  const isRepOfRecord =
+    !!me && cc.callCentreRepId != null && cc.callCentreRepId === me.id;
+  // A rep "owns" a lead only while it is still awaiting qualification;
+  // after transfer the rep keeps read-only visibility.
+  const ownsAsRep = isRepOfRecord && ccHeld;
+  const editRestrictedToOwn =
+    me?.roleName === "Sales Advisor" || isCallCentreRep;
+  const canEdit =
+    can("leads", "edit") &&
+    (!editRestrictedToOwn || (isCallCentreRep ? ownsAsRep : ownsLead));
   const canDeskDeal =
+    !ccHeld &&
+    !isCallCentreRep &&
     can("deals", "create") && (!editRestrictedToOwn || ownsLead);
   const canReplyToDeal = can("deals", "edit");
   const canDelete = can("leads", "delete");
@@ -1580,7 +1647,7 @@ export default function LeadDetail() {
                 className="gap-1.5"
               >
                 <Phone className="w-3.5 h-3.5" />
-                Call
+                {ccHeld ? "Call & qualify" : "Call"}
               </Button>
             )}
             {canFinance && financeDeal && (
@@ -1631,7 +1698,7 @@ export default function LeadDetail() {
                 Desk deal
               </Button>
             )}
-            {canEdit && (
+            {canEdit && !ccHeld && !isCallCentreRep && (
               <Button
                 variant="outline"
                 onClick={() => setWorkflowOpen(true)}
@@ -1649,7 +1716,7 @@ export default function LeadDetail() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {canEdit && lead.phase !== "lost" && lead.phase !== "won" && (
+                  {canEdit && !ccHeld && lead.phase !== "lost" && lead.phase !== "won" && (
                     <DropdownMenuItem onClick={() => setLostOpen(true)}>
                       <XCircle className="w-3.5 h-3.5 mr-2" />
                       Mark as Lost…
@@ -1663,7 +1730,7 @@ export default function LeadDetail() {
                   )}
                   {canDelete && (
                     <>
-                      {canEdit && lead.phase !== "lost" && lead.phase !== "won" && (
+                      {canEdit && !ccHeld && lead.phase !== "lost" && lead.phase !== "won" && (
                         <DropdownMenuSeparator />
                       )}
                       <DropdownMenuItem
@@ -1688,6 +1755,7 @@ export default function LeadDetail() {
         leadPhone={lead.phone ?? null}
         open={callOpen}
         onOpenChange={setCallOpen}
+        callCentre={ccHeld && canEdit}
       />
 
       <DealQuickFinanceDialogs
@@ -1707,6 +1775,54 @@ export default function LeadDetail() {
       <div className="mb-6">
         <StageNav stages={stagesWithAlerts} currentIndex={journeyIndex} compact />
       </div>
+
+      {cc.callCentreStatus && (
+        <div
+          className="mb-6 rounded-2xl border border-white/10 bg-foreground/[0.03] p-4 flex flex-col md:flex-row md:items-center gap-4"
+          data-testid="panel-call-centre"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary shrink-0">
+              <Headset className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Call Centre
+              </div>
+              <div className="text-sm font-semibold" data-testid="status-call-centre">
+                {CC_STATUS_LABEL[cc.callCentreStatus] ?? cc.callCentreStatus}
+              </div>
+            </div>
+          </div>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs flex-1">
+            <CcFact label="Representative">
+              {cc.callCentreRepId == null
+                ? "Unassigned"
+                : isRepOfRecord
+                  ? "You"
+                  : `Rep #${cc.callCentreRepId}`}
+            </CcFact>
+            <CcFact label="Queued">
+              {cc.callCentreAssignedAt ? formatGuyanaDateTime(cc.callCentreAssignedAt) : "—"}
+            </CcFact>
+            <CcFact label="Follow-up date">
+              {cc.callCentreFollowUpDate ? formatDateOnly(cc.callCentreFollowUpDate) : "—"}
+            </CcFact>
+            <CcFact label={cc.callCentreStatus === "transferred" ? "Transferred to" : "Transferred"}>
+              {cc.callCentreTransferredAt
+                ? `${lead.assignedTo ?? "Sales Advisor"} · ${formatGuyanaDateTime(cc.callCentreTransferredAt)}`
+                : "—"}
+            </CcFact>
+          </dl>
+          {ccHeld && (
+            <p className="text-xs text-muted-foreground md:max-w-[220px]">
+              {canEdit
+                ? "Log the first call to transfer, schedule a follow-up, or close this lead."
+                : "Held by the call centre until the representative logs a decision."}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Stage facts strip */}
       <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1787,7 +1903,7 @@ export default function LeadDetail() {
                   <ActionChain
                     lead={lead}
                     stage={stagesWithAlerts[journeyIndex]}
-                    canEdit={canEdit}
+                    canEdit={canEdit && !ccHeld}
                     pendingGates={chainGates}
                     onGateResolved={() => {
                       qc.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });

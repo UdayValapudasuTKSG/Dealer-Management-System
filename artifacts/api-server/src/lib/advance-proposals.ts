@@ -20,6 +20,7 @@ import type { ChecklistStage } from "@workspace/db";
 import { isAgentEnabled, recordAgentRun } from "./agent-governance";
 import { notifyUser } from "./email";
 import { logger } from "./logger";
+import { isActiveCallCentreLead } from "./call-centre-policy";
 
 // ---------------------------------------------------------------------------
 // Pipeline-progression agent — periodically evaluates every active lead
@@ -236,6 +237,7 @@ export async function runAdvanceProposalSweep(): Promise<{
         ),
       );
     for (const lead of active) {
+      if (isActiveCallCentreLead(lead)) continue;
       try {
         if (await proposeAdvance(lead)) proposed++;
         else if (await nudgeIfStalled(lead)) nudged++;

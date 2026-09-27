@@ -9,6 +9,7 @@ import {
 import { notifyLeadNew } from "./notify-triggers";
 import { onLeadCreated } from "./email-triggers";
 import { autoAssignLead } from "./lead-assignment";
+import { isCallCentreSource } from "./call-centre-policy";
 import { findOpenDuplicate, mergeIntoExistingLead } from "./lead-dedup";
 import { notifyUser } from "./email";
 import { runIntakeOrchestration } from "./intake-orchestration";
@@ -219,6 +220,7 @@ async function createNewInboundLead(opts: InboundLeadOptions): Promise<Lead> {
       address: opts.address ?? null,
       channel: opts.channel,
       source: opts.source,
+      callCentreStatus: isCallCentreSource(opts.source) || opts.channel === "whatsapp" ? "pending" : null,
       priority: "medium",
       phase: "new",
       status: "new",

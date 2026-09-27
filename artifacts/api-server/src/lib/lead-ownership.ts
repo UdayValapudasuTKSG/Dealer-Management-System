@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db, leadsTable } from "@workspace/db";
+import { isCallCentreRole } from "./call-centre-policy";
 
 type ActingUser = {
   id: number;
@@ -14,7 +15,7 @@ type LeadOwnership = {
 
 /** Roles whose lead mutations are restricted to leads assigned to them. */
 export function isOwnRestrictedRole(user: ActingUser | undefined): boolean {
-  return user?.roleName === "Sales Advisor";
+  return user?.roleName === "Sales Advisor" || isCallCentreRole(user?.roleName);
 }
 
 /** True when the lead is assigned to this user (owner id, or legacy

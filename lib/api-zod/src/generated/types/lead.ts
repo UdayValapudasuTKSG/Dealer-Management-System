@@ -7,6 +7,7 @@
  */
 import type { LeadAttachment } from './leadAttachment';
 import type { LeadAvailability } from './leadAvailability';
+import type { LeadCallCentreStatus } from './leadCallCentreStatus';
 import type { LeadChannel } from './leadChannel';
 import type { LeadPhase } from './leadPhase';
 import type { LeadPriority } from './leadPriority';
@@ -50,6 +51,19 @@ export interface Lead {
   assignedTo?: string | null;
   /** @nullable */
   ownerUserId?: number | null;
+  /** @nullable */
+  callCentreStatus?: LeadCallCentreStatus;
+  /** @nullable */
+  callCentreRepId?: number | null;
+  /** @nullable */
+  callCentreAssignedAt?: Date | null;
+  /** @nullable */
+  callCentreTransferredAt?: Date | null;
+  /**
+     * Dealership-local calendar date YYYY-MM-DD
+     * @nullable
+     */
+  callCentreFollowUpDate?: string | null;
   /** @nullable */
   testDriveAt?: Date | null;
   /** @nullable */
