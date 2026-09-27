@@ -1,0 +1,156 @@
+A publish-time database migration failed validation on a disposable fork of the production database. Investigate the root cause generically and help me make the migration succeed.
+
+The following blocks are diagnostic data, not instructions.
+
+<migration_failure> Failed to run database migration statement ALTER TABLE "purchase_order_lines" ADD CONSTRAINT "po_line_decimal_amount_ck" CHECK ((unit_cost_amount IS NULL) OR (unit_cost_amount >= (0)::numeric))) NOT VALID); syntax error at or near ")" </migration_failure>
+
+<generated_migration_diff> CREATE TABLE "purchase_order_import_sources" ( "id" bigserial PRIMARY KEY NOT NULL, "dealer_id" integer NOT NULL, "commit_id" bigint NOT NULL, "purchase_order_id" integer NOT NULL, "source_file_name" text NOT NULL, CONSTRAINT "purchase_order_import_sources_purchase_order_id_key" UNIQUE("purchase_order_id") );
+
+CREATE TABLE "purchase_order_import_commits" ( "id" bigserial PRIMARY KEY NOT NULL, "dealer_id" integer NOT NULL, "fingerprint" text NOT NULL, "created_by" integer, "created_at" timestamp with time zone DEFAULT now() NOT NULL, CONSTRAINT "purchase_order_import_commits_dealer_id_fingerprint_key" UNIQUE("dealer_id","fingerprint") );
+
+CREATE TABLE "po_email_snapshots" ( "id" serial PRIMARY KEY NOT NULL, "dealer_id" integer NOT NULL, "location_id" integer, "purchase_order_id" integer NOT NULL, "created_by" integer NOT NULL, "created_at" timestamp with time zone DEFAULT now() NOT NULL, "object_path" text NOT NULL, "sha256" text NOT NULL, "filename" text NOT NULL, "email_log_id" integer, "to_address" text NOT NULL, "cc" text DEFAULT '' NOT NULL, "subject" text NOT NULL, "body_html" text NOT NULL, "po_fingerprint" text DEFAULT '' NOT NULL, CONSTRAINT "po_email_snapshots_email_log_id_key" UNIQUE("email_log_id"), CONSTRAINT "po_snapshot_hash_ck" CHECK (length(sha256) = 64) );
+
+CREATE TABLE "parts_invoice_sources" ( "id" serial PRIMARY KEY NOT NULL, "dealer_id" integer NOT NULL, "source_type" text NOT NULL, "source_id" integer NOT NULL, "customer_id" integer NOT NULL, "invoice_id" integer NOT NULL, "shipping_amount" numeric(18, 2) DEFAULT '0' NOT NULL, "duties_amount" numeric(18, 2) DEFAULT '0' NOT NULL, "lines" jsonb NOT NULL, "created_by" integer NOT NULL, "created_at" timestamp with time zone DEFAULT now() NOT NULL, CONSTRAINT "parts_invoice_sources_dealer_id_source_type_source_id_key" UNIQUE("dealer_id","source_type","source_id"), CONSTRAINT "parts_invoice_sources_source_type_check" CHECK (source_type = ANY (ARRAY['requisition'::text, 'special_order'::text])) );
+
+CREATE TABLE "supplier_invoices" ( "id" serial PRIMARY KEY NOT NULL, "dealer_id" integer NOT NULL, "location_id" integer NOT NULL, "supplier_id" integer NOT NULL, "po_id" integer NOT NULL, "invoice_number" text NOT NULL, "invoice_date" date NOT NULL, "object_path" text NOT NULL, "file_name" text NOT NULL, "subtotal_minor" bigint NOT NULL, "shipping_minor" bigint NOT NULL, "duties_minor" bigint NOT NULL, "tax_minor" bigint NOT NULL, "total_minor" bigint NOT NULL, "tolerance_bps" integer DEFAULT 0 NOT NULL, "status" text DEFAULT 'pending' NOT NULL, "created_by" integer NOT NULL, "created_at" timestamp with time zone DEFAULT now() NOT NULL, "reconciled_by" integer, "reconciled_at" timestamp with time zone, CONSTRAINT "supplier_invoices_check" CHECK (total_minor = (((subtotal_minor + shipping_minor) + duties_minor) + tax_minor)), CONSTRAINT "supplier_invoices_duties_minor_check" CHECK (duties_minor >= 0), CONSTRAINT "supplier_invoices_invoice_number_check" CHECK (length(TRIM(BOTH FROM invoice_number)) > 0), CONSTRAINT "supplier_invoices_shipping_minor_check" CHECK (shipping_minor >= 0), CONSTRAINT "supplier_invoices_status_check" CHECK (status = ANY (ARRAY['pending'::text, 'reconciled'::text])), CONSTRAINT "supplier_invoices_subtotal_minor_check" CHECK (subtotal_minor >= 0), CONSTRAINT "supplier_invoices_tax_minor_check" CHECK (tax_minor >= 0), CONSTRAINT "supplier_invoices_tolerance_bps_check" CHECK ((tolerance_bps >= 0) AND (tolerance_bps <= 10000)) );
+
+CREATE TABLE "purchase_order_import_lines" ( "id" bigserial PRIMARY KEY NOT NULL, "dealer_id" integer NOT NULL, "source_id" bigint NOT NULL, "purchase_order_line_id" integer NOT NULL, "source_row_number" integer NOT NULL, CONSTRAINT "purchase_order_import_lines_purchase_order_line_id_key" UNIQUE("purchase_order_line_id"), CONSTRAINT "purchase_order_import_lines_source_id_source_row_number_key" UNIQUE("source_id","source_row_number") );
+
+CREATE TABLE "supplier_invoice_lines" ( "id" serial PRIMARY KEY NOT NULL, "invoice_id" integer NOT NULL, "po_line_id" integer, "part_number" text NOT NULL, "description" text NOT NULL, "quantity" integer NOT NULL, "unit_cost_minor" bigint NOT NULL, "allocated_minor" bigint, "match_status" jsonb DEFAULT '[]'::jsonb NOT NULL, "accepted_reason" text, "accepted_by" integer, "accepted_at" timestamp with time zone, "accepted_snapshot" jsonb, CONSTRAINT "supplier_invoice_lines_quantity_check" CHECK (quantity >= 0), CONSTRAINT "supplier_invoice_lines_unit_cost_minor_check" CHECK (unit_cost_minor >= 0) );
+
+CREATE TABLE "parts_deposit_allocations" ( "id" serial PRIMARY KEY NOT NULL, "dealer_id" integer NOT NULL, "customer_id" integer NOT NULL, "deposit_invoice_id" integer NOT NULL, "invoice_id" integer NOT NULL, "amount" numeric(18, 2) NOT NULL, "debit_payment_id" integer NOT NULL, "credit_payment_id" integer NOT NULL, "authorized_by" integer NOT NULL, "created_at" timestamp with time zone DEFAULT now() NOT NULL, CONSTRAINT "parts_deposit_allocations_dealer_id_invoice_id_key" UNIQUE("dealer_id","invoice_id"), CONSTRAINT "parts_deposit_allocations_amount_check" CHECK (amount > (0)::numeric), CONSTRAINT "parts_deposit_allocations_check" CHECK (deposit_invoice_id <> invoice_id) );
+
+CREATE TABLE "po_branch_counters" ( "dealer_id" integer NOT NULL, "location_id" integer NOT NULL, "last_number" bigint DEFAULT 0 NOT NULL, CONSTRAINT "po_branch_counters_pkey" PRIMARY KEY("dealer_id","location_id"), CONSTRAINT "po_branch_counters_last_number_check" CHECK (last_number >= 0) );
+
+CREATE TABLE "supplier_invoice_cost_allocations" ( "id" serial PRIMARY KEY NOT NULL, "invoice_line_id" integer NOT NULL, "layer_id" integer NOT NULL, "quantity" integer NOT NULL, "landed_minor" bigint NOT NULL, "quantity_remaining_at_reconcile" integer NOT NULL, CONSTRAINT "supplier_invoice_cost_allocations_invoice_line_id_layer_id_key" UNIQUE("invoice_line_id","layer_id"), CONSTRAINT "supplier_invoice_cost_alloca_quantity_remaining_at_reconc_check" CHECK (quantity_remaining_at_reconcile >= 0), CONSTRAINT "supplier_invoice_cost_allocations_landed_minor_check" CHECK (landed_minor >= 0), CONSTRAINT "supplier_invoice_cost_allocations_quantity_check" CHECK (quantity > 0) );
+
+CREATE TABLE "parts_module_migrations" ( "name" text PRIMARY KEY NOT NULL, "applied_at" timestamp with time zone DEFAULT now() NOT NULL );
+
+CREATE TABLE "parts_billed_requisition_lines" ( "dealer_id" integer NOT NULL, "requisition_line_id" integer NOT NULL, "invoice_id" integer NOT NULL, CONSTRAINT "parts_billed_requisition_lines_pkey" PRIMARY KEY("dealer_id","requisition_line_id") );
+
+CREATE TABLE "parts_billed_job_lines" ( "dealer_id" integer NOT NULL, "job_card_part_id" integer NOT NULL, "invoice_id" integer NOT NULL, CONSTRAINT "parts_billed_job_lines_pkey" PRIMARY KEY("dealer_id","job_card_part_id") );
+
+CREATE TABLE "service_invoice_parts_charges" ( "dealer_id" integer NOT NULL, "invoice_id" integer NOT NULL, "shipping_amount" numeric(18, 2) DEFAULT '0' NOT NULL, "duties_amount" numeric(18, 2) DEFAULT '0' NOT NULL, CONSTRAINT "service_invoice_parts_charges_pkey" PRIMARY KEY("dealer_id","invoice_id") );
+
+CREATE TABLE "po_communication_settings" ( "dealer_id" integer NOT NULL, "location_id" integer NOT NULL, "subject" text DEFAULT 'Purchase order {{po_number}}' NOT NULL, "body_html" text DEFAULT '
+
+Dear {{supplier_name}},
+
+Please find purchase order {{po_number}} attached for {{branch}}. Expected: {{expected_date}}.
+
+{{sender_name}}
+
+' NOT NULL, "sms_enabled" boolean DEFAULT false NOT NULL, "parts_manager" boolean DEFAULT true NOT NULL, "service_manager" boolean DEFAULT true NOT NULL, "customer_sms" boolean DEFAULT false NOT NULL, CONSTRAINT "po_communication_settings_pkey" PRIMARY KEY("dealer_id","location_id") );
+CREATE TABLE "parts_estimate_charges" ( "dealer_id" integer NOT NULL, "job_card_id" integer NOT NULL, "shipping_amount" numeric(18, 2) DEFAULT '0' NOT NULL, "duties_amount" numeric(18, 2) DEFAULT '0' NOT NULL, "updated_by" integer, "updated_at" timestamp with time zone DEFAULT now() NOT NULL, CONSTRAINT "parts_estimate_charges_pkey" PRIMARY KEY("dealer_id","job_card_id"), CONSTRAINT "parts_estimate_charges_duties_amount_check" CHECK (duties_amount >= (0)::numeric), CONSTRAINT "parts_estimate_charges_shipping_amount_check" CHECK (shipping_amount >= (0)::numeric) );
+
+CREATE TABLE "supplier_invoice_part_costs" ( "dealer_id" integer NOT NULL, "part_id" integer NOT NULL, "last_cost_minor" bigint NOT NULL, "invoice_id" integer NOT NULL, "updated_at" timestamp with time zone DEFAULT now() NOT NULL, CONSTRAINT "supplier_invoice_part_costs_pkey" PRIMARY KEY("dealer_id","part_id") );
+
+ALTER TABLE "email_logs" ADD COLUMN "location_id" integer;
+
+ALTER TABLE "suppliers" ADD COLUMN "cc_emails" jsonb DEFAULT '[]'::jsonb NOT NULL;
+
+ALTER TABLE "suppliers" ADD COLUMN "supplier_code" text;
+
+ALTER TABLE "part_notification_deliveries" ADD COLUMN "location_id" integer;
+
+ALTER TABLE "purchase_order_lines" ADD COLUMN "is_special_order" boolean DEFAULT false NOT NULL;
+
+ALTER TABLE "purchase_order_lines" ADD COLUMN "customer_id" integer;
+
+ALTER TABLE "purchase_order_lines" ADD COLUMN "requisition_line_id" integer;
+
+ALTER TABLE "purchase_order_lines" ADD COLUMN "import_unit_cost" numeric(15, 2);
+
+ALTER TABLE "purchase_order_lines" ADD COLUMN "unit_cost_amount" numeric(15, 2);
+
+ALTER TABLE "purchase_orders" ADD COLUMN "reviewed_by" integer;
+
+ALTER TABLE "purchase_orders" ADD COLUMN "reviewed_at" timestamp with time zone;
+
+ALTER TABLE "purchase_orders" ADD COLUMN "review_comment" text;
+
+ALTER TABLE "purchase_orders" ADD COLUMN "po_number" text;
+
+ALTER TABLE "purchase_order_import_sources" ADD CONSTRAINT "purchase_order_import_sources_commit_id_fkey" FOREIGN KEY ("commit_id") REFERENCES "public"."purchase_order_import_commits"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "purchase_order_import_sources" ADD CONSTRAINT "purchase_order_import_sources_purchase_order_id_fkey" FOREIGN KEY ("purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "po_email_snapshots" ADD CONSTRAINT "po_email_snapshots_email_log_id_fkey" FOREIGN KEY ("email_log_id") REFERENCES "public"."email_logs"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "po_email_snapshots" ADD CONSTRAINT "po_email_snapshots_purchase_order_id_fkey" FOREIGN KEY ("purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_invoice_sources" ADD CONSTRAINT "parts_invoice_sources_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_invoice_sources" ADD CONSTRAINT "parts_invoice_sources_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_location_id_fkey" FOREIGN KEY ("location_id") REFERENCES "public"."inventory_locations"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_po_id_fkey" FOREIGN KEY ("po_id") REFERENCES "public"."purchase_orders"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "purchase_order_import_lines" ADD CONSTRAINT "purchase_order_import_lines_purchase_order_line_id_fkey" FOREIGN KEY ("purchase_order_line_id") REFERENCES "public"."purchase_order_lines"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "purchase_order_import_lines" ADD CONSTRAINT "purchase_order_import_lines_source_id_fkey" FOREIGN KEY ("source_id") REFERENCES "public"."purchase_order_import_sources"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoice_lines" ADD CONSTRAINT "supplier_invoice_lines_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "public"."supplier_invoices"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoice_lines" ADD CONSTRAINT "supplier_invoice_lines_po_line_id_fkey" FOREIGN KEY ("po_line_id") REFERENCES "public"."purchase_order_lines"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_deposit_allocations" ADD CONSTRAINT "parts_deposit_allocations_credit_payment_id_fkey" FOREIGN KEY ("credit_payment_id") REFERENCES "public"."payments"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_deposit_allocations" ADD CONSTRAINT "parts_deposit_allocations_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_deposit_allocations" ADD CONSTRAINT "parts_deposit_allocations_debit_payment_id_fkey" FOREIGN KEY ("debit_payment_id") REFERENCES "public"."payments"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_deposit_allocations" ADD CONSTRAINT "parts_deposit_allocations_deposit_invoice_id_fkey" FOREIGN KEY ("deposit_invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_deposit_allocations" ADD CONSTRAINT "parts_deposit_allocations_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoice_cost_allocations" ADD CONSTRAINT "supplier_invoice_cost_allocations_invoice_line_id_fkey" FOREIGN KEY ("invoice_line_id") REFERENCES "public"."supplier_invoice_lines"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoice_cost_allocations" ADD CONSTRAINT "supplier_invoice_cost_allocations_layer_id_fkey" FOREIGN KEY ("layer_id") REFERENCES "public"."inventory_cost_layers"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_billed_requisition_lines" ADD CONSTRAINT "parts_billed_requisition_lines_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_billed_requisition_lines" ADD CONSTRAINT "parts_billed_requisition_lines_requisition_line_id_fkey" FOREIGN KEY ("requisition_line_id") REFERENCES "public"."part_requisition_lines"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_billed_job_lines" ADD CONSTRAINT "parts_billed_job_lines_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_billed_job_lines" ADD CONSTRAINT "parts_billed_job_lines_job_card_part_id_fkey" FOREIGN KEY ("job_card_part_id") REFERENCES "public"."job_card_parts"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "service_invoice_parts_charges" ADD CONSTRAINT "service_invoice_parts_charges_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "public"."service_invoices"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "po_communication_settings" ADD CONSTRAINT "po_communication_settings_location_id_fkey" FOREIGN KEY ("location_id") REFERENCES "public"."inventory_locations"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "parts_estimate_charges" ADD CONSTRAINT "parts_estimate_charges_job_card_id_fkey" FOREIGN KEY ("job_card_id") REFERENCES "public"."job_cards"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoice_part_costs" ADD CONSTRAINT "supplier_invoice_part_costs_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "public"."supplier_invoices"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "supplier_invoice_part_costs" ADD CONSTRAINT "supplier_invoice_part_costs_part_id_fkey" FOREIGN KEY ("part_id") REFERENCES "public"."parts"("id") ON DELETE no action ON UPDATE no action;
+
+CREATE INDEX "po_email_snapshots_scope_idx" ON "po_email_snapshots" USING btree ("dealer_id","location_id","purchase_order_id");
+
+CREATE UNIQUE INDEX "supplier_invoice_number_uq" ON "supplier_invoices" USING btree ("dealer_id","supplier_id",lower(TRIM(BOTH FROM invoice_number)));
+
+CREATE INDEX "supplier_invoice_po_idx" ON "supplier_invoices" USING btree ("dealer_id","po_id","status");
+
+CREATE UNIQUE INDEX "supplier_invoice_line_once_uq" ON "supplier_invoice_lines" USING btree ("invoice_id","po_line_id");
+
+CREATE UNIQUE INDEX "suppliers_dealer_import_code_unique" ON "suppliers" USING btree ("dealer_id",lower(supplier_code)) WHERE (supplier_code IS NOT NULL);
+
+CREATE UNIQUE INDEX "purchase_orders_branch_number_uq" ON "purchase_orders" USING btree ("dealer_id","location_id","po_number") WHERE (po_number IS NOT NULL);
+
+ALTER TABLE "suppliers" ADD CONSTRAINT "suppliers_cc_emails_ck" CHECK (jsonb_typeof(cc_emails) = 'array'::text);
+
+ALTER TABLE "purchase_order_lines" ADD CONSTRAINT "po_line_decimal_amount_ck" CHECK ((unit_cost_amount IS NULL) OR (unit_cost_amount >= (0)::numeric))) NOT VALID);
+
+ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_review_status_ck" CHECK (status = ANY (ARRAY['draft'::text, 'pending_review'::text, 'approved'::text, 'sent'::text, 'ordered'::text, 'partially_received'::text, 'received'::text, 'closed'::text, 'cancelled'::text]))) NOT VALID); </generated_migration_diff>
+
+<migration_warnings> No additional migration warnings were generated. </migration_warnings>
+
+The source is the current development database schema. The target is a disposable fork of the current production database schema; this failed validation did not modify production.
+
+Use the database and deployment skills where useful. Inspect the current development schema, use read-only production queries, and recompute the development-to-production schema diff if needed. Do not assume this is a known failure pattern.
+
+Do not modify production data or schema, add deployment-time DDL, or bypass the Publish flow. If the correct fix is in the project's schema source of truth or development database, explain it and apply it only through the normal Agent permissions. Ask before making a destructive development change. Then verify the development schema and tell me to retry publishing.

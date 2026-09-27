@@ -11,7 +11,7 @@ ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS cc_emails jsonb NOT NULL DEFAULT 
 ALTER TABLE part_notification_deliveries ADD COLUMN IF NOT EXISTS location_id integer;
 ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS location_id integer;
 ALTER TABLE purchase_orders DROP CONSTRAINT IF EXISTS purchase_orders_inventory_source_ck;
-ALTER TABLE purchase_orders ADD CONSTRAINT purchase_orders_inventory_source_ck CHECK(source IN ('manual','import','low_stock_alert','special_order') AND send_count >= 0) NOT VALID;
+ALTER TABLE purchase_orders ADD CONSTRAINT purchase_orders_inventory_source_ck CHECK(source IN ('manual','import','low_stock_alert','special_order') AND send_count >= 0);
 CREATE TABLE IF NOT EXISTS po_email_snapshots (
  id serial PRIMARY KEY, dealer_id integer NOT NULL, location_id integer,
  purchase_order_id integer NOT NULL REFERENCES purchase_orders(id),
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS po_communication_settings (
 DO $$ BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='purchase_orders_review_status_ck') THEN
    ALTER TABLE purchase_orders ADD CONSTRAINT purchase_orders_review_status_ck
-   CHECK (status IN ('draft','pending_review','approved','sent','ordered','partially_received','received','closed','cancelled')) NOT VALID;
+   CHECK (status IN ('draft','pending_review','approved','sent','ordered','partially_received','received','closed','cancelled'));
  END IF;
  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='suppliers_cc_emails_ck') THEN
    ALTER TABLE suppliers ADD CONSTRAINT suppliers_cc_emails_ck CHECK(jsonb_typeof(cc_emails)='array');
@@ -71,7 +71,7 @@ DROP TRIGGER IF EXISTS po_line_decimal_amount ON purchase_order_lines;
 CREATE TRIGGER po_line_decimal_amount BEFORE INSERT OR UPDATE OF unit_cost ON purchase_order_lines FOR EACH ROW EXECUTE FUNCTION preserve_po_line_decimal_amount();
 DO $$ BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='po_line_decimal_amount_ck') THEN
-   ALTER TABLE purchase_order_lines ADD CONSTRAINT po_line_decimal_amount_ck CHECK(unit_cost_amount IS NULL OR unit_cost_amount>=0) NOT VALID;
+    ALTER TABLE purchase_order_lines ADD CONSTRAINT po_line_decimal_amount_ck CHECK(unit_cost_amount IS NULL OR unit_cost_amount>=0);
  END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS parts_module_migrations (
@@ -84,4 +84,10 @@ DO $$ BEGIN
    INSERT INTO parts_module_migrations(name) VALUES('2026-10-05-po-review-email');
  END IF;
 END $$;
+-- Also finish validation for development databases that ran the earlier version.
+-- Leave the data and CHECK predicates unchanged; fail rather than rewrite bad rows.
+-- Publish introspects these definitions, so do not leave staging NOT VALID flags.
+ALTER TABLE purchase_orders VALIDATE CONSTRAINT purchase_orders_inventory_source_ck;
+ALTER TABLE purchase_orders VALIDATE CONSTRAINT purchase_orders_review_status_ck;
+ALTER TABLE purchase_order_lines VALIDATE CONSTRAINT po_line_decimal_amount_ck;
 COMMIT;
