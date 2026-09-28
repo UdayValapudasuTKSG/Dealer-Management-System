@@ -14,5 +14,5 @@ export const brochuresTable = pgTable("dealer_brochures", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("dealer_brochures_object_path_idx").on(t.objectPath),
-  check("dealer_brochures_size_bytes_check", sql`${t.sizeBytes} > 0 AND ${t.sizeBytes} <= 104857600`),
+  check("dealer_brochures_size_bytes_check", sql`${t.sizeBytes} > 0 AND ${t.sizeBytes} <= 20971520`),
 ]);

@@ -14,7 +14,7 @@ try {
   const dealer = await client.query<{ id: number }>("SELECT id FROM dealers LIMIT 1");
   if (!dealer.rows[0]) throw new Error("No dealer available for brochure verification.");
   for (const [size, expected] of [
-    [20971521, true], [88317429, true], [104857600, true], [104857601, false],
+    [20971520, true], [20971521, false],
   ] as const) {
     await client.query("SAVEPOINT brochure_size_probe");
     let accepted = false;

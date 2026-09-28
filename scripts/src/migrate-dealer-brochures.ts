@@ -12,6 +12,7 @@ if (process.env.NODE_ENV === "production" || !url ||
 const migrationFiles = [
   "../migrations/2026-09-28-dealer-brochures.sql",
   "../migrations/2026-09-28-dealer-brochures-100mb.sql",
+  "../migrations/2026-09-29-dealer-brochures-20mb.sql",
 ];
 const client = await pool.connect();
 try {

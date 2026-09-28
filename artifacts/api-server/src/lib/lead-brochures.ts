@@ -17,7 +17,7 @@ export const GT_BROCHURES = [
 ] as const;
 
 export const BROCHURE_ATTACHMENT_LIMIT = 20 * 1024 * 1024;
-export const BROCHURE_UPLOAD_LIMIT = 100 * 1024 * 1024;
+export const BROCHURE_UPLOAD_LIMIT = 20 * 1024 * 1024;
 export const MAX_BROCHURES_PER_EMAIL = 7;
 export class BrochureUploadValidationError extends Error {}
 export const brochureCatalog = GT_BROCHURES.map(({ id, title, fileName, sizeBytes }) => ({
@@ -84,7 +84,7 @@ export async function commitBrochureUpload(dealerId: number, stagedPath: string)
   const [metadata] = await staged.getMetadata();
   const size = Number(metadata.size);
   if (!Number.isInteger(size) || size < 8 || size > BROCHURE_UPLOAD_LIMIT)
-    throw new BrochureUploadValidationError("PDF must be between 8 bytes and 100 MB.");
+    throw new BrochureUploadValidationError("PDF must be between 8 bytes and 20 MB.");
   if (metadata.contentType !== "application/pdf")
     throw new BrochureUploadValidationError("Uploaded file must be a PDF.");
   const [bytes] = await staged.download();

@@ -32,9 +32,7 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
   try {
     const { name, size, contentType } = parsed.data;
 
-    // Brochure PDFs may be 100 MB; other upload types retain their 20 MB cap.
-    const maxUploadMb = contentType === "application/pdf" ? 100 : 20;
-    const MAX_UPLOAD_BYTES = maxUploadMb * 1024 * 1024;
+    const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
     const DOCUMENT_MIME = new Set([
       "application/pdf",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -47,7 +45,7 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
       return;
     }
     if (size > MAX_UPLOAD_BYTES) {
-      res.status(422).json({ error: `File is too large (max ${maxUploadMb}MB)` });
+      res.status(422).json({ error: "File is too large (max 20MB)" });
       return;
     }
 
