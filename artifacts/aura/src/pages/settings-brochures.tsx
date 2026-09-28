@@ -15,7 +15,7 @@ import { useAuthz } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Plus, Pencil, Archive, Loader2 } from "lucide-react";
 
-const LIMIT = 20 * 1024 * 1024;
+const LIMIT = 100 * 1024 * 1024;
 type Selected = { id: string; title: string; fileName: string } | null;
 
 async function uploadBrochurePdf(file: File): Promise<string> {
@@ -76,7 +76,7 @@ export default function SettingsBrochures() {
     if (!title.trim() || !fileName.trim()) { setError("Enter a display name and PDF filename."); return; }
     if (editor === "new" && !file) { setError("Choose a PDF file."); return; }
     if (file && (file.type !== "application/pdf" || file.size < 8 || file.size > LIMIT)) {
-      setError("Choose a PDF smaller than 20 MB."); return;
+      setError("Choose a PDF up to 100 MB."); return;
     }
     setError("");
     try {
@@ -136,7 +136,7 @@ export default function SettingsBrochures() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{editor === "new" ? "Add brochure" : "Edit brochure"}</DialogTitle>
-          <DialogDescription>Choose a PDF. Replacing it won't change attachments in emails already queued.</DialogDescription>
+          <DialogDescription>Upload a PDF up to 100 MB. Email attachments still have a combined 20 MB limit; larger PDFs can be stored here but need a smaller copy to email. Replacing a PDF won't change attachments in emails already queued.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1"><Label htmlFor="brochure-title">Display name</Label><Input id="brochure-title" maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. New model brochure" /></div>
