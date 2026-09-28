@@ -8,7 +8,7 @@ import {
   ArchiveDealerBrochureParams, ArchiveDealerBrochureResponse, DownloadDealerBrochureParams,
 } from "@workspace/api-zod";
 import { activeDealerId } from "../middlewares/rbac";
-import { brochureCatalog, brochureView, commitBrochureUpload, safeBrochureFileName } from "../lib/lead-brochures";
+import { BrochureUploadValidationError, brochureCatalog, brochureView, commitBrochureUpload, safeBrochureFileName } from "../lib/lead-brochures";
 import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
@@ -41,7 +41,11 @@ router.post("/settings/brochures", async (req, res): Promise<void> => {
     res.status(201).json(CreateDealerBrochureResponse.parse(brochureView(row)));
   } catch (error) {
     if (uploaded) await uploaded.objectFile.delete().catch(() => {});
-    res.status(422).json({ error: error instanceof Error ? error.message : "Could not save brochure." });
+    if (error instanceof BrochureUploadValidationError) {
+      res.status(422).json({ error: error.message }); return;
+    }
+    console.error("Could not save brochure:", error);
+    res.status(500).json({ error: "Could not save brochure." });
   }
 });
 
@@ -72,7 +76,11 @@ router.patch("/settings/brochures/:brochureId", async (req, res): Promise<void> 
     res.json(UpdateDealerBrochureResponse.parse(brochureView(row)));
   } catch (error) {
     if (uploaded) await uploaded.objectFile.delete().catch(() => {});
-    res.status(422).json({ error: error instanceof Error ? error.message : "Could not update brochure." });
+    if (error instanceof BrochureUploadValidationError) {
+      res.status(422).json({ error: error.message }); return;
+    }
+    console.error("Could not update brochure:", error);
+    res.status(500).json({ error: "Could not update brochure." });
   }
 });
 

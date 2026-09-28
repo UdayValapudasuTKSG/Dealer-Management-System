@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS dealer_brochures (
   file_name text NOT NULL,
   object_path text NOT NULL UNIQUE,
   sha text NOT NULL,
-  size_bytes integer NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 20971520),
+  size_bytes integer NOT NULL CONSTRAINT dealer_brochures_size_bytes_check CHECK (size_bytes > 0 AND size_bytes <= 104857600),
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );

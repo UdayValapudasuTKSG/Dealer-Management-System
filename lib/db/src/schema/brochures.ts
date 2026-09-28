@@ -1,4 +1,5 @@
-import { pgTable, text, integer, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, text, integer, boolean, timestamp, uniqueIndex, check } from "drizzle-orm/pg-core";
 import { dealersTable } from "./dealers";
 
 export const brochuresTable = pgTable("dealer_brochures", {
@@ -11,4 +12,7 @@ export const brochuresTable = pgTable("dealer_brochures", {
   sizeBytes: integer("size_bytes").notNull(),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex("dealer_brochures_object_path_idx").on(t.objectPath)]);
+}, (t) => [
+  uniqueIndex("dealer_brochures_object_path_idx").on(t.objectPath),
+  check("dealer_brochures_size_bytes_check", sql`${t.sizeBytes} > 0 AND ${t.sizeBytes} <= 104857600`),
+]);

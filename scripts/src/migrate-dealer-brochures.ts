@@ -9,11 +9,23 @@ if (process.env.NODE_ENV === "production" || !url ||
     (process.env.EXTERNAL_DATABASE_URL && url === process.env.EXTERNAL_DATABASE_URL)) {
   throw new Error("Refusing brochure migration: development database URL required.");
 }
-const path = fileURLToPath(new URL("../migrations/2026-09-28-dealer-brochures.sql", import.meta.url));
-const sql = await readFile(path, "utf8");
+const migrationFiles = [
+  "../migrations/2026-09-28-dealer-brochures.sql",
+  "../migrations/2026-09-28-dealer-brochures-100mb.sql",
+];
+const client = await pool.connect();
 try {
-  await pool.query(sql);
-  console.log("Development dealer brochure migration applied.");
+  await client.query("BEGIN");
+  for (const file of migrationFiles) {
+    const sql = await readFile(fileURLToPath(new URL(file, import.meta.url)), "utf8");
+    await client.query(sql);
+  }
+  await client.query("COMMIT");
+  console.log("Development dealer brochure migrations applied.");
+} catch (error) {
+  await client.query("ROLLBACK");
+  throw error;
 } finally {
+  client.release();
   await pool.end();
 }

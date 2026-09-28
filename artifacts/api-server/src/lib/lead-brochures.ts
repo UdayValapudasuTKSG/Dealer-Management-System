@@ -19,6 +19,7 @@ export const GT_BROCHURES = [
 export const BROCHURE_ATTACHMENT_LIMIT = 20 * 1024 * 1024;
 export const BROCHURE_UPLOAD_LIMIT = 100 * 1024 * 1024;
 export const MAX_BROCHURES_PER_EMAIL = 7;
+export class BrochureUploadValidationError extends Error {}
 export const brochureCatalog = GT_BROCHURES.map(({ id, title, fileName, sizeBytes }) => ({
   id, title, fileName, sizeBytes, sendable: sizeBytes <= BROCHURE_ATTACHMENT_LIMIT,
 }));
@@ -31,7 +32,7 @@ export function safeBrochureFileName(name: string): string {
   // Never pass paths, control characters or MIME header delimiters into SMTP.
   const base = name.trim().replace(/\.pdf$/i, "").replace(/[^a-zA-Z0-9._ -]/g, "-")
     .replace(/^\.+/, "").trim().slice(0, 116);
-  if (!base) throw new Error("Enter a valid PDF filename.");
+  if (!base) throw new BrochureUploadValidationError("Enter a valid PDF filename.");
   return `${base}.pdf`;
 }
 
@@ -72,23 +73,23 @@ export async function selectDealerBrochures(dealerId: number, ids: string[]): Pr
 
 export async function commitBrochureUpload(dealerId: number, stagedPath: string) {
   if (!new RegExp(`^/objects/uploads/dealer-${dealerId}/[0-9a-f-]{36}$`, "i").test(stagedPath))
-    throw new Error("Upload a PDF for the active dealership first.");
+    throw new BrochureUploadValidationError("Upload a PDF for the active dealership first.");
   const [doc] = await db.select({ id: documentsTable.id }).from(documentsTable)
     .where(eq(documentsTable.storageKey, stagedPath)).limit(1);
   const [vehicle] = await db.select({ id: vehiclesTable.id }).from(vehiclesTable)
     .where(sql`${vehiclesTable.imageUrl} = ${stagedPath} OR ${vehiclesTable.images} @> ${JSON.stringify([stagedPath])}::jsonb`).limit(1);
-  if (doc || vehicle) throw new Error("This upload already belongs to another record. Upload a new PDF.");
+  if (doc || vehicle) throw new BrochureUploadValidationError("This upload already belongs to another record. Upload a new PDF.");
   const storage = new ObjectStorageService();
   const staged = await storage.getObjectEntityFile(stagedPath);
   const [metadata] = await staged.getMetadata();
   const size = Number(metadata.size);
   if (!Number.isInteger(size) || size < 8 || size > BROCHURE_UPLOAD_LIMIT)
-    throw new Error("PDF must be between 8 bytes and 100 MB.");
+    throw new BrochureUploadValidationError("PDF must be between 8 bytes and 100 MB.");
   if (metadata.contentType !== "application/pdf")
-    throw new Error("Uploaded file must be a PDF.");
+    throw new BrochureUploadValidationError("Uploaded file must be a PDF.");
   const [bytes] = await staged.download();
   if (bytes.length !== size || !bytes.subarray(0, 5).equals(Buffer.from("%PDF-")))
-    throw new Error("Uploaded file is not a valid PDF.");
+    throw new BrochureUploadValidationError("Uploaded file is not a valid PDF.");
   const sha = createHash("sha256").update(bytes).digest("hex");
   const dir = storage.getPrivateObjectDir().replace(/^\/|\/$/g, "");
   const [bucketName, ...prefix] = dir.split("/");
