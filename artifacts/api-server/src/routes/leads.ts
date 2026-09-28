@@ -106,11 +106,18 @@ import {
   ListLeadSourcesQueryParams,
   ListLeadSourcesResponse,
   RecordCallCentreDispositionBody,
+  ListLeadBrochuresParams,
+  ListLeadBrochuresResponse,
+  SendLeadBrochuresParams,
+  SendLeadBrochuresBody,
+  SendLeadBrochuresResponse,
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { CallCentreError, recordCallCentreDisposition, reassignCallCentreLead } from "../lib/call-centre";
 import { isActiveCallCentreLead, isCallCentreRole } from "../lib/call-centre-policy";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { brochureCatalog, loadBrochureAttachments, selectBrochures } from "../lib/lead-brochures";
+import { preflightDealerEmailSender, preflightEmailRecipient } from "../lib/email";
 import {
   onLeadCreated,
   onLeadUpdated,
@@ -319,6 +326,94 @@ async function logLeadEvent(
     refId: lead.id,
   });
 }
+
+router.get("/leads/:id/brochures", async (req, res): Promise<void> => {
+  const params = ListLeadBrochuresParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid lead ID" }); return; }
+  const lead = await leadForDealer(params.data.id, activeDealerId(res));
+  if (!lead || lead.deletedAt) { res.status(404).json({ error: "Lead not found" }); return; }
+  res.json(ListLeadBrochuresResponse.parse(lead.dealerId === 1 ? brochureCatalog : []));
+});
+
+router.post("/leads/:id/brochures", async (req, res): Promise<void> => {
+  const params = SendLeadBrochuresParams.safeParse(req.params);
+  const body = SendLeadBrochuresBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Select 1–7 distinct brochure IDs and supply an idempotency key." });
+    return;
+  }
+  const ownership = await checkLeadMutationOwnership(res.locals.user, activeDealerId(res), params.data.id);
+  if (ownership === "forbidden") { res.status(403).json(LEAD_NOT_OWNED); return; }
+  const lead = await leadForDealer(params.data.id, activeDealerId(res));
+  if (!lead || lead.deletedAt) { res.status(404).json({ error: "Lead not found" }); return; }
+  if (lead.dealerId !== 1) {
+    res.status(403).json({ error: "These GT Automotive brochures are not available for this dealership." });
+    return;
+  }
+  let selected: ReturnType<typeof selectBrochures>;
+  try { selected = selectBrochures(body.data.brochureIds); }
+  catch (err) { res.status(422).json({ error: (err as Error).message }); return; }
+  const recipient = lead.email?.trim();
+  if (!recipient || !z.email().safeParse(recipient).success) {
+    res.status(422).json({ error: "This lead has no valid customer email address. Add one before sending brochures." });
+    return;
+  }
+  const dedupeKey = `brochures:${lead.dealerId}:${lead.id}:${body.data.idempotencyKey}`;
+  const ids = selected.map((b) => b.id);
+  const [existing] = await db.select().from(emailLogsTable).where(eq(emailLogsTable.dedupeKey, dedupeKey));
+  if (existing) {
+    if (existing.dealerId !== lead.dealerId || existing.leadId !== lead.id ||
+        existing.recipient.toLowerCase() !== recipient.toLowerCase() ||
+        existing.payload?.brochureIdsJson !== JSON.stringify(ids)) {
+      res.status(409).json({ error: "This submission key was already used for a different recipient or brochure selection." });
+      return;
+    }
+    res.json(SendLeadBrochuresResponse.parse({
+      status: existing.status, recipient: existing.recipient, brochureIds: ids,
+    }));
+    return;
+  }
+  const sender = await preflightDealerEmailSender(lead.dealerId);
+  if (!sender.ok) {
+    res.status(422).json({ error: sender.message.replace("No quote was sent.", "No brochures were queued.") });
+    return;
+  }
+  const consent = await preflightEmailRecipient(lead.dealerId, recipient);
+  if (!consent.ok || lead.emailOptOut) {
+    res.status(422).json({ error: "Email communication is disabled for this customer. No brochures were queued." });
+    return;
+  }
+  try {
+    // Verify existence AND integrity before accepting the request, rather than
+    // enqueueing a message whose attachment cannot be retrieved later.
+    await loadBrochureAttachments(ids);
+  } catch (err) {
+    res.status(503).json({ error: `Brochures are unavailable: ${(err as Error).message}` });
+    return;
+  }
+  const row = await enqueueEmail({
+    template: "lead.brochures", dealerId: lead.dealerId, leadId: lead.id,
+    customerId: lead.customerId, to: recipient, dedupeKey,
+    onQueued: async () => {
+      await logLeadEvent(lead, "brochures_queued", "Brochure email queued",
+        `${selected.map((b) => b.title).join(", ")} → ${recipient}. Delivery is pending; check email status for the final result.`,
+        actorName(res));
+    },
+    data: {
+      name: lead.name,
+      brochureNames: selected.map((b) => b.title).join(", "),
+      brochureIdsJson: JSON.stringify(ids),
+    },
+  });
+  if (row.payload?.brochureIdsJson !== JSON.stringify(ids) ||
+      row.recipient.toLowerCase() !== recipient.toLowerCase()) {
+    res.status(409).json({ error: "This submission key was already used for a different selection." });
+    return;
+  }
+  res.json(SendLeadBrochuresResponse.parse({
+    status: row.status, recipient: row.recipient, brochureIds: ids,
+  }));
+});
 
 async function withLeadVehicleInterests<T extends Lead>(leads: T[]): Promise<Array<T & { vehicleInterests: Array<{
   vehicleId: number | null; make: string; model: string; modelYear: number;

@@ -41,6 +41,7 @@ import {
   sanitizeSmtpError,
 } from "./smtp-connection";
 import { buildQuotePdf } from "./quote-pdf";
+import { loadBrochureAttachments } from "./lead-brochures";
 import {
   buildInvoicePdfFromPayload,
   buildReceiptPdf,
@@ -234,6 +235,14 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personal sales advisor has been assigned and will reach out shortly with availability, pricing and a tailored walk-through.`,
     cta: () => ({ label: "Your sales advisor is on it" }),
     sample: { name: "Alex Mensah", vehicle: "2026 Aston Martin DB12" },
+  },
+  "lead.brochures": {
+    label: "Vehicle Brochures",
+    description: "Customer-requested BYD vehicle brochures attached as original PDFs.",
+    subject: () => "Your BYD vehicle brochures",
+    heading: (x) => `Your brochures are here, ${d(x, "name", "there")}`,
+    body: (x) => `Thank you for your interest in BYD. The brochures you requested (${d(x, "brochureNames", "vehicle brochures")}) are attached as PDFs. Reply to this email if you have any questions or would like to arrange a visit.`,
+    sample: { name: "Customer", brochureNames: "BYD Shark" },
   },
   vehicle_quote: {
     label: "Vehicle Quote",
@@ -1459,6 +1468,8 @@ export type EnqueueOptions = {
   data?: TemplateData;
   /** Idempotency — a second enqueue with the same key is a no-op. */
   dedupeKey?: string;
+  /** Called only for a newly inserted queued row, never on dedupe replay. */
+  onQueued?: (row: EmailLog) => Promise<void>;
   /** Scheduled send: worker won't touch the item before this time. */
   sendAt?: Date;
   /**
@@ -1738,6 +1749,7 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
       .where(eq(emailLogsTable.dedupeKey, opts.dedupeKey!));
     return existing!;
   }
+  await opts.onQueued?.(row);
   // Kick the worker soon so sends feel immediate.
   if (!opts.deferProcessing) setTimeout(() => void processQueue(), 50);
   return row;
@@ -2882,6 +2894,20 @@ async function markFailed(
   }
   if (!terminal) return;
 
+  if (item.template === "lead.brochures" && item.leadId) {
+    await db.insert(timelineEventsTable).values({
+      dealerId: item.dealerId,
+      customerId: item.customerId,
+      domain: "leads",
+      kind: "brochures_failed",
+      title: "Brochure email failed",
+      detail: `Email to ${item.recipient} failed after ${attempts} attempts. Review the email outbox; no delivery is confirmed.`,
+      actor: "Email Engine",
+      isAgent: true,
+      refType: "lead",
+      refId: item.leadId,
+    });
+  }
   // R6.4 terminal-failure cascade: WhatsApp → Email → In-App.
   try {
     const payload = item.payload ?? {};
@@ -3671,6 +3697,13 @@ export async function processQueue(): Promise<void> {
                 : "suppressed: email communication is off for this lead or controlled import",
           })
           .where(eq(emailLogsTable.id, item.id));
+        if (item.template === "lead.brochures" && item.leadId)
+          await db.insert(timelineEventsTable).values({
+            dealerId: item.dealerId, customerId: item.customerId, domain: "leads",
+            kind: "brochures_cancelled", title: "Brochure email cancelled",
+            detail: `Email to ${item.recipient} was not sent because email communication is disabled.`,
+            actor: "Email Engine", isAgent: true, refType: "lead", refId: item.leadId,
+          });
         return;
       }
       // Resolve the OWNING dealer's SMTP connection. Unconfigured/disabled
@@ -3685,6 +3718,13 @@ export async function processQueue(): Promise<void> {
             lastError: smtpSkipMessage(smtp.reason),
           })
           .where(eq(emailLogsTable.id, item.id));
+        if (item.template === "lead.brochures" && item.leadId)
+          await db.insert(timelineEventsTable).values({
+            dealerId: item.dealerId, customerId: item.customerId, domain: "leads",
+            kind: "brochures_cancelled", title: "Brochure email cancelled",
+            detail: `Email to ${item.recipient} was not sent because the dealership email connection is unavailable.`,
+            actor: "Email Engine", isAgent: true, refType: "lead", refId: item.leadId,
+          });
         logger.info(
           { id: item.id, dealerId: item.dealerId, reason: smtp.reason },
           "email skipped: dealer SMTP unavailable",
@@ -3712,6 +3752,18 @@ export async function processQueue(): Promise<void> {
         let attachments:
           | { filename: string; content: Buffer; contentType: string; cid?: string }[]
           | undefined;
+        if (item.template === "lead.brochures") {
+          if (item.dealerId !== 1 || !item.leadId)
+            throw new Error("Brochure email is restricted to GT Automotive leads.");
+          const [lead] = await db.select({ email: leadsTable.email }).from(leadsTable)
+            .where(and(eq(leadsTable.id, item.leadId), eq(leadsTable.dealerId, item.dealerId), isNull(leadsTable.deletedAt)));
+          if (!lead?.email || lead.email.trim().toLowerCase() !== item.recipient.trim().toLowerCase())
+            throw new Error("Lead email changed or lead unavailable; brochure email not sent.");
+          const ids = JSON.parse(item.payload?.brochureIdsJson ?? "[]") as unknown;
+          if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string"))
+            throw new Error("Invalid brochure selection in outbox.");
+          attachments = await loadBrochureAttachments(ids);
+        }
         if (item.template === "invoice.generated") {
           const pdf = await buildInvoicePdfFromPayload(
             item.payload ?? {},
@@ -3917,6 +3969,20 @@ export async function processQueue(): Promise<void> {
           if (!sent) return;
         }
         await markQuoteDelivered(item, "email");
+        if (item.template === "lead.brochures" && item.leadId) {
+          await db.insert(timelineEventsTable).values({
+            dealerId: item.dealerId,
+            customerId: item.customerId,
+            domain: "leads",
+            kind: "brochures_sent",
+            title: "Brochure email sent",
+            detail: `SMTP accepted the brochure email addressed to ${item.recipient}.`,
+            actor: "Email Engine",
+            isAgent: true,
+            refType: "lead",
+            refId: item.leadId,
+          });
+        }
         if (item.customerId) {
           await db.insert(timelineEventsTable).values({
             dealerId: item.dealerId,

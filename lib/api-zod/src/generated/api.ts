@@ -2017,6 +2017,40 @@ export const DeleteLeadResponse = zod.object({
 })
 
 
+export const ListLeadBrochuresParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListLeadBrochuresResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "fileName": zod.string(),
+  "sizeBytes": zod.number(),
+  "sendable": zod.boolean()
+})
+export const ListLeadBrochuresResponse = zod.array(ListLeadBrochuresResponseItem)
+
+
+export const SendLeadBrochuresParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const sendLeadBrochuresBodyBrochureIdsMax = 7;
+
+
+
+export const SendLeadBrochuresBody = zod.object({
+  "brochureIds": zod.array(zod.string()).min(1).max(sendLeadBrochuresBodyBrochureIdsMax),
+  "idempotencyKey": zod.string().uuid()
+})
+
+export const SendLeadBrochuresResponse = zod.object({
+  "status": zod.enum(['queued', 'sending', 'sent', 'cancelled', 'failed']),
+  "recipient": zod.string(),
+  "brochureIds": zod.array(zod.string())
+})
+
+
 /**
  * Restores the lead record to active visibility. Operational work closed by an approved archive remains historical and is not silently reopened.
  * @summary Restore visibility of a soft-archived lead

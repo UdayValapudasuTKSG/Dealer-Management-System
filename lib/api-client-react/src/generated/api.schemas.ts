@@ -5,6 +5,40 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export interface LeadBrochure {
+  id: string;
+  title: string;
+  fileName: string;
+  sizeBytes: number;
+  sendable: boolean;
+}
+
+export interface LeadBrochureSelection {
+  /**
+     * @minItems 1
+     * @maxItems 7
+     */
+  brochureIds: string[];
+  idempotencyKey: string;
+}
+
+export type LeadBrochureDeliveryStatus = typeof LeadBrochureDeliveryStatus[keyof typeof LeadBrochureDeliveryStatus];
+
+
+export const LeadBrochureDeliveryStatus = {
+  queued: 'queued',
+  sending: 'sending',
+  sent: 'sent',
+  cancelled: 'cancelled',
+  failed: 'failed',
+} as const;
+
+export interface LeadBrochureDelivery {
+  status: LeadBrochureDeliveryStatus;
+  recipient: string;
+  brochureIds: string[];
+}
+
 export interface CreateVehicleOnboardingInviteRequest {
   /** @minimum 1 */
   serviceOrderId: number;

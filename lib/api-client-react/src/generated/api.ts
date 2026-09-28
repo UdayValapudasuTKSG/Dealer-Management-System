@@ -254,6 +254,9 @@ import type {
   LeadAdvanceUnmet,
   LeadAdvisor,
   LeadAgentBrief,
+  LeadBrochure,
+  LeadBrochureDelivery,
+  LeadBrochureSelection,
   LeadCreateResult,
   LeadDecisionInput,
   LeadInput,
@@ -3869,6 +3872,143 @@ export const useDeleteLead = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteLeadMutationOptions(options));
+    }
+
+export const getListLeadBrochuresUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/brochures`
+}
+
+export const listLeadBrochures = async (id: number, options?: RequestInit): Promise<LeadBrochure[]> => {
+
+  return customFetch<LeadBrochure[]>(getListLeadBrochuresUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLeadBrochuresQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/brochures`
+    ] as const;
+    }
+
+
+export const getListLeadBrochuresQueryOptions = <TData = Awaited<ReturnType<typeof listLeadBrochures>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadBrochures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLeadBrochuresQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeadBrochures>>> = ({ signal }) => listLeadBrochures(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLeadBrochures>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLeadBrochuresQueryResult = NonNullable<Awaited<ReturnType<typeof listLeadBrochures>>>
+export type ListLeadBrochuresQueryError = ErrorType<unknown>
+
+
+
+export function useListLeadBrochures<TData = Awaited<ReturnType<typeof listLeadBrochures>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadBrochures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLeadBrochuresQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSendLeadBrochuresUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/brochures`
+}
+
+export const sendLeadBrochures = async (id: number,
+    leadBrochureSelection: LeadBrochureSelection, options?: RequestInit): Promise<LeadBrochureDelivery> => {
+
+  return customFetch<LeadBrochureDelivery>(getSendLeadBrochuresUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leadBrochureSelection)
+  }
+);}
+
+
+
+
+
+export const getSendLeadBrochuresMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLeadBrochures>>, TError,{id: number;data: BodyType<LeadBrochureSelection>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendLeadBrochures>>, TError,{id: number;data: BodyType<LeadBrochureSelection>}, TContext> => {
+
+const mutationKey = ['sendLeadBrochures'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendLeadBrochures>>, {id: number;data: BodyType<LeadBrochureSelection>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendLeadBrochures(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendLeadBrochuresMutationResult = NonNullable<Awaited<ReturnType<typeof sendLeadBrochures>>>
+    export type SendLeadBrochuresMutationBody = BodyType<LeadBrochureSelection>
+    export type SendLeadBrochuresMutationError = ErrorType<unknown>
+
+    export const useSendLeadBrochures = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLeadBrochures>>, TError,{id: number;data: BodyType<LeadBrochureSelection>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendLeadBrochures>>,
+        TError,
+        {id: number;data: BodyType<LeadBrochureSelection>},
+        TContext
+      > => {
+      return useMutation(getSendLeadBrochuresMutationOptions(options));
     }
 
 export const getRestoreLeadUrl = (id: number,) => {

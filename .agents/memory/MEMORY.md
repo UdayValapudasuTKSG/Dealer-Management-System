@@ -82,3 +82,4 @@
 - [Publish CHECK validation](publish-check-validation.md) — unvalidated CHECK definitions can serialize incorrectly; validate clean dev constraints, then recompute the publish diff.
 - [Call-centre qualification](call-centre-qualification.md) — interested means sales handover, not completion of sales qualification gates; historical rep attribution is not edit permission.
 - [Internal email recipient policy](internal-email-recipient-policy.md) — email-only dealer overrides; empty means off, defaults remain until customized, and queued mail respects current policy.
+- [Brochure brand boundaries](brochure-brand-boundaries.md) — supplied BYD PDFs are GT-branded, not shared across dealerships; preserve originals when making email-sized copies.

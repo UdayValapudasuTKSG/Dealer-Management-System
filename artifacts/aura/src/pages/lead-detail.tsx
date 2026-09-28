@@ -3,6 +3,9 @@ import { useRoute, Link, useLocation } from "wouter";
 import { VehicleInterestsField } from "@/components/vehicle-interests-field";
 import {
   useGetLead,
+  useListLeadBrochures,
+  useSendLeadBrochures,
+  getListLeadBrochuresQueryKey,
   useListDivisions,
   useGetVehicle,
   useGetLeadTimeline,
@@ -126,6 +129,7 @@ import {
   DocumentPrefillBanner,
 } from "@/components/documents-card";
 import { CallDialog } from "@/components/lead/call-dialog";
+import { CallCentreRepresentativeDetails } from "@/components/lead/call-centre-representative-details";
 import { isCallCentreRole } from "@/lib/pipeline-phase-filter";
 import { isHeldByCallCentre } from "@/hooks/use-call-centre";
 import { Headset } from "lucide-react";
@@ -944,6 +948,14 @@ export default function LeadDetail() {
   const money = useMoney();
 
   const { data: lead, isLoading, isError, error, refetch } = useGetLead(id);
+  const [brochuresOpen, setBrochuresOpen] = useState(false);
+  const [selectedBrochures, setSelectedBrochures] = useState<string[]>([]);
+  const [brochureKey, setBrochureKey] = useState(() => crypto.randomUUID());
+  const [brochureError, setBrochureError] = useState("");
+  const brochureCatalogQuery = useListLeadBrochures(id, {
+    query: { queryKey: getListLeadBrochuresQueryKey(id), enabled: brochuresOpen && Number.isFinite(id) },
+  });
+  const sendBrochures = useSendLeadBrochures();
   const { data: vehicle } = useGetVehicle(lead?.interestedVehicleId ?? 0, {
     query: {
       queryKey: ["lead-detail-vehicle", lead?.interestedVehicleId],
@@ -1673,6 +1685,17 @@ export default function LeadDetail() {
               </Link>
             )}
             {canEdit && (
+              <Button variant="outline" className="gap-1.5" onClick={() => {
+                setSelectedBrochures([]);
+                setBrochureError("");
+                setBrochureKey(crypto.randomUUID());
+                setBrochuresOpen(true);
+              }}>
+                <Mail className="w-3.5 h-3.5" />
+                Send brochures
+              </Button>
+            )}
+            {canEdit && (
               <Button
                 variant="outline"
                 onClick={() => setCallOpen(true)}
@@ -2094,6 +2117,7 @@ export default function LeadDetail() {
 
               {tab === "details" && (
                 <div className="space-y-4">
+                  <CallCentreRepresentativeDetails lead={lead} />
                   <Section title="Lead Information">
                     <InlineField
                       label="Name"
@@ -3812,6 +3836,88 @@ export default function LeadDetail() {
         open={workflowOpen}
         onOpenChange={setWorkflowOpen}
       />
+
+      <Dialog open={brochuresOpen} onOpenChange={(open) => {
+        if (!sendBrochures.isPending) setBrochuresOpen(open);
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Email BYD brochures</DialogTitle>
+            <DialogDescription>
+              Send original PDFs to the customer email on this lead. Delivery is queued through the dealership’s email connection.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-foreground/5 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Recipient: </span>
+              <span className="font-medium">{lead.email || "No email on file — add an email to this lead first."}</span>
+            </div>
+            {brochureCatalogQuery.isLoading && <p className="text-sm text-muted-foreground">Loading brochures…</p>}
+            {brochureCatalogQuery.isError && <p role="alert" className="text-sm text-destructive">Could not load brochures. Please try again.</p>}
+            {brochureCatalogQuery.data?.length === 0 && <p className="text-sm text-muted-foreground">No brochures available for this dealership.</p>}
+            <div className="max-h-72 space-y-2 overflow-y-auto">
+              {brochureCatalogQuery.data?.map((brochure) => (
+                <label key={brochure.id} className={`flex items-start gap-3 rounded-lg border border-white/10 p-3 ${brochure.sendable ? "cursor-pointer" : "opacity-60"}`}>
+                  <Checkbox
+                    checked={selectedBrochures.includes(brochure.id)}
+                    disabled={!brochure.sendable || sendBrochures.isPending}
+                    onCheckedChange={(checked) => {
+                      setBrochureError("");
+                      setSelectedBrochures((prior) => checked
+                        ? [...prior, brochure.id]
+                        : prior.filter((value) => value !== brochure.id));
+                    }}
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium">{brochure.title}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {(brochure.sizeBytes / 1048576).toFixed(1)} MB
+                      {!brochure.sendable && " · Too large to attach by email (20 MB limit)"}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {selectedBrochures.length > 0 && (
+              <p className={`text-xs ${(brochureCatalogQuery.data ?? []).filter((b) => selectedBrochures.includes(b.id)).reduce((sum, b) => sum + b.sizeBytes, 0) > 20 * 1048576 ? "text-destructive" : "text-muted-foreground"}`}>
+                Selected: {((brochureCatalogQuery.data ?? []).filter((b) => selectedBrochures.includes(b.id)).reduce((sum, b) => sum + b.sizeBytes, 0) / 1048576).toFixed(1)} MB / 20 MB maximum.
+              </p>
+            )}
+            {brochureError && <p role="alert" className="text-sm text-destructive">{brochureError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBrochuresOpen(false)} disabled={sendBrochures.isPending}>Cancel</Button>
+            <Button disabled={!lead.email || !selectedBrochures.length || sendBrochures.isPending ||
+              (brochureCatalogQuery.data ?? []).filter((b) => selectedBrochures.includes(b.id)).reduce((sum, b) => sum + b.sizeBytes, 0) > 20 * 1048576}
+              onClick={async () => {
+                setBrochureError("");
+                try {
+                  const result = await sendBrochures.mutateAsync({
+                    id: lead.id,
+                    data: { brochureIds: selectedBrochures, idempotencyKey: brochureKey },
+                  });
+                  if (result.status === "cancelled" || result.status === "failed") {
+                    setBrochureError(`Email was ${result.status}. No delivery is confirmed; contact your manager.`);
+                    return;
+                  }
+                  toast({
+                    title: result.status === "sent" ? "Brochures sent" : "Brochures queued",
+                    description: result.status === "sent"
+                      ? `Sent to ${result.recipient}.`
+                      : `Queued to ${result.recipient}. This does not confirm delivery.`,
+                  });
+                  qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+                  setBrochuresOpen(false);
+                } catch (err) {
+                  const apiError = err as { data?: { error?: string }; message?: string };
+                  setBrochureError(apiError.data?.error ?? apiError.message ?? "Could not queue brochures.");
+                }
+              }}>
+              {sendBrochures.isPending ? "Queuing…" : `Send ${selectedBrochures.length || ""} brochure${selectedBrochures.length === 1 ? "" : "s"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {(canEdit || canReassignCallCentre) && editOpen && (
         <CreateRecordDialog
