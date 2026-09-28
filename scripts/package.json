@@ -8,6 +8,7 @@
     "seed-connectivity": "tsx ./src/seed-connectivity.ts",
     "seed-rbac": "tsx ./src/seed-rbac.ts",
     "migrate-dealers": "tsx ./src/migrate-dealers.ts",
+    "migrate-dealer-brochures": "tsx ./src/migrate-dealer-brochures.ts",
     "seed-persona-users": "tsx ./src/seed-persona-users.ts",
     "verify-acceptance-v3": "tsx ./src/verify-acceptance-v3.ts",
     "verify-gate-cascades": "tsx ./src/verify-gate-cascades.ts",

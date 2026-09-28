@@ -1208,6 +1208,82 @@ paths:
               schema:
                 $ref: "#/components/schemas/LeadBrochureDelivery"
 
+  /settings/brochures:
+    get:
+      operationId: listDealerBrochures
+      tags: [settings]
+      responses:
+        "200":
+          description: Dealer brochure library (including archived)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DealerBrochure" }
+    post:
+      operationId: createDealerBrochure
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealerBrochureInput" }
+      responses:
+        "201":
+          description: Added brochure
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DealerBrochure" }
+  /settings/brochures/{brochureId}:
+    patch:
+      operationId: updateDealerBrochure
+      tags: [settings]
+      parameters:
+        - name: brochureId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealerBrochureUpdate" }
+      responses:
+        "200":
+          description: Updated brochure
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DealerBrochure" }
+    delete:
+      operationId: archiveDealerBrochure
+      tags: [settings]
+      parameters:
+        - name: brochureId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Archived brochure
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DealerBrochure" }
+  /settings/brochures/{brochureId}/download:
+    get:
+      operationId: downloadDealerBrochure
+      tags: [settings]
+      parameters:
+        - name: brochureId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Private PDF accessible only to this dealership's settings viewers
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+
   /leads/{id}/restore:
     post:
       operationId: restoreLead
@@ -11267,6 +11343,29 @@ components:
         fileName: { type: string }
         sizeBytes: { type: integer }
         sendable: { type: boolean }
+    DealerBrochure:
+      type: object
+      required: [id, title, fileName, sizeBytes, sendable, active]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        fileName: { type: string }
+        sizeBytes: { type: integer }
+        sendable: { type: boolean }
+        active: { type: boolean }
+    DealerBrochureInput:
+      type: object
+      required: [title, fileName, objectPath]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        fileName: { type: string, minLength: 1, maxLength: 120 }
+        objectPath: { type: string, minLength: 1 }
+    DealerBrochureUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        fileName: { type: string, minLength: 1, maxLength: 120 }
+        objectPath: { type: string, minLength: 1 }
     LeadBrochureSelection:
       type: object
       required: [brochureIds, idempotencyKey]

@@ -41,7 +41,7 @@ import {
   sanitizeSmtpError,
 } from "./smtp-connection";
 import { buildQuotePdf } from "./quote-pdf";
-import { loadBrochureAttachments } from "./lead-brochures";
+import { loadBrochureAttachments, loadBrochureSnapshotAttachments } from "./lead-brochures";
 import {
   buildInvoicePdfFromPayload,
   buildReceiptPdf,
@@ -238,10 +238,10 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   },
   "lead.brochures": {
     label: "Vehicle Brochures",
-    description: "Customer-requested BYD vehicle brochures attached as original PDFs.",
-    subject: () => "Your BYD vehicle brochures",
+    description: "Customer-requested vehicle brochures attached as PDFs.",
+    subject: () => "Your vehicle brochures",
     heading: (x) => `Your brochures are here, ${d(x, "name", "there")}`,
-    body: (x) => `Thank you for your interest in BYD. The brochures you requested (${d(x, "brochureNames", "vehicle brochures")}) are attached as PDFs. Reply to this email if you have any questions or would like to arrange a visit.`,
+    body: (x) => `Thank you for your interest. The brochures you requested (${d(x, "brochureNames", "vehicle brochures")}) are attached as PDFs. Reply to this email if you have any questions or would like to arrange a visit.`,
     sample: { name: "Customer", brochureNames: "BYD Shark" },
   },
   vehicle_quote: {
@@ -3753,8 +3753,8 @@ export async function processQueue(): Promise<void> {
           | { filename: string; content: Buffer; contentType: string; cid?: string }[]
           | undefined;
         if (item.template === "lead.brochures") {
-          if (item.dealerId !== 1 || !item.leadId)
-            throw new Error("Brochure email is restricted to GT Automotive leads.");
+          if (!item.leadId)
+            throw new Error("Brochure email has no lead.");
           const [lead] = await db.select({ email: leadsTable.email }).from(leadsTable)
             .where(and(eq(leadsTable.id, item.leadId), eq(leadsTable.dealerId, item.dealerId), isNull(leadsTable.deletedAt)));
           if (!lead?.email || lead.email.trim().toLowerCase() !== item.recipient.trim().toLowerCase())
@@ -3762,7 +3762,18 @@ export async function processQueue(): Promise<void> {
           const ids = JSON.parse(item.payload?.brochureIdsJson ?? "[]") as unknown;
           if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string"))
             throw new Error("Invalid brochure selection in outbox.");
-          attachments = await loadBrochureAttachments(ids);
+          // New jobs use immutable upload snapshots; legacy GT jobs predate
+          // snapshots and continue to use the original seven private PDFs.
+          if (item.payload?.brochureSnapshotJson) {
+            const snapshots = JSON.parse(item.payload.brochureSnapshotJson);
+            if (!Array.isArray(snapshots) || snapshots.map((b: { id: string }) => b.id).join(",") !== ids.join(","))
+              throw new Error("Invalid brochure attachment snapshot.");
+            // Archived/replaced brochures remain sendable for existing jobs.
+            attachments = await loadBrochureSnapshotAttachments(snapshots, item.dealerId);
+          } else {
+            if (item.dealerId !== 1) throw new Error("Legacy brochure selection is invalid for this dealer.");
+            attachments = await loadBrochureAttachments(ids);
+          }
         }
         if (item.template === "invoice.generated") {
           const pdf = await buildInvoicePdfFromPayload(

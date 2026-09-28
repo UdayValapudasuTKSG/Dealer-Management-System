@@ -8,6 +8,7 @@ import {
   Percent,
   ScrollText,
   Mail,
+  FileText,
   Paintbrush,
   Plug,
   MessageSquare,
@@ -55,6 +56,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     href: "/settings/sources",
     icon: Megaphone,
     description: "Configure where enquiries come from and how they are tracked.",
+    module: "settings",
+  },
+  {
+    name: "Brochures",
+    href: "/settings/brochures",
+    icon: FileText,
+    description: "Upload PDFs for lead brochure emails.",
     module: "settings",
   },
   {

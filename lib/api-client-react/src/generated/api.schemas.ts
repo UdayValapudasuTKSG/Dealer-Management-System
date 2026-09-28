@@ -13,6 +13,45 @@ export interface LeadBrochure {
   sendable: boolean;
 }
 
+export interface DealerBrochure {
+  id: string;
+  title: string;
+  fileName: string;
+  sizeBytes: number;
+  sendable: boolean;
+  active: boolean;
+}
+
+export interface DealerBrochureInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  fileName: string;
+  /** @minLength 1 */
+  objectPath: string;
+}
+
+export interface DealerBrochureUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title?: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  fileName?: string;
+  /** @minLength 1 */
+  objectPath?: string;
+}
+
 export interface LeadBrochureSelection {
   /**
      * @minItems 1

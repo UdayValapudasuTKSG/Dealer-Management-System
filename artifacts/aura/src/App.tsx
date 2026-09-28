@@ -47,6 +47,7 @@ import SettingsBranding from "@/pages/settings-branding";
 import SettingsLocalization from "@/pages/settings-localization";
 import SettingsRoles from "@/pages/settings-roles";
 import SettingsSources from "@/pages/settings-sources";
+import SettingsBrochures from "@/pages/settings-brochures";
 import SettingsStages from "@/pages/settings-stages";
 import SettingsTaxes from "@/pages/settings-taxes";
 import SettingsAudit from "@/pages/settings-audit";
@@ -343,6 +344,11 @@ function AppRoutes() {
                 <Route path="/settings/sources">
                   <RequireSettings>
                     <SettingsSources />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/brochures">
+                  <RequireSettings>
+                    <SettingsBrochures />
                   </RequireSettings>
                 </Route>
                 <Route path="/settings/stages">

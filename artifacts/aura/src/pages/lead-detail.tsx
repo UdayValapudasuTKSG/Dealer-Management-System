@@ -3842,7 +3842,7 @@ export default function LeadDetail() {
       }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Email BYD brochures</DialogTitle>
+            <DialogTitle>Email brochures</DialogTitle>
             <DialogDescription>
               Send original PDFs to the customer email on this lead. Delivery is queued through the dealership’s email connection.
             </DialogDescription>

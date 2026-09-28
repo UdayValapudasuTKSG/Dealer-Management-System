@@ -116,7 +116,7 @@ import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { CallCentreError, recordCallCentreDisposition, reassignCallCentreLead } from "../lib/call-centre";
 import { isActiveCallCentreLead, isCallCentreRole } from "../lib/call-centre-policy";
 import { ObjectStorageService } from "../lib/objectStorage";
-import { brochureCatalog, loadBrochureAttachments, selectBrochures } from "../lib/lead-brochures";
+import { listBrochures, loadBrochureSnapshotAttachments, selectDealerBrochures } from "../lib/lead-brochures";
 import { preflightDealerEmailSender, preflightEmailRecipient } from "../lib/email";
 import {
   onLeadCreated,
@@ -332,7 +332,7 @@ router.get("/leads/:id/brochures", async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: "Invalid lead ID" }); return; }
   const lead = await leadForDealer(params.data.id, activeDealerId(res));
   if (!lead || lead.deletedAt) { res.status(404).json({ error: "Lead not found" }); return; }
-  res.json(ListLeadBrochuresResponse.parse(lead.dealerId === 1 ? brochureCatalog : []));
+  res.json(ListLeadBrochuresResponse.parse(await listBrochures(lead.dealerId)));
 });
 
 router.post("/leads/:id/brochures", async (req, res): Promise<void> => {
@@ -346,20 +346,13 @@ router.post("/leads/:id/brochures", async (req, res): Promise<void> => {
   if (ownership === "forbidden") { res.status(403).json(LEAD_NOT_OWNED); return; }
   const lead = await leadForDealer(params.data.id, activeDealerId(res));
   if (!lead || lead.deletedAt) { res.status(404).json({ error: "Lead not found" }); return; }
-  if (lead.dealerId !== 1) {
-    res.status(403).json({ error: "These GT Automotive brochures are not available for this dealership." });
-    return;
-  }
-  let selected: ReturnType<typeof selectBrochures>;
-  try { selected = selectBrochures(body.data.brochureIds); }
-  catch (err) { res.status(422).json({ error: (err as Error).message }); return; }
   const recipient = lead.email?.trim();
   if (!recipient || !z.email().safeParse(recipient).success) {
     res.status(422).json({ error: "This lead has no valid customer email address. Add one before sending brochures." });
     return;
   }
   const dedupeKey = `brochures:${lead.dealerId}:${lead.id}:${body.data.idempotencyKey}`;
-  const ids = selected.map((b) => b.id);
+  const ids = body.data.brochureIds;
   const [existing] = await db.select().from(emailLogsTable).where(eq(emailLogsTable.dedupeKey, dedupeKey));
   if (existing) {
     if (existing.dealerId !== lead.dealerId || existing.leadId !== lead.id ||
@@ -373,6 +366,9 @@ router.post("/leads/:id/brochures", async (req, res): Promise<void> => {
     }));
     return;
   }
+  let selected: Awaited<ReturnType<typeof selectDealerBrochures>>;
+  try { selected = await selectDealerBrochures(lead.dealerId, ids); }
+  catch (err) { res.status(422).json({ error: (err as Error).message }); return; }
   const sender = await preflightDealerEmailSender(lead.dealerId);
   if (!sender.ok) {
     res.status(422).json({ error: sender.message.replace("No quote was sent.", "No brochures were queued.") });
@@ -386,10 +382,17 @@ router.post("/leads/:id/brochures", async (req, res): Promise<void> => {
   try {
     // Verify existence AND integrity before accepting the request, rather than
     // enqueueing a message whose attachment cannot be retrieved later.
-    await loadBrochureAttachments(ids);
+    await loadBrochureSnapshotAttachments(selected, lead.dealerId);
   } catch (err) {
     res.status(503).json({ error: `Brochures are unavailable: ${(err as Error).message}` });
     return;
+  }
+  try {
+    const current = await selectDealerBrochures(lead.dealerId, ids);
+    if (JSON.stringify(current) !== JSON.stringify(selected))
+      throw new Error("Brochure selection changed. Review the catalog and try again.");
+  } catch (err) {
+    res.status(422).json({ error: (err as Error).message }); return;
   }
   const row = await enqueueEmail({
     template: "lead.brochures", dealerId: lead.dealerId, leadId: lead.id,
@@ -403,6 +406,7 @@ router.post("/leads/:id/brochures", async (req, res): Promise<void> => {
       name: lead.name,
       brochureNames: selected.map((b) => b.title).join(", "),
       brochureIdsJson: JSON.stringify(ids),
+      brochureSnapshotJson: JSON.stringify(selected),
     },
   });
   if (row.payload?.brochureIdsJson !== JSON.stringify(ids) ||

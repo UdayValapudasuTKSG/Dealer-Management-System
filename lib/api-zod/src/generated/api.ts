@@ -2051,6 +2051,88 @@ export const SendLeadBrochuresResponse = zod.object({
 })
 
 
+export const ListDealerBrochuresResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "fileName": zod.string(),
+  "sizeBytes": zod.number(),
+  "sendable": zod.boolean(),
+  "active": zod.boolean()
+})
+export const ListDealerBrochuresResponse = zod.array(ListDealerBrochuresResponseItem)
+
+
+export const createDealerBrochureBodyTitleMax = 120;
+
+export const createDealerBrochureBodyFileNameMax = 120;
+
+
+
+
+export const CreateDealerBrochureBody = zod.object({
+  "title": zod.string().min(1).max(createDealerBrochureBodyTitleMax),
+  "fileName": zod.string().min(1).max(createDealerBrochureBodyFileNameMax),
+  "objectPath": zod.string().min(1)
+})
+
+export const CreateDealerBrochureResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "fileName": zod.string(),
+  "sizeBytes": zod.number(),
+  "sendable": zod.boolean(),
+  "active": zod.boolean()
+})
+
+
+export const UpdateDealerBrochureParams = zod.object({
+  "brochureId": zod.coerce.string()
+})
+
+export const updateDealerBrochureBodyTitleMax = 120;
+
+export const updateDealerBrochureBodyFileNameMax = 120;
+
+
+
+
+export const UpdateDealerBrochureBody = zod.object({
+  "title": zod.string().min(1).max(updateDealerBrochureBodyTitleMax).optional(),
+  "fileName": zod.string().min(1).max(updateDealerBrochureBodyFileNameMax).optional(),
+  "objectPath": zod.string().min(1).optional()
+})
+
+export const UpdateDealerBrochureResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "fileName": zod.string(),
+  "sizeBytes": zod.number(),
+  "sendable": zod.boolean(),
+  "active": zod.boolean()
+})
+
+
+export const ArchiveDealerBrochureParams = zod.object({
+  "brochureId": zod.coerce.string()
+})
+
+export const ArchiveDealerBrochureResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "fileName": zod.string(),
+  "sizeBytes": zod.number(),
+  "sendable": zod.boolean(),
+  "active": zod.boolean()
+})
+
+
+export const DownloadDealerBrochureParams = zod.object({
+  "brochureId": zod.coerce.string()
+})
+
+export const DownloadDealerBrochureResponse = zod.unknown()
+
+
 /**
  * Restores the lead record to active visibility. Operational work closed by an approved archive remains historical and is not silently reopened.
  * @summary Restore visibility of a soft-archived lead

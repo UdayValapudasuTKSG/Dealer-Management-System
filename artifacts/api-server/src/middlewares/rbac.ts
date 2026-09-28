@@ -979,6 +979,10 @@ const PATH_MODULES: Record<string, RouteRule> = {
     category: (req) => (req.method === "GET" ? "view" : "edit"),
   },
   emails: { module: "settings" },
+  settings: {
+    module: "settings",
+    category: (req) => (req.method === "GET" ? "view" : "edit"),
+  },
 };
 
 // Signed-in-only paths that carry no specific permission requirement.

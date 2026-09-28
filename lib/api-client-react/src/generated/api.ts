@@ -142,6 +142,9 @@ import type {
   DealerAgentOverview,
   DealerBranding,
   DealerBrandingUpdate,
+  DealerBrochure,
+  DealerBrochureInput,
+  DealerBrochureUpdate,
   DealerInput,
   DealerLocalization,
   DealerLocalizationUpdate,
@@ -4010,6 +4013,344 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getSendLeadBrochuresMutationOptions(options));
     }
+
+export const getListDealerBrochuresUrl = () => {
+
+
+
+
+  return `/api/settings/brochures`
+}
+
+export const listDealerBrochures = async ( options?: RequestInit): Promise<DealerBrochure[]> => {
+
+  return customFetch<DealerBrochure[]>(getListDealerBrochuresUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDealerBrochuresQueryKey = () => {
+    return [
+    `/api/settings/brochures`
+    ] as const;
+    }
+
+
+export const getListDealerBrochuresQueryOptions = <TData = Awaited<ReturnType<typeof listDealerBrochures>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerBrochures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDealerBrochuresQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDealerBrochures>>> = ({ signal }) => listDealerBrochures({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDealerBrochures>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDealerBrochuresQueryResult = NonNullable<Awaited<ReturnType<typeof listDealerBrochures>>>
+export type ListDealerBrochuresQueryError = ErrorType<unknown>
+
+
+
+export function useListDealerBrochures<TData = Awaited<ReturnType<typeof listDealerBrochures>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerBrochures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDealerBrochuresQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateDealerBrochureUrl = () => {
+
+
+
+
+  return `/api/settings/brochures`
+}
+
+export const createDealerBrochure = async (dealerBrochureInput: DealerBrochureInput, options?: RequestInit): Promise<DealerBrochure> => {
+
+  return customFetch<DealerBrochure>(getCreateDealerBrochureUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerBrochureInput)
+  }
+);}
+
+
+
+
+
+export const getCreateDealerBrochureMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDealerBrochure>>, TError,{data: BodyType<DealerBrochureInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDealerBrochure>>, TError,{data: BodyType<DealerBrochureInput>}, TContext> => {
+
+const mutationKey = ['createDealerBrochure'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDealerBrochure>>, {data: BodyType<DealerBrochureInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDealerBrochure(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDealerBrochureMutationResult = NonNullable<Awaited<ReturnType<typeof createDealerBrochure>>>
+    export type CreateDealerBrochureMutationBody = BodyType<DealerBrochureInput>
+    export type CreateDealerBrochureMutationError = ErrorType<unknown>
+
+    export const useCreateDealerBrochure = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDealerBrochure>>, TError,{data: BodyType<DealerBrochureInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDealerBrochure>>,
+        TError,
+        {data: BodyType<DealerBrochureInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDealerBrochureMutationOptions(options));
+    }
+
+export const getUpdateDealerBrochureUrl = (brochureId: string,) => {
+
+
+
+
+  return `/api/settings/brochures/${brochureId}`
+}
+
+export const updateDealerBrochure = async (brochureId: string,
+    dealerBrochureUpdate: DealerBrochureUpdate, options?: RequestInit): Promise<DealerBrochure> => {
+
+  return customFetch<DealerBrochure>(getUpdateDealerBrochureUrl(brochureId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerBrochureUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateDealerBrochureMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerBrochure>>, TError,{brochureId: string;data: BodyType<DealerBrochureUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDealerBrochure>>, TError,{brochureId: string;data: BodyType<DealerBrochureUpdate>}, TContext> => {
+
+const mutationKey = ['updateDealerBrochure'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDealerBrochure>>, {brochureId: string;data: BodyType<DealerBrochureUpdate>}> = (props) => {
+          const {brochureId,data} = props ?? {};
+
+          return  updateDealerBrochure(brochureId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDealerBrochureMutationResult = NonNullable<Awaited<ReturnType<typeof updateDealerBrochure>>>
+    export type UpdateDealerBrochureMutationBody = BodyType<DealerBrochureUpdate>
+    export type UpdateDealerBrochureMutationError = ErrorType<unknown>
+
+    export const useUpdateDealerBrochure = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerBrochure>>, TError,{brochureId: string;data: BodyType<DealerBrochureUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateDealerBrochure>>,
+        TError,
+        {brochureId: string;data: BodyType<DealerBrochureUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateDealerBrochureMutationOptions(options));
+    }
+
+export const getArchiveDealerBrochureUrl = (brochureId: string,) => {
+
+
+
+
+  return `/api/settings/brochures/${brochureId}`
+}
+
+export const archiveDealerBrochure = async (brochureId: string, options?: RequestInit): Promise<DealerBrochure> => {
+
+  return customFetch<DealerBrochure>(getArchiveDealerBrochureUrl(brochureId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getArchiveDealerBrochureMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveDealerBrochure>>, TError,{brochureId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveDealerBrochure>>, TError,{brochureId: string}, TContext> => {
+
+const mutationKey = ['archiveDealerBrochure'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveDealerBrochure>>, {brochureId: string}> = (props) => {
+          const {brochureId} = props ?? {};
+
+          return  archiveDealerBrochure(brochureId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveDealerBrochureMutationResult = NonNullable<Awaited<ReturnType<typeof archiveDealerBrochure>>>
+
+    export type ArchiveDealerBrochureMutationError = ErrorType<unknown>
+
+    export const useArchiveDealerBrochure = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveDealerBrochure>>, TError,{brochureId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof archiveDealerBrochure>>,
+        TError,
+        {brochureId: string},
+        TContext
+      > => {
+      return useMutation(getArchiveDealerBrochureMutationOptions(options));
+    }
+
+export const getDownloadDealerBrochureUrl = (brochureId: string,) => {
+
+
+
+
+  return `/api/settings/brochures/${brochureId}/download`
+}
+
+export const downloadDealerBrochure = async (brochureId: string, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadDealerBrochureUrl(brochureId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadDealerBrochureQueryKey = (brochureId: string,) => {
+    return [
+    `/api/settings/brochures/${brochureId}/download`
+    ] as const;
+    }
+
+
+export const getDownloadDealerBrochureQueryOptions = <TData = Awaited<ReturnType<typeof downloadDealerBrochure>>, TError = ErrorType<unknown>>(brochureId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadDealerBrochure>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadDealerBrochureQueryKey(brochureId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadDealerBrochure>>> = ({ signal }) => downloadDealerBrochure(brochureId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: brochureId !== null && brochureId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadDealerBrochure>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadDealerBrochureQueryResult = NonNullable<Awaited<ReturnType<typeof downloadDealerBrochure>>>
+export type DownloadDealerBrochureQueryError = ErrorType<unknown>
+
+
+
+export function useDownloadDealerBrochure<TData = Awaited<ReturnType<typeof downloadDealerBrochure>>, TError = ErrorType<unknown>>(
+ brochureId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadDealerBrochure>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadDealerBrochureQueryOptions(brochureId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getRestoreLeadUrl = (id: number,) => {
 
