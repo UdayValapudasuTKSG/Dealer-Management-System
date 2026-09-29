@@ -4687,7 +4687,8 @@ export const CustomerComplaintStatus = {
 
 export interface CustomerComplaint {
   id: number;
-  customerId: number;
+  /** @nullable */
+  customerId: number | null;
   /** @nullable */
   leadId?: number | null;
   title: string;
@@ -4748,6 +4749,31 @@ export const CustomerComplaintUpdateStatus = {
 export interface CustomerComplaintUpdate {
   severity?: CustomerComplaintUpdateSeverity;
   status?: CustomerComplaintUpdateStatus;
+  escalated?: boolean;
+}
+
+export type LeadComplaintInputSeverity = typeof LeadComplaintInputSeverity[keyof typeof LeadComplaintInputSeverity];
+
+
+export const LeadComplaintInputSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
+} as const;
+
+export interface LeadComplaintInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  details: string;
+  severity?: LeadComplaintInputSeverity;
   escalated?: boolean;
 }
 

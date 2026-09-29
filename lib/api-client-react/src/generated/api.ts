@@ -264,6 +264,7 @@ import type {
   LeadBrochure,
   LeadBrochureDelivery,
   LeadBrochureSelection,
+  LeadComplaintInput,
   LeadCreateResult,
   LeadDecisionInput,
   LeadInput,
@@ -28149,6 +28150,229 @@ export const useUpdateCustomerComplaint = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateCustomerComplaintMutationOptions(options));
+    }
+
+export const getListLeadComplaintsUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/complaints`
+}
+
+/**
+ * @summary List complaints linked to a lead
+ */
+export const listLeadComplaints = async (id: number, options?: RequestInit): Promise<CustomerComplaint[]> => {
+
+  return customFetch<CustomerComplaint[]>(getListLeadComplaintsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLeadComplaintsQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/complaints`
+    ] as const;
+    }
+
+
+export const getListLeadComplaintsQueryOptions = <TData = Awaited<ReturnType<typeof listLeadComplaints>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadComplaints>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLeadComplaintsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeadComplaints>>> = ({ signal }) => listLeadComplaints(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLeadComplaints>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLeadComplaintsQueryResult = NonNullable<Awaited<ReturnType<typeof listLeadComplaints>>>
+export type ListLeadComplaintsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List complaints linked to a lead
+ */
+
+export function useListLeadComplaints<TData = Awaited<ReturnType<typeof listLeadComplaints>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadComplaints>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLeadComplaintsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateLeadComplaintUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/complaints`
+}
+
+/**
+ * @summary Create a lead complaint and optionally queue manager escalation
+ */
+export const createLeadComplaint = async (id: number,
+    leadComplaintInput: LeadComplaintInput, options?: RequestInit): Promise<CustomerComplaintResult> => {
+
+  return customFetch<CustomerComplaintResult>(getCreateLeadComplaintUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leadComplaintInput)
+  }
+);}
+
+
+
+
+
+export const getCreateLeadComplaintMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeadComplaint>>, TError,{id: number;data: BodyType<LeadComplaintInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLeadComplaint>>, TError,{id: number;data: BodyType<LeadComplaintInput>}, TContext> => {
+
+const mutationKey = ['createLeadComplaint'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLeadComplaint>>, {id: number;data: BodyType<LeadComplaintInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createLeadComplaint(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLeadComplaintMutationResult = NonNullable<Awaited<ReturnType<typeof createLeadComplaint>>>
+    export type CreateLeadComplaintMutationBody = BodyType<LeadComplaintInput>
+    export type CreateLeadComplaintMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a lead complaint and optionally queue manager escalation
+ */
+export const useCreateLeadComplaint = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeadComplaint>>, TError,{id: number;data: BodyType<LeadComplaintInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLeadComplaint>>,
+        TError,
+        {id: number;data: BodyType<LeadComplaintInput>},
+        TContext
+      > => {
+      return useMutation(getCreateLeadComplaintMutationOptions(options));
+    }
+
+export const getUpdateLeadComplaintUrl = (id: number,
+    complaintId: number,) => {
+
+
+
+
+  return `/api/leads/${id}/complaints/${complaintId}`
+}
+
+/**
+ * @summary Update or escalate a lead complaint
+ */
+export const updateLeadComplaint = async (id: number,
+    complaintId: number,
+    customerComplaintUpdate: CustomerComplaintUpdate, options?: RequestInit): Promise<CustomerComplaintResult> => {
+
+  return customFetch<CustomerComplaintResult>(getUpdateLeadComplaintUrl(id,complaintId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(customerComplaintUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateLeadComplaintMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLeadComplaint>>, TError,{id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLeadComplaint>>, TError,{id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>}, TContext> => {
+
+const mutationKey = ['updateLeadComplaint'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLeadComplaint>>, {id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>}> = (props) => {
+          const {id,complaintId,data} = props ?? {};
+
+          return  updateLeadComplaint(id,complaintId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLeadComplaintMutationResult = NonNullable<Awaited<ReturnType<typeof updateLeadComplaint>>>
+    export type UpdateLeadComplaintMutationBody = BodyType<CustomerComplaintUpdate>
+    export type UpdateLeadComplaintMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update or escalate a lead complaint
+ */
+export const useUpdateLeadComplaint = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLeadComplaint>>, TError,{id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLeadComplaint>>,
+        TError,
+        {id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateLeadComplaintMutationOptions(options));
     }
 
 export const getListCustomerNotesUrl = (id: number,) => {

@@ -760,7 +760,8 @@ const PATH_MODULES: Record<string, RouteRule> = {
     category: (req) =>
       req.method === "POST" && /^\/leads\/\d+\/assign\/?$/.test(req.path)
         ? "assign"
-        : (isWhatsappReplyPath(req) || /^\/leads\/\d+\/(?:call-centre-disposition|brochures)\/?$/.test(req.path))
+        : (isWhatsappReplyPath(req) || /^\/leads\/\d+\/(?:call-centre-disposition|brochures)\/?$/.test(req.path) ||
+          (req.method === "POST" && /^\/leads\/\d+\/complaints\/?$/.test(req.path)))
         ? "edit"
         : (METHOD_CATEGORY[req.method] ?? "view"),
   },

@@ -52,3 +52,5 @@ psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f lib/db/migrations/2026-10-09-brochure-finance.sql
 psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f lib/db/migrations/2026-10-03-customer-complaints.sql
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f lib/db/migrations/2026-10-10-lead-complaints.sql

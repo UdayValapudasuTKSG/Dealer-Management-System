@@ -563,6 +563,8 @@ export * from './leadBrochureDownPaymentType';
 export * from './leadBrochureSelection';
 export * from './leadCallCentreStatus';
 export * from './leadChannel';
+export * from './leadComplaintInput';
+export * from './leadComplaintInputSeverity';
 export * from './leadCreateResult';
 export * from './leadDecisionInput';
 export * from './leadDecisionInputChoice';

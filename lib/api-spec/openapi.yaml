@@ -8038,6 +8038,69 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CustomerComplaintResult" }
+  /leads/{id}/complaints:
+    get:
+      operationId: listLeadComplaints
+      tags: [leads]
+      summary: List complaints linked to a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Lead complaints
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CustomerComplaint" }
+    post:
+      operationId: createLeadComplaint
+      tags: [leads]
+      summary: Create a lead complaint and optionally queue manager escalation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeadComplaintInput" }
+      responses:
+        "201":
+          description: Created with notification disposition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerComplaintResult" }
+  /leads/{id}/complaints/{complaintId}:
+    patch:
+      operationId: updateLeadComplaint
+      tags: [leads]
+      summary: Update or escalate a lead complaint
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: complaintId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerComplaintUpdate" }
+      responses:
+        "200":
+          description: Updated complaint and notification disposition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerComplaintResult" }
   /customers/{id}/notes:
     get:
       operationId: listCustomerNotes
@@ -14227,7 +14290,7 @@ components:
       required: [id, customerId, title, details, severity, status, escalated, createdAt, updatedAt]
       properties:
         id: { type: integer }
-        customerId: { type: integer }
+        customerId: { type: ["integer", "null"] }
         leadId: { type: ["integer", "null"] }
         title: { type: string }
         details: { type: string }
@@ -14251,6 +14314,14 @@ components:
         severity: { type: string, enum: [low, medium, high, critical] }
         status: { type: string, enum: [open, in_progress, resolved, closed] }
         escalated: { type: boolean }
+    LeadComplaintInput:
+      type: object
+      required: [title, details]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        details: { type: string, minLength: 1, maxLength: 10000 }
+        severity: { type: string, enum: [low, medium, high, critical], default: medium }
+        escalated: { type: boolean, default: false }
     CustomerComplaintResult:
       allOf:
         - $ref: "#/components/schemas/CustomerComplaint"

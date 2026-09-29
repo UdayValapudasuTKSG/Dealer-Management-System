@@ -10,7 +10,8 @@ import type { CustomerComplaintStatus } from './customerComplaintStatus';
 
 export interface CustomerComplaint {
   id: number;
-  customerId: number;
+  /** @nullable */
+  customerId: number | null;
   /** @nullable */
   leadId?: number | null;
   title: string;

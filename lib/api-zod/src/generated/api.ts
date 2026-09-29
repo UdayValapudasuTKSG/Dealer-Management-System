@@ -15750,7 +15750,7 @@ export const ListCustomerComplaintsParams = zod.object({
 
 export const ListCustomerComplaintsResponseItem = zod.object({
   "id": zod.number(),
-  "customerId": zod.number(),
+  "customerId": zod.number().nullable(),
   "leadId": zod.number().nullish(),
   "title": zod.string(),
   "details": zod.string(),
@@ -15787,7 +15787,7 @@ export const CreateCustomerComplaintBody = zod.object({
 
 export const CreateCustomerComplaintResponse = zod.object({
   "id": zod.number(),
-  "customerId": zod.number(),
+  "customerId": zod.number().nullable(),
   "leadId": zod.number().nullish(),
   "title": zod.string(),
   "details": zod.string(),
@@ -15818,7 +15818,98 @@ export const UpdateCustomerComplaintBody = zod.object({
 
 export const UpdateCustomerComplaintResponse = zod.object({
   "id": zod.number(),
-  "customerId": zod.number(),
+  "customerId": zod.number().nullable(),
+  "leadId": zod.number().nullish(),
+  "title": zod.string(),
+  "details": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "escalated": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "notification": zod.enum(['not_requested', 'queued', 'skipped']),
+  "notificationReason": zod.string().nullish()
+}))
+
+
+/**
+ * @summary List complaints linked to a lead
+ */
+export const ListLeadComplaintsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListLeadComplaintsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullable(),
+  "leadId": zod.number().nullish(),
+  "title": zod.string(),
+  "details": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "escalated": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListLeadComplaintsResponse = zod.array(ListLeadComplaintsResponseItem)
+
+
+/**
+ * @summary Create a lead complaint and optionally queue manager escalation
+ */
+export const CreateLeadComplaintParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createLeadComplaintBodyTitleMax = 200;
+
+export const createLeadComplaintBodyDetailsMax = 10000;
+
+export const createLeadComplaintBodySeverityDefault = `medium`;
+export const createLeadComplaintBodyEscalatedDefault = false;
+
+export const CreateLeadComplaintBody = zod.object({
+  "title": zod.string().min(1).max(createLeadComplaintBodyTitleMax),
+  "details": zod.string().min(1).max(createLeadComplaintBodyDetailsMax),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']).default(createLeadComplaintBodySeverityDefault),
+  "escalated": zod.boolean().default(createLeadComplaintBodyEscalatedDefault)
+})
+
+export const CreateLeadComplaintResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullable(),
+  "leadId": zod.number().nullish(),
+  "title": zod.string(),
+  "details": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "escalated": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "notification": zod.enum(['not_requested', 'queued', 'skipped']),
+  "notificationReason": zod.string().nullish()
+}))
+
+
+/**
+ * @summary Update or escalate a lead complaint
+ */
+export const UpdateLeadComplaintParams = zod.object({
+  "id": zod.coerce.number(),
+  "complaintId": zod.coerce.number()
+})
+
+export const UpdateLeadComplaintBody = zod.object({
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']).optional(),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']).optional(),
+  "escalated": zod.boolean().optional()
+})
+
+export const UpdateLeadComplaintResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullable(),
   "leadId": zod.number().nullish(),
   "title": zod.string(),
   "details": zod.string(),

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { VehicleInterestsField } from "@/components/vehicle-interests-field";
+import { ComplaintsTab } from "@/components/customer/complaints-tab";
 import {
   useGetLead,
   useListLeadBrochures,
@@ -513,6 +514,7 @@ const TABS = [
   { key: "documents", label: "Documents" },
   { key: "correspondence", label: "Correspondence" },
   { key: "notes", label: "Notes" },
+  { key: "complaints", label: "Complaints" },
   { key: "activity", label: "Activity" },
 ] as const;
 
@@ -1949,6 +1951,7 @@ export default function LeadDetail() {
               transition={{ duration: 0.18 }}
               className="p-6"
             >
+              {tab === "complaints" && <ComplaintsTab leadId={lead.id} readOnly={!canEdit} />}
               {tab === "overview" && (
                 <div className="space-y-5">
                   <ActionChain
