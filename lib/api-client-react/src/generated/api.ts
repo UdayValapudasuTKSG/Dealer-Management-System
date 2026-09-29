@@ -126,6 +126,10 @@ import type {
   Customer,
   Customer360,
   CustomerCommunications,
+  CustomerComplaint,
+  CustomerComplaintInput,
+  CustomerComplaintResult,
+  CustomerComplaintUpdate,
   CustomerDocument,
   CustomerInput,
   CustomerNote,
@@ -27922,6 +27926,229 @@ export const useRecommendCustomerVehicle = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getRecommendCustomerVehicleMutationOptions(options));
+    }
+
+export const getListCustomerComplaintsUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/complaints`
+}
+
+/**
+ * @summary List complaints linked to a customer
+ */
+export const listCustomerComplaints = async (id: number, options?: RequestInit): Promise<CustomerComplaint[]> => {
+
+  return customFetch<CustomerComplaint[]>(getListCustomerComplaintsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCustomerComplaintsQueryKey = (id: number,) => {
+    return [
+    `/api/customers/${id}/complaints`
+    ] as const;
+    }
+
+
+export const getListCustomerComplaintsQueryOptions = <TData = Awaited<ReturnType<typeof listCustomerComplaints>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerComplaints>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCustomerComplaintsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomerComplaints>>> = ({ signal }) => listCustomerComplaints(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCustomerComplaints>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCustomerComplaintsQueryResult = NonNullable<Awaited<ReturnType<typeof listCustomerComplaints>>>
+export type ListCustomerComplaintsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List complaints linked to a customer
+ */
+
+export function useListCustomerComplaints<TData = Awaited<ReturnType<typeof listCustomerComplaints>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomerComplaints>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCustomerComplaintsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCustomerComplaintUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/complaints`
+}
+
+/**
+ * @summary Create a complaint and optionally queue a manager escalation
+ */
+export const createCustomerComplaint = async (id: number,
+    customerComplaintInput: CustomerComplaintInput, options?: RequestInit): Promise<CustomerComplaintResult> => {
+
+  return customFetch<CustomerComplaintResult>(getCreateCustomerComplaintUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(customerComplaintInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCustomerComplaintMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCustomerComplaint>>, TError,{id: number;data: BodyType<CustomerComplaintInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCustomerComplaint>>, TError,{id: number;data: BodyType<CustomerComplaintInput>}, TContext> => {
+
+const mutationKey = ['createCustomerComplaint'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCustomerComplaint>>, {id: number;data: BodyType<CustomerComplaintInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createCustomerComplaint(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCustomerComplaintMutationResult = NonNullable<Awaited<ReturnType<typeof createCustomerComplaint>>>
+    export type CreateCustomerComplaintMutationBody = BodyType<CustomerComplaintInput>
+    export type CreateCustomerComplaintMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a complaint and optionally queue a manager escalation
+ */
+export const useCreateCustomerComplaint = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCustomerComplaint>>, TError,{id: number;data: BodyType<CustomerComplaintInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCustomerComplaint>>,
+        TError,
+        {id: number;data: BodyType<CustomerComplaintInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCustomerComplaintMutationOptions(options));
+    }
+
+export const getUpdateCustomerComplaintUrl = (id: number,
+    complaintId: number,) => {
+
+
+
+
+  return `/api/customers/${id}/complaints/${complaintId}`
+}
+
+/**
+ * @summary Update status or severity and optionally escalate
+ */
+export const updateCustomerComplaint = async (id: number,
+    complaintId: number,
+    customerComplaintUpdate: CustomerComplaintUpdate, options?: RequestInit): Promise<CustomerComplaintResult> => {
+
+  return customFetch<CustomerComplaintResult>(getUpdateCustomerComplaintUrl(id,complaintId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(customerComplaintUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCustomerComplaintMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCustomerComplaint>>, TError,{id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCustomerComplaint>>, TError,{id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>}, TContext> => {
+
+const mutationKey = ['updateCustomerComplaint'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCustomerComplaint>>, {id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>}> = (props) => {
+          const {id,complaintId,data} = props ?? {};
+
+          return  updateCustomerComplaint(id,complaintId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCustomerComplaintMutationResult = NonNullable<Awaited<ReturnType<typeof updateCustomerComplaint>>>
+    export type UpdateCustomerComplaintMutationBody = BodyType<CustomerComplaintUpdate>
+    export type UpdateCustomerComplaintMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update status or severity and optionally escalate
+ */
+export const useUpdateCustomerComplaint = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCustomerComplaint>>, TError,{id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCustomerComplaint>>,
+        TError,
+        {id: number;complaintId: number;data: BodyType<CustomerComplaintUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCustomerComplaintMutationOptions(options));
     }
 
 export const getListCustomerNotesUrl = (id: number,) => {

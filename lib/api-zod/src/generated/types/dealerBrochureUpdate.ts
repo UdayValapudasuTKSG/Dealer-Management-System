@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DealerBrochureUpdateDownPaymentType } from './dealerBrochureUpdateDownPaymentType';
 
 export interface DealerBrochureUpdate {
   /**
@@ -19,4 +20,31 @@ export interface DealerBrochureUpdate {
   fileName?: string;
   /** @minLength 1 */
   objectPath?: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  financeModel?: string | null;
+  /** @nullable */
+  downPaymentType?: DealerBrochureUpdateDownPaymentType;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  downPaymentValue?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  monthlyEmi?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceDp?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceDf?: number | null;
 }

@@ -2212,7 +2212,13 @@ export const ListLeadBrochuresResponseItem = zod.object({
   "title": zod.string(),
   "fileName": zod.string(),
   "sizeBytes": zod.number(),
-  "sendable": zod.boolean()
+  "sendable": zod.boolean(),
+  "financeModel": zod.string().nullish(),
+  "downPaymentType": zod.union([zod.literal('amount'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "downPaymentValue": zod.number().nullish(),
+  "monthlyEmi": zod.number().nullish(),
+  "priceDp": zod.number().nullish(),
+  "priceDf": zod.number().nullish()
 })
 export const ListLeadBrochuresResponse = zod.array(ListLeadBrochuresResponseItem)
 
@@ -2243,7 +2249,13 @@ export const ListDealerBrochuresResponseItem = zod.object({
   "fileName": zod.string(),
   "sizeBytes": zod.number(),
   "sendable": zod.boolean(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "financeModel": zod.string().nullish(),
+  "downPaymentType": zod.union([zod.literal('amount'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "downPaymentValue": zod.number().nullish(),
+  "monthlyEmi": zod.number().nullish(),
+  "priceDp": zod.number().nullish(),
+  "priceDf": zod.number().nullish()
 })
 export const ListDealerBrochuresResponse = zod.array(ListDealerBrochuresResponseItem)
 
@@ -2253,12 +2265,28 @@ export const createDealerBrochureBodyTitleMax = 120;
 export const createDealerBrochureBodyFileNameMax = 120;
 
 
+export const createDealerBrochureBodyFinanceModelMax = 120;
+
+export const createDealerBrochureBodyDownPaymentValueMin = 0;
+
+export const createDealerBrochureBodyMonthlyEmiMin = 0;
+
+export const createDealerBrochureBodyPriceDpMin = 0;
+
+export const createDealerBrochureBodyPriceDfMin = 0;
+
 
 
 export const CreateDealerBrochureBody = zod.object({
   "title": zod.string().min(1).max(createDealerBrochureBodyTitleMax),
   "fileName": zod.string().min(1).max(createDealerBrochureBodyFileNameMax),
-  "objectPath": zod.string().min(1)
+  "objectPath": zod.string().min(1),
+  "financeModel": zod.string().max(createDealerBrochureBodyFinanceModelMax).nullish(),
+  "downPaymentType": zod.union([zod.literal('amount'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "downPaymentValue": zod.number().min(createDealerBrochureBodyDownPaymentValueMin).nullish(),
+  "monthlyEmi": zod.number().min(createDealerBrochureBodyMonthlyEmiMin).nullish(),
+  "priceDp": zod.number().min(createDealerBrochureBodyPriceDpMin).nullish(),
+  "priceDf": zod.number().min(createDealerBrochureBodyPriceDfMin).nullish()
 })
 
 export const CreateDealerBrochureResponse = zod.object({
@@ -2267,7 +2295,13 @@ export const CreateDealerBrochureResponse = zod.object({
   "fileName": zod.string(),
   "sizeBytes": zod.number(),
   "sendable": zod.boolean(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "financeModel": zod.string().nullish(),
+  "downPaymentType": zod.union([zod.literal('amount'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "downPaymentValue": zod.number().nullish(),
+  "monthlyEmi": zod.number().nullish(),
+  "priceDp": zod.number().nullish(),
+  "priceDf": zod.number().nullish()
 })
 
 
@@ -2280,12 +2314,28 @@ export const updateDealerBrochureBodyTitleMax = 120;
 export const updateDealerBrochureBodyFileNameMax = 120;
 
 
+export const updateDealerBrochureBodyFinanceModelMax = 120;
+
+export const updateDealerBrochureBodyDownPaymentValueMin = 0;
+
+export const updateDealerBrochureBodyMonthlyEmiMin = 0;
+
+export const updateDealerBrochureBodyPriceDpMin = 0;
+
+export const updateDealerBrochureBodyPriceDfMin = 0;
+
 
 
 export const UpdateDealerBrochureBody = zod.object({
   "title": zod.string().min(1).max(updateDealerBrochureBodyTitleMax).optional(),
   "fileName": zod.string().min(1).max(updateDealerBrochureBodyFileNameMax).optional(),
-  "objectPath": zod.string().min(1).optional()
+  "objectPath": zod.string().min(1).optional(),
+  "financeModel": zod.string().max(updateDealerBrochureBodyFinanceModelMax).nullish(),
+  "downPaymentType": zod.union([zod.literal('amount'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "downPaymentValue": zod.number().min(updateDealerBrochureBodyDownPaymentValueMin).nullish(),
+  "monthlyEmi": zod.number().min(updateDealerBrochureBodyMonthlyEmiMin).nullish(),
+  "priceDp": zod.number().min(updateDealerBrochureBodyPriceDpMin).nullish(),
+  "priceDf": zod.number().min(updateDealerBrochureBodyPriceDfMin).nullish()
 })
 
 export const UpdateDealerBrochureResponse = zod.object({
@@ -2294,7 +2344,13 @@ export const UpdateDealerBrochureResponse = zod.object({
   "fileName": zod.string(),
   "sizeBytes": zod.number(),
   "sendable": zod.boolean(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "financeModel": zod.string().nullish(),
+  "downPaymentType": zod.union([zod.literal('amount'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "downPaymentValue": zod.number().nullish(),
+  "monthlyEmi": zod.number().nullish(),
+  "priceDp": zod.number().nullish(),
+  "priceDf": zod.number().nullish()
 })
 
 
@@ -2308,7 +2364,13 @@ export const ArchiveDealerBrochureResponse = zod.object({
   "fileName": zod.string(),
   "sizeBytes": zod.number(),
   "sendable": zod.boolean(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "financeModel": zod.string().nullish(),
+  "downPaymentType": zod.union([zod.literal('amount'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "downPaymentValue": zod.number().nullish(),
+  "monthlyEmi": zod.number().nullish(),
+  "priceDp": zod.number().nullish(),
+  "priceDf": zod.number().nullish()
 })
 
 
@@ -3980,10 +4042,11 @@ export const recordCallCentreDispositionBodyFollowUpDateRegExp = new RegExp('^\\
 
 
 export const RecordCallCentreDispositionBody = zod.object({
-  "outcome": zod.enum(['interested', 'follow_up', 'not_interested']),
+  "outcome": zod.enum(['interested', 'follow_up', 'not_interested', 'busy', 'no_answer', 'wrong_number']),
   "notes": zod.string().min(1).max(recordCallCentreDispositionBodyNotesMax),
   "durationSeconds": zod.number().min(recordCallCentreDispositionBodyDurationSecondsMin).max(recordCallCentreDispositionBodyDurationSecondsMax).optional(),
   "followUpDate": zod.string().regex(recordCallCentreDispositionBodyFollowUpDateRegExp).optional().describe('Dealership-local calendar date YYYY-MM-DD'),
+  "followUpAt": zod.coerce.date().optional().describe('Required future timestamp for busy\/no-answer attempts; scheduled in the dealership timezone'),
   "existingCallId": zod.number().min(1).optional()
 })
 
@@ -4086,7 +4149,7 @@ export const ListLeadCallsResponseItem = zod.object({
   "direction": zod.enum(['outbound', 'inbound']),
   "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail', 'wrong_number', 'callback']),
   "durationSeconds": zod.number().nullish(),
-  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "sentiment": zod.union([zod.literal('positive'),zod.literal('neutral'),zod.literal('negative'),zod.literal(null)]).nullable(),
   "notes": zod.string().nullish(),
   "provider": zod.string(),
   "providerCallId": zod.string().nullish(),
@@ -4128,7 +4191,7 @@ export const CreateLeadCallResponse = zod.object({
   "direction": zod.enum(['outbound', 'inbound']),
   "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail', 'wrong_number', 'callback']),
   "durationSeconds": zod.number().nullish(),
-  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "sentiment": zod.union([zod.literal('positive'),zod.literal('neutral'),zod.literal('negative'),zod.literal(null)]).nullable(),
   "notes": zod.string().nullish(),
   "provider": zod.string(),
   "providerCallId": zod.string().nullish(),
@@ -4164,7 +4227,7 @@ export const UpdateLeadCallResponse = zod.object({
   "direction": zod.enum(['outbound', 'inbound']),
   "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail', 'wrong_number', 'callback']),
   "durationSeconds": zod.number().nullish(),
-  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "sentiment": zod.union([zod.literal('positive'),zod.literal('neutral'),zod.literal('negative'),zod.literal(null)]).nullable(),
   "notes": zod.string().nullish(),
   "provider": zod.string(),
   "providerCallId": zod.string().nullish(),
@@ -15676,6 +15739,98 @@ export const RecommendCustomerVehicleResponse = zod.object({
   "leadScore": zod.number(),
   "updatedAt": zod.string().nullish()
 })
+
+
+/**
+ * @summary List complaints linked to a customer
+ */
+export const ListCustomerComplaintsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListCustomerComplaintsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "leadId": zod.number().nullish(),
+  "title": zod.string(),
+  "details": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "escalated": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListCustomerComplaintsResponse = zod.array(ListCustomerComplaintsResponseItem)
+
+
+/**
+ * @summary Create a complaint and optionally queue a manager escalation
+ */
+export const CreateCustomerComplaintParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createCustomerComplaintBodyTitleMax = 200;
+
+export const createCustomerComplaintBodyDetailsMax = 10000;
+
+export const createCustomerComplaintBodySeverityDefault = `medium`;
+export const createCustomerComplaintBodyEscalatedDefault = false;
+
+export const CreateCustomerComplaintBody = zod.object({
+  "title": zod.string().min(1).max(createCustomerComplaintBodyTitleMax),
+  "details": zod.string().min(1).max(createCustomerComplaintBodyDetailsMax),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']).default(createCustomerComplaintBodySeverityDefault),
+  "escalated": zod.boolean().default(createCustomerComplaintBodyEscalatedDefault),
+  "leadId": zod.number().optional()
+})
+
+export const CreateCustomerComplaintResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "leadId": zod.number().nullish(),
+  "title": zod.string(),
+  "details": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "escalated": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "notification": zod.enum(['not_requested', 'queued', 'skipped']),
+  "notificationReason": zod.string().nullish()
+}))
+
+
+/**
+ * @summary Update status or severity and optionally escalate
+ */
+export const UpdateCustomerComplaintParams = zod.object({
+  "id": zod.coerce.number(),
+  "complaintId": zod.coerce.number()
+})
+
+export const UpdateCustomerComplaintBody = zod.object({
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']).optional(),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']).optional(),
+  "escalated": zod.boolean().optional()
+})
+
+export const UpdateCustomerComplaintResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "leadId": zod.number().nullish(),
+  "title": zod.string(),
+  "details": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "escalated": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "notification": zod.enum(['not_requested', 'queued', 'skipped']),
+  "notificationReason": zod.string().nullish()
+}))
 
 
 /**

@@ -13,7 +13,6 @@ import {
 } from "@workspace/api-client-react";
 import type {
   Lead,
-  Task,
   LeadAdvanceInput,
   LeadReviewItem,
 } from "@workspace/api-client-react";
@@ -89,7 +88,9 @@ export function ActionChain({
   const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [advanceUnmet, setAdvanceUnmet] = useState<string[]>([]);
-  const tasks = useListTasks({ leadId: lead.id });
+  const tasks = useListTasks({ leadId: lead.id }, {
+    query: { queryKey: getListTasksQueryKey({ leadId: lead.id }), refetchOnMount: "always" },
+  });
   const review = useGetLeadReview(lead.id, {
     query: { queryKey: getGetLeadReviewQueryKey(lead.id) },
   });
@@ -162,11 +163,10 @@ export function ActionChain({
     (g) => g.chainStageKey === stage?.key || g.chainStageKey == null,
   );
   
-  const rows = [...(tasks.data ?? [])].sort((a, b) => {
-    const open = (t: Task) => (t.status === "done" ? 1 : 0);
-    return open(a) - open(b);
-  });
-  const openCount = rows.filter((t) => t.status !== "done").length;
+  // Completed/superseded follow-up reminders belong to task history, not the
+  // lead's "Open Tasks" list. A wrong-number disposition closes them in DB.
+  const rows = (tasks.data ?? []).filter((t) => t.status !== "done");
+  const openCount = rows.length;
 
   const addTask = () => {
     const t = title.trim();

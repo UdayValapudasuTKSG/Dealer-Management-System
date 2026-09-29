@@ -1038,7 +1038,7 @@ router.post("/webhooks/twilio/voice", async (req, res): Promise<void> => {
         leadId: lead.id,
         direction: "outbound",
         status: "in_progress",
-        sentiment: "neutral",
+        sentiment: null,
         provider: "twilio",
         providerCallId: callSid || null,
         actor,
@@ -1107,12 +1107,18 @@ router.post(
             and(
               eq(callLogsTable.id, callLogId),
               eq(callLogsTable.providerCallId, callSid),
+              eq(callLogsTable.status, "in_progress"),
             ),
           )
           .returning();
 
         // One activity record per call, written once the outcome is known.
         if (call) {
+          if (status === "completed" && call.recordingSid && call.transcriptStatus === "none") {
+            await db.update(callLogsTable).set({ transcriptStatus: "pending" })
+              .where(eq(callLogsTable.id, call.id));
+            autoTranscribeCall(call.id);
+          }
           await markLeadContactFromCall(call);
           const [lead] = await db
             .select()
@@ -1201,7 +1207,9 @@ router.post(
             // Stored for reference; playback goes through our authed proxy
             // (GET /leads/:id/calls/:callId/recording), never this raw URL.
             recordingUrl: params["RecordingUrl"] ?? null,
-            transcriptStatus: "pending",
+            // The recording callback may precede the Dial completion callback.
+            // Only an actual connected conversation may enter transcription.
+            transcriptStatus: "none",
           })
           .where(
             and(
@@ -1210,7 +1218,9 @@ router.post(
             ),
           )
           .returning();
-        if (call) {
+        if (call?.status === "completed") {
+          await db.update(callLogsTable).set({ transcriptStatus: "pending" })
+            .where(eq(callLogsTable.id, call.id));
           req.log.info(
             { callLogId, recordingSid },
             "Twilio recording captured; transcription queued",

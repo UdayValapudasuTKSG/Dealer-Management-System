@@ -39,6 +39,9 @@ async function analyze(callLogId: number): Promise<void> {
     .from(callLogsTable)
     .where(eq(callLogsTable.id, callLogId));
   if (!call) return;
+  // A busy line, unanswered call or wrong number is not a conversation.
+  // Notes on those attempts describe the disposition, not customer sentiment.
+  if (["busy", "no_answer", "wrong_number", "voicemail", "in_progress"].includes(call.status)) return;
   if (!(await isAgentEnabled(call.dealerId, AGENT_KEY, { strict: true })))
     return;
 

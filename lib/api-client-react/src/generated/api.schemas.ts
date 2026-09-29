@@ -85,13 +85,47 @@ export interface WorkshopOilProcessInput {
   litres?: number;
 }
 
+/**
+ * @nullable
+ */
+export type LeadBrochureDownPaymentType = typeof LeadBrochureDownPaymentType[keyof typeof LeadBrochureDownPaymentType] | null;
+
+
+export const LeadBrochureDownPaymentType = {
+  amount: 'amount',
+  percent: 'percent',
+} as const;
+
 export interface LeadBrochure {
   id: string;
   title: string;
   fileName: string;
   sizeBytes: number;
   sendable: boolean;
+  /** @nullable */
+  financeModel?: string | null;
+  /** @nullable */
+  downPaymentType?: LeadBrochureDownPaymentType;
+  /** @nullable */
+  downPaymentValue?: number | null;
+  /** @nullable */
+  monthlyEmi?: number | null;
+  /** @nullable */
+  priceDp?: number | null;
+  /** @nullable */
+  priceDf?: number | null;
 }
+
+/**
+ * @nullable
+ */
+export type DealerBrochureDownPaymentType = typeof DealerBrochureDownPaymentType[keyof typeof DealerBrochureDownPaymentType] | null;
+
+
+export const DealerBrochureDownPaymentType = {
+  amount: 'amount',
+  percent: 'percent',
+} as const;
 
 export interface DealerBrochure {
   id: string;
@@ -100,7 +134,30 @@ export interface DealerBrochure {
   sizeBytes: number;
   sendable: boolean;
   active: boolean;
+  /** @nullable */
+  financeModel?: string | null;
+  /** @nullable */
+  downPaymentType?: DealerBrochureDownPaymentType;
+  /** @nullable */
+  downPaymentValue?: number | null;
+  /** @nullable */
+  monthlyEmi?: number | null;
+  /** @nullable */
+  priceDp?: number | null;
+  /** @nullable */
+  priceDf?: number | null;
 }
+
+/**
+ * @nullable
+ */
+export type DealerBrochureInputDownPaymentType = typeof DealerBrochureInputDownPaymentType[keyof typeof DealerBrochureInputDownPaymentType] | null;
+
+
+export const DealerBrochureInputDownPaymentType = {
+  amount: 'amount',
+  percent: 'percent',
+} as const;
 
 export interface DealerBrochureInput {
   /**
@@ -115,7 +172,45 @@ export interface DealerBrochureInput {
   fileName: string;
   /** @minLength 1 */
   objectPath: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  financeModel?: string | null;
+  /** @nullable */
+  downPaymentType?: DealerBrochureInputDownPaymentType;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  downPaymentValue?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  monthlyEmi?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceDp?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceDf?: number | null;
 }
+
+/**
+ * @nullable
+ */
+export type DealerBrochureUpdateDownPaymentType = typeof DealerBrochureUpdateDownPaymentType[keyof typeof DealerBrochureUpdateDownPaymentType] | null;
+
+
+export const DealerBrochureUpdateDownPaymentType = {
+  amount: 'amount',
+  percent: 'percent',
+} as const;
 
 export interface DealerBrochureUpdate {
   /**
@@ -130,6 +225,33 @@ export interface DealerBrochureUpdate {
   fileName?: string;
   /** @minLength 1 */
   objectPath?: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  financeModel?: string | null;
+  /** @nullable */
+  downPaymentType?: DealerBrochureUpdateDownPaymentType;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  downPaymentValue?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  monthlyEmi?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceDp?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceDf?: number | null;
 }
 
 export interface LeadBrochureSelection {
@@ -2796,6 +2918,9 @@ export const CallCentreDispositionInputOutcome = {
   interested: 'interested',
   follow_up: 'follow_up',
   not_interested: 'not_interested',
+  busy: 'busy',
+  no_answer: 'no_answer',
+  wrong_number: 'wrong_number',
 } as const;
 
 export interface CallCentreDispositionInput {
@@ -2815,6 +2940,8 @@ export interface CallCentreDispositionInput {
      * @pattern ^\d{4}-\d{2}-\d{2}$
      */
   followUpDate?: string;
+  /** Required future timestamp for busy/no-answer attempts; scheduled in the dealership timezone */
+  followUpAt?: string;
   /** @minimum 1 */
   existingCallId?: number;
 }
@@ -3231,7 +3358,10 @@ export const CallLogStatus = {
   callback: 'callback',
 } as const;
 
-export type CallLogSentiment = typeof CallLogSentiment[keyof typeof CallLogSentiment];
+/**
+ * @nullable
+ */
+export type CallLogSentiment = typeof CallLogSentiment[keyof typeof CallLogSentiment] | null;
 
 
 export const CallLogSentiment = {
@@ -3257,6 +3387,7 @@ export interface CallLog {
   status: CallLogStatus;
   /** @nullable */
   durationSeconds?: number | null;
+  /** @nullable */
   sentiment: CallLogSentiment;
   /** @nullable */
   notes?: string | null;
@@ -4533,6 +4664,107 @@ export interface CustomerPersonaInput {
   /** @nullable */
   marketingConsent?: boolean | null;
 }
+
+export type CustomerComplaintSeverity = typeof CustomerComplaintSeverity[keyof typeof CustomerComplaintSeverity];
+
+
+export const CustomerComplaintSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
+} as const;
+
+export type CustomerComplaintStatus = typeof CustomerComplaintStatus[keyof typeof CustomerComplaintStatus];
+
+
+export const CustomerComplaintStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
+
+export interface CustomerComplaint {
+  id: number;
+  customerId: number;
+  /** @nullable */
+  leadId?: number | null;
+  title: string;
+  details: string;
+  severity: CustomerComplaintSeverity;
+  status: CustomerComplaintStatus;
+  escalated: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CustomerComplaintInputSeverity = typeof CustomerComplaintInputSeverity[keyof typeof CustomerComplaintInputSeverity];
+
+
+export const CustomerComplaintInputSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
+} as const;
+
+export interface CustomerComplaintInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  details: string;
+  severity?: CustomerComplaintInputSeverity;
+  escalated?: boolean;
+  leadId?: number;
+}
+
+export type CustomerComplaintUpdateSeverity = typeof CustomerComplaintUpdateSeverity[keyof typeof CustomerComplaintUpdateSeverity];
+
+
+export const CustomerComplaintUpdateSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
+} as const;
+
+export type CustomerComplaintUpdateStatus = typeof CustomerComplaintUpdateStatus[keyof typeof CustomerComplaintUpdateStatus];
+
+
+export const CustomerComplaintUpdateStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
+
+export interface CustomerComplaintUpdate {
+  severity?: CustomerComplaintUpdateSeverity;
+  status?: CustomerComplaintUpdateStatus;
+  escalated?: boolean;
+}
+
+export type CustomerComplaintResultNotification = typeof CustomerComplaintResultNotification[keyof typeof CustomerComplaintResultNotification];
+
+
+export const CustomerComplaintResultNotification = {
+  not_requested: 'not_requested',
+  queued: 'queued',
+  skipped: 'skipped',
+} as const;
+
+export type CustomerComplaintResult = CustomerComplaint & ({
+  notification: CustomerComplaintResultNotification;
+  /** @nullable */
+  notificationReason?: string | null;
+});
 
 export interface CustomerNote {
   id: number;

@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import {
   db,
   callLogsTable,
@@ -32,6 +32,29 @@ const NEXT_ATTEMPT_OFFSET_DAYS: Record<number, number> = { 1: 3, 2: 3, 3: 7 };
 const CADENCE_TITLE_PREFIX = "Follow-up call";
 /** Only system-created tasks of these kinds are ever auto-closed. */
 const CADENCE_TASK_KINDS = ["cadence", "callback"] as const;
+
+/** Includes older system reminders persisted as kind=manual, without touching
+ * genuine staff-created tasks (which have a creator, or a different title).
+ */
+export function pendingCallSystemTasks(dealerId: number, leadId: number) {
+  return and(
+    eq(tasksTable.dealerId, dealerId),
+    eq(tasksTable.leadId, leadId),
+    inArray(tasksTable.status, ["open", "in_progress"]),
+    or(
+      inArray(tasksTable.kind, ["call_centre", "callback", "cadence"]),
+      and(
+        eq(tasksTable.kind, "manual"),
+        isNull(tasksTable.createdByUserId),
+        or(
+          like(tasksTable.title, "Follow-up call (attempt % of %): %"),
+          like(tasksTable.title, "Follow-up call — customer requested callback: %"),
+          like(tasksTable.title, "Call centre follow-up: %"),
+        ),
+      ),
+    ),
+  );
+}
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 

@@ -46,3 +46,9 @@ psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f lib/db/migrations/2026-09-30-technician-work-segment-ledger.sql
 psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f lib/db/migrations/2026-10-01-technician-timesheet-original-job-card.sql
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f lib/db/migrations/2026-10-08-call-log-nullable-sentiment.sql
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f lib/db/migrations/2026-10-09-brochure-finance.sql
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f lib/db/migrations/2026-10-03-customer-complaints.sql

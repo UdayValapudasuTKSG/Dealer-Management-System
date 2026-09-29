@@ -5,7 +5,7 @@
 // is logged on the call record. Fire-and-forget; never throws into the
 // webhook path. Twilio credentials never leave the server.
 // ---------------------------------------------------------------------------
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, callLogsTable } from "@workspace/db";
 import { twilioVoiceConfig } from "./telephony";
 import { autoAnalyzeCall } from "./call-analysis";
@@ -39,14 +39,14 @@ async function transcribe(callLogId: number): Promise<void> {
     .select()
     .from(callLogsTable)
     .where(eq(callLogsTable.id, callLogId));
-  if (!call?.recordingSid) return;
+  if (!call?.recordingSid || call.status !== "completed") return;
 
   const audio = await fetchRecordingAudio(call.recordingSid);
   if (!audio || audio.length === 0) {
     await db
       .update(callLogsTable)
       .set({ transcriptStatus: "failed" })
-      .where(eq(callLogsTable.id, callLogId));
+      .where(and(eq(callLogsTable.id, callLogId), eq(callLogsTable.status, "completed")));
     return;
   }
 
@@ -62,7 +62,7 @@ async function transcribe(callLogId: number): Promise<void> {
       transcript: text.length > 0 ? text : null,
       transcriptStatus: text.length > 0 ? "completed" : "failed",
     })
-    .where(eq(callLogsTable.id, callLogId));
+    .where(and(eq(callLogsTable.id, callLogId), eq(callLogsTable.status, "completed")));
 
   // Re-run the sentiment/summary agent now that the real conversation exists.
   if (text.length > 0) autoAnalyzeCall(callLogId);
@@ -75,7 +75,7 @@ export function autoTranscribeCall(callLogId: number): void {
     await db
       .update(callLogsTable)
       .set({ transcriptStatus: "failed" })
-      .where(eq(callLogsTable.id, callLogId))
+      .where(and(eq(callLogsTable.id, callLogId), eq(callLogsTable.status, "completed")))
       .catch?.(() => undefined);
   });
 }

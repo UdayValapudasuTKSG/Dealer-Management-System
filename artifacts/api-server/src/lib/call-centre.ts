@@ -1,21 +1,23 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import {
   db, leadsTable, callLogsTable, tasksTable, dealerUsersTable, timelineEventsTable,
   emailLogsTable, usersTable, rolesTable, type Lead,
 } from "@workspace/db";
 import { isActiveCallCentreLead, isCallCentreRole } from "./call-centre-policy";
 import { lockAssignmentQueue, nextRoundRobinCandidate } from "./lead-assignment";
-import { dealerTimezone, zonedDayKey, zonedStartOfDay } from "./timezone";
+import { dealerTimezone, zonedDayKey, zonedStartOfDay, formatDealerDateTime } from "./timezone";
+import { pendingCallSystemTasks } from "./call-cadence";
 
 export class CallCentreError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
 export type CallCentreDisposition = {
-  outcome: "interested" | "follow_up" | "not_interested";
+  outcome: "interested" | "follow_up" | "not_interested" | "busy" | "no_answer" | "wrong_number";
   notes: string;
   durationSeconds?: number;
   followUpDate?: string;
+  followUpAt?: string | Date;
   existingCallId?: number;
 };
 
@@ -93,6 +95,14 @@ export async function recordCallCentreDisposition(
   const now = new Date();
   const followUpDate = input.outcome === "follow_up"
     ? validateFollowUpDate(input.followUpDate, zonedDayKey(now, timezone)) : null;
+  const missed = input.outcome === "busy" || input.outcome === "no_answer";
+  const followUpAt = missed && input.followUpAt ? new Date(input.followUpAt) : null;
+  if (missed && (!followUpAt || !Number.isFinite(followUpAt.getTime()) || followUpAt <= now)) {
+    throw new CallCentreError(400, "Busy and no-answer calls require a future follow-up date and time");
+  }
+  if (input.outcome === "wrong_number" && input.notes.trim().length < 3) {
+    throw new CallCentreError(400, "Explain why this number is wrong");
+  }
   if (!input.notes.trim()) throw new CallCentreError(400, "Call notes are required");
   return db.transaction(async (tx) => {
     // Queue lock always precedes row lock, matching intake and avoiding deadlocks.
@@ -120,10 +130,10 @@ export async function recordCallCentreDisposition(
     }
     let callId = input.existingCallId;
     const callValues = {
-      status: input.outcome === "follow_up" ? "callback" : "completed",
+      status: missed || input.outcome === "wrong_number" ? input.outcome : input.outcome === "follow_up" ? "callback" : "completed",
       notes: input.notes.trim(),
-      sentiment: input.outcome === "interested" ? "positive" : input.outcome === "not_interested" ? "negative" : "neutral",
-      callbackAt: followUpDate ? zonedStartOfDay(followUpDate, timezone) : null,
+      sentiment: missed || input.outcome === "wrong_number" ? null : input.outcome === "interested" ? "positive" : input.outcome === "not_interested" ? "negative" : "neutral",
+      callbackAt: followUpAt ?? (followUpDate ? zonedStartOfDay(followUpDate, timezone) : null),
     };
     if (callId) {
       const [call] = await tx.select().from(callLogsTable).where(and(
@@ -131,6 +141,7 @@ export async function recordCallCentreDisposition(
       )).for("update");
       if (!call) throw new CallCentreError(404, "Call not found");
       if (call.status === "in_progress") throw new CallCentreError(409, "Finish the call before recording qualification");
+      if (missed && call.status === "completed") throw new CallCentreError(409, "A connected call cannot be marked busy or unanswered");
       const [prior] = await tx.select({ id: timelineEventsTable.id }).from(timelineEventsTable).where(and(
         eq(timelineEventsTable.dealerId, dealerId), eq(timelineEventsTable.refId, leadId),
         eq(timelineEventsTable.refType, "lead"), eq(timelineEventsTable.cause, `call_centre:${callId}`),
@@ -145,45 +156,59 @@ export async function recordCallCentreDisposition(
       callId = call!.id;
     }
 
-    // Resolve earlier system reminders; a follow-up outcome replaces the date.
-    await tx.update(tasksTable).set({ status: "done", completedAt: now, updatedAt: now }).where(and(
-      eq(tasksTable.dealerId, dealerId), eq(tasksTable.leadId, leadId),
-      inArray(tasksTable.kind, ["call_centre", "callback", "cadence"]),
-      inArray(tasksTable.status, ["open", "in_progress"]),
-    ));
-    if (followUpDate) {
-      await tx.insert(tasksTable).values({
-        dealerId, leadId, title: `Call centre follow-up: ${lead.name}`,
+    // Reschedule the assigned reminder in place when possible; close any
+    // duplicate or legacy system reminders, never staff-created manual tasks.
+    const [reminder] = followUpDate || followUpAt ? await tx.select().from(tasksTable).where(and(
+      pendingCallSystemTasks(dealerId, leadId),
+      eq(tasksTable.kind, "call_centre"),
+      eq(tasksTable.assigneeUserId, lead.callCentreRepId),
+    )).orderBy(desc(tasksTable.id)).limit(1).for("update") : [];
+    await tx.update(tasksTable).set({ status: "done", completedAt: now, updatedAt: now })
+      .where(and(pendingCallSystemTasks(dealerId, leadId),
+        reminder ? ne(tasksTable.id, reminder.id) : undefined));
+    if (followUpDate || followUpAt) {
+      const schedule = {
+        title: `Call centre follow-up: ${lead.name}`,
         description: input.notes.trim(), assigneeUserId: lead.callCentreRepId,
-        createdByUserId: actor.id, dueDate: followUpDate,
-        // Date-only commitment: the existing sweep interprets dueDate in dealer timezone.
-        kind: "call_centre", priority: "normal", status: "open",
-      });
+        dueDate: followUpDate ?? zonedDayKey(followUpAt!, timezone), dueAt: followUpAt,
+      };
+      if (reminder) {
+        await tx.update(tasksTable).set({
+          ...schedule, status: "open", completedAt: null,
+          dueSoonNotifiedAt: null, overdueNotifiedAt: null, updatedAt: now,
+        }).where(and(eq(tasksTable.id, reminder.id), eq(tasksTable.dealerId, dealerId)));
+      } else {
+        await tx.insert(tasksTable).values({
+          dealerId, leadId, ...schedule, createdByUserId: actor.id,
+          // Date-only commitment: the sweep interprets dueDate in dealer time.
+          kind: "call_centre", priority: "normal", status: "open",
+        });
+      }
     }
     const [updated] = await tx.update(leadsTable).set({
-      callCentreStatus: input.outcome === "interested" ? "transferred" : input.outcome,
-      callCentreFollowUpDate: followUpDate,
-      contactedDate: lead.contactedDate ?? now,
-      phase: input.outcome === "not_interested" ? "lost" : "contacted",
-      status: input.outcome === "not_interested" ? "lost" : input.outcome === "interested" ? "assigned" : "contacted",
+      callCentreStatus: input.outcome === "interested" ? "transferred" : missed ? "follow_up" : input.outcome === "wrong_number" ? "not_interested" : input.outcome,
+      callCentreFollowUpDate: followUpDate ?? (followUpAt ? zonedDayKey(followUpAt, timezone) : null),
+      contactedDate: missed || input.outcome === "wrong_number" ? lead.contactedDate : lead.contactedDate ?? now,
+      phase: input.outcome === "not_interested" || input.outcome === "wrong_number" ? "lost" : missed ? lead.phase : "contacted",
+      status: input.outcome === "not_interested" || input.outcome === "wrong_number" ? "lost" : input.outcome === "interested" ? "assigned" : missed ? lead.status : "contacted",
       stageEnteredAt: now,
       ...(advisor ? { ownerUserId: advisor.id, assignedTo: advisor.name ?? advisor.email ?? `User #${advisor.id}`,
         callCentreTransferredAt: now } : {}),
-      ...(input.outcome === "not_interested" ? { closureReason: input.notes.trim() } : {}),
+      ...(input.outcome === "not_interested" || input.outcome === "wrong_number" ? { closureReason: input.outcome === "wrong_number" ? `Wrong number: ${input.notes.trim()}` : input.notes.trim() } : {}),
     }).where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId))).returning();
     if (advisor) {
       await tx.update(dealerUsersTable).set({ lastLeadAssignedAt: now })
         .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, advisor.id)));
     }
-    if (input.outcome === "not_interested") {
+    if (input.outcome === "not_interested" || input.outcome === "wrong_number") {
       await tx.update(emailLogsTable).set({ status: "cancelled" }).where(and(
         eq(emailLogsTable.dealerId, dealerId), eq(emailLogsTable.leadId, leadId), eq(emailLogsTable.status, "queued"),
       ));
     }
     await tx.insert(timelineEventsTable).values({
       dealerId, customerId: lead.customerId, domain: "leads", kind: "call_centre_disposition",
-      title: advisor ? "Transferred to Sales Advisor" : followUpDate ? "Call centre follow-up scheduled" : "Call centre — not interested",
-      detail: `${input.notes.trim()}${advisor ? `\nRound robin: ${updated!.assignedTo}` : followUpDate ? `\nFollow-up: ${followUpDate}` : ""}`,
+       title: advisor ? "Transferred to Sales Advisor" : followUpDate || followUpAt ? `Call centre — ${input.outcome.replace("_", " ")}; follow-up scheduled` : `Call centre — ${input.outcome.replace("_", " ")}`,
+       detail: `${input.notes.trim()}${advisor ? `\nRound robin: ${updated!.assignedTo}` : followUpAt ? `\nFollow-up: ${formatDealerDateTime(followUpAt, timezone)}` : followUpDate ? `\nFollow-up: ${followUpDate}` : ""}`,
       actor: actor.name ?? "Staff", isAgent: false, refType: "lead", refId: leadId, cause: `call_centre:${callId}`,
     });
     return updated!;

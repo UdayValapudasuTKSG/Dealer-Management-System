@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:dealer-brochures": "OUTBOX_WORKER_DISABLED=1 tsx src/scripts/test-dealer-brochures.ts",
+    "verify:customer-complaints-http": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-customer-complaints-http.ts",
     "verify:vehicle-import": "AUTH_BYPASS=1 NODE_ENV=development tsx src/scripts/verify-vehicle-import-api.ts",
     "test:model-year-bulk": "tsx src/scripts/test-model-year-bulk.ts",
     "test:imported-output-compatibility": "tsx src/scripts/test-imported-output-compatibility.ts",

@@ -14,3 +14,9 @@ Brochure edits and archival affect future selections only; already queued custom
 **Why:** Replacing a pricing brochure after a customer email was queued must not silently change the offer that staff selected.
 
 **How to apply:** Keep queued attachment snapshots immutable when extending library management.
+
+Finance offers are dealer-owned metadata, not values to infer from a model name across dealerships. The supplied model offers belong to the GT brochure set. A bank vehicle-loans webpage is a link, not an attached application PDF.
+
+**Why:** Applying another dealership's finance figures or claiming a webpage is an attached form misrepresents the offer sent to the customer.
+
+**How to apply:** Snapshot selected finance fields with the queued brochure email, preserve explicitly customized values, and require an actual PDF upload for models without a supplied brochure.

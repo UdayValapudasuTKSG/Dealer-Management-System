@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CallLogSentiment = typeof CallLogSentiment[keyof typeof CallLogSentiment];
+/**
+ * @nullable
+ */
+export type CallLogSentiment = typeof CallLogSentiment[keyof typeof CallLogSentiment] | null;
 
 
 export const CallLogSentiment = {

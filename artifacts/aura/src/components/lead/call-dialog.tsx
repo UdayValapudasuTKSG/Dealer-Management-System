@@ -10,6 +10,7 @@ import {
   getGetLeadTimelineQueryKey,
   getListLeadsQueryKey,
   getListLeadCallsQueryKey,
+  getListTasksQueryKey,
   listLeadCalls,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,6 +34,7 @@ import {
   type CallCentreOutcome,
 } from "@/hooks/use-call-centre";
 import { cn } from "@/lib/utils";
+import { activeDealerTimeZone, dealerDateParts, dealerDayKey } from "@/lib/format";
 
 type Direction = "outbound" | "inbound";
 type CallStatus =
@@ -55,7 +57,8 @@ const STATUS_OPTIONS: { value: CallStatus; label: string }[] = [
   { value: "callback", label: "Callback requested" },
 ];
 
-const CC_OUTCOMES: { value: CallCentreOutcome; label: string; hint: string }[] = [
+type ExtendedOutcome = CallCentreOutcome | "busy" | "no_answer" | "wrong_number";
+const CC_OUTCOMES: { value: ExtendedOutcome; label: string; hint: string }[] = [
   {
     value: "interested",
     label: "Interested",
@@ -71,11 +74,28 @@ const CC_OUTCOMES: { value: CallCentreOutcome; label: string; hint: string }[] =
     label: "Not interested",
     hint: "The lead is closed as lost.",
   },
+  { value: "busy", label: "Busy", hint: "No conversation. Schedule another attempt." },
+  { value: "no_answer", label: "No answer", hint: "No conversation. Schedule another attempt." },
+  { value: "wrong_number", label: "Wrong number", hint: "Closes the lead as lost. Add the reason below." },
 ];
 
 function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return dealerDayKey();
+}
+
+/** Interpret datetime-local as a dealership wall-clock time, not browser-local time. */
+function dealerInputToDate(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const wanted = Date.parse(`${value}:00Z`);
+  if (!Number.isFinite(wanted)) return null;
+  let instant = new Date(wanted);
+  const wall = (date: Date) => {
+    const p = dealerDateParts(date);
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+  };
+  for (let i = 0; i < 3; i++) instant = new Date(instant.getTime() + wanted - wall(instant));
+  // Reject non-existent wall times during daylight-saving transitions.
+  return wall(instant) === wanted ? instant : null;
 }
 
 const SENTIMENT_STYLE: Record<Sentiment, string> = {
@@ -107,7 +127,7 @@ export function CallDialog({
   callCentre?: boolean;
 }) {
   const disposition = useCallCentreDisposition(leadId);
-  const [ccOutcome, setCcOutcome] = useState<CallCentreOutcome | null>(null);
+  const [ccOutcome, setCcOutcome] = useState<ExtendedOutcome | null>(null);
   const [ccFollowUp, setCcFollowUp] = useState("");
   const submittingRef = useRef(false);
   const queryClient = useQueryClient();
@@ -173,22 +193,15 @@ export function CallDialog({
     setLiveCallLogId(null);
   };
 
-  const refreshCallData = () => {
-    queryClient.invalidateQueries({
-      queryKey: getGetLeadQueryKey(leadId),
-    });
-    queryClient.invalidateQueries({
-      queryKey: getGetLeadReviewQueryKey(leadId),
-    });
-    queryClient.invalidateQueries({
-      queryKey: getListLeadsQueryKey(),
-    });
-    queryClient.invalidateQueries({
-      queryKey: getGetLeadTimelineQueryKey(leadId),
-    });
-    queryClient.invalidateQueries({
-      queryKey: getListLeadCallsQueryKey(leadId),
-    });
+  const refreshCallData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetLeadQueryKey(leadId) }),
+      queryClient.invalidateQueries({ queryKey: getGetLeadReviewQueryKey(leadId) }),
+      queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(leadId) }),
+      queryClient.invalidateQueries({ queryKey: getListLeadCallsQueryKey(leadId) }),
+      queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() }),
+    ]);
   };
 
   const resolveLiveCallLogId = async (callSid: string | undefined) => {
@@ -244,7 +257,7 @@ export function CallDialog({
         deviceRef.current?.destroy();
         deviceRef.current = null;
         // Give the completion webhook a beat, then pull the fresh outcome.
-        setTimeout(refreshCallData, 1500);
+        setTimeout(() => { void refreshCallData(); }, 1500);
         void resolveLiveCallLogId(call.parameters["CallSid"]);
       });
       call.on("error", () => {
@@ -320,7 +333,7 @@ export function CallDialog({
           notes: notes.trim(),
         },
       });
-      refreshCallData();
+      await refreshCallData();
       toast({
         title: "Note added",
         description: `Your note was attached to ${leadName}'s call record.`,
@@ -338,16 +351,17 @@ export function CallDialog({
 
   const logCall = async () => {
     const mins = minutes.trim() === "" ? null : Number(minutes);
-    if (status === "callback") {
+    const followUpInstant = dealerInputToDate(callbackAt);
+    if (status === "callback" || status === "busy" || status === "no_answer") {
       if (!callbackAt) {
         toast({
-          title: "Pick a callback time",
-          description: "A callback outcome needs the time the customer asked for.",
+           title: "Pick a follow-up time",
+           description: "This outcome needs a future follow-up date and time.",
           variant: "destructive",
         });
         return;
       }
-      if (new Date(callbackAt).getTime() <= Date.now()) {
+      if (!followUpInstant || followUpInstant.getTime() <= Date.now()) {
         toast({
           title: "Callback time must be in the future",
           variant: "destructive",
@@ -355,15 +369,19 @@ export function CallDialog({
         return;
       }
     }
+    if (status === "wrong_number" && !notes.trim()) {
+      toast({ title: "Explain why this is a wrong number", variant: "destructive" });
+      return;
+    }
     try {
       await createCall.mutateAsync({
         id: leadId,
         data: {
           direction,
           status,
-          ...(sentiment !== "auto" ? { sentiment } : {}),
-          ...(status === "callback" && callbackAt
-            ? { callbackAt: new Date(callbackAt).toISOString() }
+          ...(["completed", "callback"].includes(status) && sentiment !== "auto" ? { sentiment } : {}),
+          ...(["callback", "busy", "no_answer"].includes(status) && callbackAt
+            ? { callbackAt: followUpInstant!.toISOString() }
             : {}),
           ...(mins != null && Number.isFinite(mins) && mins >= 0
             ? { durationSeconds: Math.round(mins * 60) }
@@ -371,11 +389,11 @@ export function CallDialog({
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         },
       });
-      refreshCallData();
+      await refreshCallData();
       toast({
         title: "Call logged",
         description:
-          sentiment === "auto" && notes.trim()
+          status === "completed" && sentiment === "auto" && notes.trim()
             ? `Saved to ${leadName}'s record — AURA is scoring the sentiment.`
             : `Outcome saved to ${leadName}'s record.`,
       });
@@ -408,7 +426,13 @@ export function CallDialog({
         return;
       }
     }
-    if (!notes.trim()) {
+    const missed = ccOutcome === "busy" || ccOutcome === "no_answer";
+    const followUpInstant = dealerInputToDate(callbackAt);
+    if (missed && (!followUpInstant || followUpInstant.getTime() <= Date.now())) {
+      toast({ title: "Pick a future follow-up date and time", variant: "destructive" });
+      return;
+    }
+    if (!missed && !notes.trim()) {
       toast({
         title: "Add call notes",
         description: "Note what was said so the next person picks up from here.",
@@ -428,8 +452,9 @@ export function CallDialog({
     try {
       await disposition.mutateAsync({ id: leadId, data: {
         outcome: ccOutcome,
-        notes: notes.trim(),
+        notes: notes.trim() || `${ccOutcome === "busy" ? "Line busy" : "No answer"} — no conversation`,
         ...(ccOutcome === "follow_up" ? { followUpDate: ccFollowUp } : {}),
+        ...(missed ? { followUpAt: followUpInstant!.toISOString() } : {}),
         ...(fromLiveCall && liveCallLogId != null
           ? { existingCallId: liveCallLogId }
           : mins != null && Number.isFinite(mins) && mins >= 0
@@ -442,12 +467,13 @@ export function CallDialog({
             ? "Transferred to a Sales Advisor"
             : ccOutcome === "follow_up"
               ? "Follow-up scheduled"
-              : "Marked not interested",
+              : missed ? "Next attempt scheduled" : "Marked lost",
         description:
           ccOutcome === "interested"
             ? `${leadName} was assigned to the next Sales Advisor in rotation.`
             : ccOutcome === "follow_up"
               ? `${leadName} stays in your queue for ${ccFollowUp}.`
+              : missed ? `${leadName} stays in your queue for another attempt.`
               : `${leadName} was closed as lost.`,
       });
       reset();
@@ -627,6 +653,12 @@ export function CallDialog({
                   />
                 </div>
               )}
+              {(ccOutcome === "busy" || ccOutcome === "no_answer") && (
+                <div className="mt-3">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">Next attempt ({activeDealerTimeZone()} time) *</div>
+                  <Input type="datetime-local" value={callbackAt} onChange={(e) => setCallbackAt(e.target.value)} />
+                </div>
+              )}
             </div>
           )}
 
@@ -655,10 +687,10 @@ export function CallDialog({
             </div>
           )}
 
-          {!afterLiveCall && !callCentre && status === "callback" && (
+          {!afterLiveCall && !callCentre && ["callback", "busy", "no_answer"].includes(status) && (
             <div>
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
-                Callback time
+                Follow-up date and time ({activeDealerTimeZone()}) *
               </div>
               <Input
                 type="datetime-local"
@@ -690,7 +722,7 @@ export function CallDialog({
             />
           </div>
 
-          {!afterLiveCall && !callCentre && (
+          {!afterLiveCall && !callCentre && ["completed", "callback"].includes(status) && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground">

@@ -41,7 +41,7 @@ export const callLogsTable = pgTable("call_logs", {
   direction: text("direction").notNull().default("outbound"),
   status: text("status").notNull().default("completed"),
   durationSeconds: integer("duration_seconds"),
-  sentiment: text("sentiment").notNull().default("neutral"),
+  sentiment: text("sentiment"),
   notes: text("notes"),
   // Telephony adapter seam (PENDING-INFRA): which provider placed the call
   // and its call id. The stub adapter writes provider = "stub".

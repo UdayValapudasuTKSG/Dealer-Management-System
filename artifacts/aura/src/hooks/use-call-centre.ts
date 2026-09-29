@@ -31,16 +31,20 @@ export function useCallCentreDisposition(leadId: number) {
   const qc = useQueryClient();
   return useRecordCallCentreDisposition({
     mutation: {
-      onSuccess: (lead) => {
+      onSuccess: async (lead) => {
         qc.setQueryData(getGetLeadQueryKey(leadId), lead);
-        qc.invalidateQueries({ queryKey: getGetLeadQueryKey(leadId) });
-        qc.invalidateQueries({ queryKey: getGetLeadReviewQueryKey(leadId) });
-        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(leadId) });
-        qc.invalidateQueries({ queryKey: getListLeadCallsQueryKey(leadId) });
-        qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
-        qc.invalidateQueries({ queryKey: getListTasksQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetReportQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetCallCentreReportQueryKey() });
+        // Mutation must not report success while the lead's Open Tasks card
+        // still contains its superseded follow-ups.
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetLeadQueryKey(leadId) }),
+          qc.invalidateQueries({ queryKey: getGetLeadReviewQueryKey(leadId) }),
+          qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(leadId) }),
+          qc.invalidateQueries({ queryKey: getListLeadCallsQueryKey(leadId) }),
+          qc.invalidateQueries({ queryKey: getListLeadsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getListTasksQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetReportQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetCallCentreReportQueryKey() }),
+        ]);
       },
     },
   });

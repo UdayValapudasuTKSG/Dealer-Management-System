@@ -51,6 +51,7 @@ export const EMAIL_TEMPLATES = [
   "delivered.service.handoff",
   "warranty.document",
   "case.opened",
+  "customer.complaint.escalated",
   "manager.note.advisor",
   "feedback.survey",
   "service.cadence.due",

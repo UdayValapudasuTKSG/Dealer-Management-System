@@ -10,6 +10,7 @@ export * from "./assets";
 export * from "./customerDocuments";
 export * from "./documents";
 export * from "./customerNotes";
+export * from "./customerComplaints";
 export * from "./customerPersonas";
 export * from "./deals";
 export * from "./dealItems";

@@ -671,6 +671,15 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `Case <strong>${d(x, "title", "")}</strong> for <strong>${d(x, "name", "a customer")}</strong> has been opened and assigned to you. Triage it and set expectations with the customer.`,
     sample: { title: "Brake noise — front left", name: "Alex Mensah" },
   },
+  "customer.complaint.escalated": {
+    label: "Customer complaint escalation (Internal)",
+    description: "Alerts dealership managers to an escalated customer complaint.",
+    subject: (x) => `Customer complaint escalated: ${d(x, "title", "Complaint")}`,
+    heading: () => "A customer complaint needs attention",
+    body: (x) => `Complaint <strong>${d(x, "title", "")}</strong> for <strong>${d(x, "name", "a customer")}</strong> has been escalated. Severity: ${d(x, "severity", "medium")}. ${d(x, "details", "")}`,
+    cta: (x) => x.link ? { label: "Review complaint", href: x.link } : { label: "Review complaint" },
+    sample: { title: "Delivery concern", name: "Alex", severity: "high", details: "Customer requested a callback.", link: "/customers/1?tab=complaints" },
+  },
   "manager.note.advisor": {
     label: "Manager Note (Internal)",
     description: "Flags a manager note on a record to the owning advisor.",
@@ -938,6 +947,42 @@ const escapeHtml = (s: string) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+
+/** Render only the finance values captured in the queued payload, never current brochure settings. */
+export function renderBrochureFinanceEmail(
+  html: string,
+  snapshotJson: string | undefined,
+  fallbackNames: string | undefined,
+): { html: string; text: string } {
+  const parsed: unknown = snapshotJson ? JSON.parse(snapshotJson) : [];
+  if (!Array.isArray(parsed)) throw new Error("Invalid brochure finance snapshot.");
+  const money = (n: number) => `GYD ${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  const validAmount = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0;
+  const lines = parsed.map((entry: unknown) => {
+    if (!entry || typeof entry !== "object" || typeof (entry as { title?: unknown }).title !== "string")
+      throw new Error("Invalid brochure finance snapshot.");
+    const b = entry as Record<string, unknown>;
+    const title = typeof b.financeModel === "string" && b.financeModel.trim() ? b.financeModel : b.title as string;
+    const details = [
+      validAmount(b.downPaymentValue) && (b.downPaymentType === "amount" || b.downPaymentType === "percent")
+        ? `Down payment: ${b.downPaymentType === "percent" ? `${b.downPaymentValue}%` : money(b.downPaymentValue)}` : null,
+      validAmount(b.monthlyEmi) ? `Monthly EMI: ${money(b.monthlyEmi)}` : null,
+      validAmount(b.priceDp) ? `Price DP: ${money(b.priceDp)}` : null,
+      validAmount(b.priceDf) ? `Price DF: ${money(b.priceDf)}` : null,
+    ].filter((detail): detail is string => detail !== null);
+    return { title, details };
+  });
+  // Jobs queued before finance snapshots existed contain names only.
+  if (!lines.length) lines.push({ title: fallbackNames || "Vehicle brochures", details: [] });
+  const bankLink = "https://demerarabank.com/vehicle-loans/";
+  const text = `Your selected vehicle brochures are attached as PDFs.\n${lines.map((line) =>
+    `${line.title}${line.details.length ? ` — ${line.details.join("; ")}` : " — finance information is not available"}`).join("\n")}\nDemerara Bank vehicle loan application: ${bankLink} (opens the bank website; no bank form is attached).`;
+  const financeHtml = `<tr><td style="padding:16px 44px;color:#444;font-size:15px;line-height:1.7;"><strong>Vehicle finance (GYD)</strong><br/>${lines.map((line) =>
+    `<strong>${escapeHtml(line.title)}</strong>${line.details.length ? ` — ${line.details.map(escapeHtml).join("; ")}` : " — finance information is not available"}`).join("<br/>")}<br/><a href="${bankLink}">Demerara Bank vehicle loan application</a> (opens the bank website; no bank form is attached).</td></tr>`;
+  const footer = '        <tr>\n          <td style="padding:36px 44px 32px;">';
+  if (!html.includes(footer)) throw new Error("Brochure email template cannot display finance information.");
+  return { html: html.replace(footer, `${financeHtml}\n${footer}`), text };
+}
 
 function renderServiceSummaryRows(encoded: string | undefined): string {
   if (!encoded) return "No services are currently booked in this window.";
@@ -3743,12 +3788,20 @@ export async function processQueue(): Promise<void> {
           item.dealerId,
           item.template,
         );
-        const { subject, html } = renderEmail(
+        let { subject, html } = renderEmail(
           item.template as EmailTemplate,
           item.payload ?? {},
           { name: branding.displayName, logoSrc: logo ? "cid:dealer-logo" : null },
           override,
         );
+        let brochurePlainText: string | undefined;
+        if (item.template === "lead.brochures") {
+          const rendered = renderBrochureFinanceEmail(
+            html, item.payload?.brochureSnapshotJson, item.payload?.brochureNames,
+          );
+          html = rendered.html;
+          brochurePlainText = rendered.text;
+        }
         let attachments:
           | { filename: string; content: Buffer; contentType: string; cid?: string }[]
           | undefined;
@@ -3938,6 +3991,7 @@ export async function processQueue(): Promise<void> {
           to: item.recipient,
           subject,
           html,
+          ...(brochurePlainText ? { text: brochurePlainText } : {}),
           // Marks system-originated mail so the Gmail intake agent never
           // re-ingests our own outbound (quotes, reminders, tests) as leads.
           headers: { [SYSTEM_MAIL_HEADER]: "1" },

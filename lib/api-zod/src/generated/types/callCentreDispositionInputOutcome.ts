@@ -13,4 +13,7 @@ export const CallCentreDispositionInputOutcome = {
   interested: 'interested',
   follow_up: 'follow_up',
   not_interested: 'not_interested',
+  busy: 'busy',
+  no_answer: 'no_answer',
+  wrong_number: 'wrong_number',
 } as const;

@@ -114,6 +114,7 @@ import {
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { CallCentreError, recordCallCentreDisposition, reassignCallCentreLead } from "../lib/call-centre";
+import { ManualCallAttemptError, recordManualCallAttempt } from "../lib/manual-call-attempt";
 import { isActiveCallCentreLead, isCallCentreRole } from "../lib/call-centre-policy";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { listBrochures, loadBrochureSnapshotAttachments, selectDealerBrochures } from "../lib/lead-brochures";
@@ -3896,6 +3897,10 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
+  if (isActiveCallCentreLead(lead)) {
+    res.status(409).json({ error: "Record call-centre attempts through the qualification decision" });
+    return;
+  }
 
   // A callback promise must be in the future (dealer-local clock).
   const callbackAt = body.data.callbackAt ? new Date(body.data.callbackAt) : null;
@@ -3903,8 +3908,32 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Callback time must be in the future" });
     return;
   }
-  if (body.data.status === "callback" && !callbackAt) {
-    res.status(400).json({ error: "A callback disposition needs a callback time" });
+  if (["callback", "busy", "no_answer"].includes(body.data.status) && !callbackAt) {
+    res.status(400).json({ error: "This outcome needs a future follow-up date and time" });
+    return;
+  }
+  if (body.data.status === "wrong_number" && !body.data.notes?.trim()) {
+    res.status(400).json({ error: "Explain why the number is wrong" });
+    return;
+  }
+
+  // Staff-entered failed attempts and wrong numbers change the lead and its
+  // pending system reminders together; never derive these decisions from a
+  // telephony callback (which can fail for unrelated provider reasons).
+  if (["busy", "no_answer", "wrong_number"].includes(body.data.status)) {
+    try {
+      const call = await recordManualCallAttempt(lead.dealerId, lead.id,
+        { id: res.locals.user?.id ?? null, name: actorName(res) }, {
+          direction: body.data.direction,
+          status: body.data.status as "busy" | "no_answer" | "wrong_number",
+          callbackAt, notes: body.data.notes,
+          durationSeconds: body.data.durationSeconds,
+        });
+      res.status(201).json(CreateLeadCallResponse.parse(call));
+    } catch (err) {
+      if (!(err instanceof ManualCallAttemptError)) throw err;
+      res.status(err.status).json({ error: err.message });
+    }
     return;
   }
 
@@ -3924,7 +3953,7 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
       direction: body.data.direction,
       status: body.data.status,
       durationSeconds: body.data.durationSeconds ?? null,
-      sentiment: body.data.sentiment ?? "neutral",
+      sentiment: body.data.sentiment ?? null,
       notes: body.data.notes?.trim() || null,
       provider: session.provider,
       providerCallId: session.providerCallId,
@@ -3946,14 +3975,14 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
     lead,
     "call",
     `${call!.direction === "outbound" ? "Outbound" : "Inbound"} call — ${statusLabel}${mins}`,
-    `${call!.notes ? `${call!.notes}\n` : ""}Sentiment: ${call!.sentiment}.`,
+    `${call!.notes ? `${call!.notes}\n` : ""}${call!.sentiment ? `Sentiment: ${call!.sentiment}.` : "Sentiment not assessed."}`,
     actorName(res),
   );
 
   // A6 call sentiment: when the advisor leaves the score to AURA and there
   // are notes to judge from, the agent runs fire-and-forget (kill-switch and
   // confidence-gated inside; below-floor scores route to human review).
-  if (!body.data.sentiment && call!.notes) {
+  if (!body.data.sentiment && call!.notes && ["completed", "callback"].includes(call!.status)) {
     autoAnalyzeCall(call!.id);
   }
 
@@ -4011,7 +4040,8 @@ router.patch("/leads/:id/calls/:callId", async (req, res): Promise<void> => {
 
   // Sentiment loop: when notes land without an explicit sentiment pick, the
   // Sales agent scores the call and notes the summary on the lead.
-  if (body.data.notes !== undefined && !body.data.sentiment && updated) {
+  if (body.data.notes !== undefined && !body.data.sentiment && updated &&
+      ["completed", "callback"].includes(updated.status)) {
     autoAnalyzeCall(updated.id);
   }
 

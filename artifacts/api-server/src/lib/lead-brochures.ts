@@ -16,17 +16,55 @@ export const GT_BROCHURES = [
   { id: "yuan-plus", title: "BYD Yuan Plus brochure", fileName: "BYD-Yuan-Plus-Brochure.pdf", sizeBytes: 2626951, sha: "b0fe02279391ff916fafb380c4025a8ab5bf76f01ff8d0ff61a6c83c24d060ed" },
 ] as const;
 
+// Only GT Automotive's known offers; the Sealion has no supplied finance figures.
+// These are quoted values, never derived from price or EMI.
+export const GT_FINANCE: Record<string, BrochureFinance> = {
+  "dolphin-mini": { financeModel: "Mini", downPaymentType: "amount", downPaymentValue: 150000, monthlyEmi: 49900, priceDp: 4500000, priceDf: null },
+  "song-pro": { financeModel: "Pro", downPaymentType: "amount", downPaymentValue: 300000, monthlyEmi: 69900, priceDp: 5699000, priceDf: null },
+  "yuan-plus": { financeModel: "Yuan Plus", downPaymentType: "percent", downPaymentValue: 10, monthlyEmi: 95500, priceDp: 7500000, priceDf: null },
+  "song-plus-dmi": { financeModel: "Song Plus", downPaymentType: "percent", downPaymentValue: 10, monthlyEmi: 122141, priceDp: 9600000, priceDf: 7600000 },
+  shark: { financeModel: "Shark", downPaymentType: "amount", downPaymentValue: 625000, monthlyEmi: 154900, priceDp: 12500000, priceDf: 10500000 },
+  "atto-8": { financeModel: "Atto 8", downPaymentType: "percent", downPaymentValue: 10, monthlyEmi: 177920, priceDp: 14500000, priceDf: null },
+  // Finance preset only. No M9 brochure exists in the supplied PDF catalog.
+  m9: { financeModel: "M9", downPaymentType: "percent", downPaymentValue: 10, monthlyEmi: 177920, priceDp: 14500000, priceDf: null },
+};
+export type BrochureFinance = {
+  financeModel: string | null; downPaymentType: "amount" | "percent" | null;
+  downPaymentValue: number | null; monthlyEmi: number | null;
+  priceDp: number | null; priceDf: number | null;
+};
+export const emptyBrochureFinance: BrochureFinance = {
+  financeModel: null, downPaymentType: null, downPaymentValue: null,
+  monthlyEmi: null, priceDp: null, priceDf: null,
+};
+export const financeFor = (id: string): BrochureFinance => GT_FINANCE[id] ?? emptyBrochureFinance;
+export const brochureFinanceView = (b: BrochureFinance) => ({
+  financeModel: b.financeModel, downPaymentType: b.downPaymentType === "amount" || b.downPaymentType === "percent" ? b.downPaymentType : null,
+  downPaymentValue: b.downPaymentValue, monthlyEmi: b.monthlyEmi,
+  priceDp: b.priceDp, priceDf: b.priceDf,
+});
+function financeForRow(b: typeof brochuresTable.$inferSelect): BrochureFinance {
+  if (!b.financeCustomized && b.dealerId === 1 && GT_FINANCE[b.id] &&
+      GT_BROCHURES.find((original) => original.id === b.id)?.sha === b.sha &&
+      b.financeModel === null && b.downPaymentType === null &&
+      b.downPaymentValue === null && b.monthlyEmi === null &&
+      b.priceDp === null && b.priceDf === null) return financeFor(b.id);
+  return { ...b, downPaymentType: b.downPaymentType === "amount" || b.downPaymentType === "percent"
+    ? b.downPaymentType : null };
+}
+
 export const BROCHURE_ATTACHMENT_LIMIT = 20 * 1024 * 1024;
 export const BROCHURE_UPLOAD_LIMIT = 20 * 1024 * 1024;
 export const MAX_BROCHURES_PER_EMAIL = 7;
 export class BrochureUploadValidationError extends Error {}
 export const brochureCatalog = GT_BROCHURES.map(({ id, title, fileName, sizeBytes }) => ({
   id, title, fileName, sizeBytes, sendable: sizeBytes <= BROCHURE_ATTACHMENT_LIMIT,
+  ...financeFor(id),
 }));
 
 export type BrochureSnapshot = {
   id: string; title: string; fileName: string; sizeBytes: number; sha: string; objectPath: string;
-};
+} & BrochureFinance;
 
 export function safeBrochureFileName(name: string): string {
   // Never pass paths, control characters or MIME header delimiters into SMTP.
@@ -38,7 +76,8 @@ export function safeBrochureFileName(name: string): string {
 
 export function brochureView(b: typeof brochuresTable.$inferSelect) {
   return { id: b.id, title: b.title, fileName: b.fileName, sizeBytes: b.sizeBytes,
-    sendable: b.sizeBytes <= BROCHURE_ATTACHMENT_LIMIT, active: b.active };
+    sendable: b.sizeBytes <= BROCHURE_ATTACHMENT_LIMIT, active: b.active,
+    ...brochureFinanceView(financeForRow(b)) };
 }
 
 export async function listBrochures(dealerId: number) {
@@ -57,11 +96,11 @@ export async function selectDealerBrochures(dealerId: number, ids: string[]): Pr
   const selected = ids.map((id) => {
     const b = custom.find((item) => item.id === id);
     if (b) return b.active ? { id, title: b.title, fileName: b.fileName, sha: b.sha,
-      sizeBytes: b.sizeBytes, objectPath: b.objectPath } : null;
+      sizeBytes: b.sizeBytes, objectPath: b.objectPath, ...brochureFinanceView(financeForRow(b)) } : null;
     const builtin = dealerId === 1 ? GT_BROCHURES.find((item) => item.id === id) : undefined;
     if (builtin) return { id, title: builtin.title, fileName: builtin.fileName,
       sha: builtin.sha, sizeBytes: builtin.sizeBytes,
-      objectPath: `/objects/brochures/dealer-1/${builtin.sha}.pdf` };
+      objectPath: `/objects/brochures/dealer-1/${builtin.sha}.pdf`, ...financeFor(id) };
     return null;
   });
   if (selected.some((b) => !b)) throw new Error("Unknown or archived brochure selected.");
@@ -118,7 +157,7 @@ export async function loadBrochureAttachments(ids: string[]) {
   const brochures = selectBrochures(ids);
   return loadBrochureSnapshotAttachments(brochures.map((b) => ({
     id: b.id, title: b.title, fileName: b.fileName, sizeBytes: b.sizeBytes, sha: b.sha,
-    objectPath: `/objects/brochures/dealer-1/${b.sha}.pdf`,
+    objectPath: `/objects/brochures/dealer-1/${b.sha}.pdf`, ...financeFor(b.id),
   })));
 }
 

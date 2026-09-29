@@ -24,6 +24,8 @@ export interface CallCentreDispositionInput {
      * @pattern ^\d{4}-\d{2}-\d{2}$
      */
   followUpDate?: string;
+  /** Required future timestamp for busy/no-answer attempts; scheduled in the dealership timezone */
+  followUpAt?: Date;
   /** @minimum 1 */
   existingCallId?: number;
 }

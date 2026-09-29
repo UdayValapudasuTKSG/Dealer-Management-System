@@ -16,6 +16,7 @@ import {
 import { PersonaTab } from "@/components/customer/persona-tab";
 import { DocumentsTab } from "@/components/customer/documents-tab";
 import { NotesPanel } from "@/components/customer/notes-panel";
+import { ComplaintsTab } from "@/components/customer/complaints-tab";
 import { CareTab } from "@/components/customer/care-tab";
 import { PrivacyTab } from "@/components/customer/privacy-tab";
 import { AnimatePresence, motion } from "framer-motion";
@@ -222,8 +223,8 @@ export default function CustomerDetail() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="bg-white/[0.04] border border-white/10 rounded-full h-11 p-1 gap-1">
+      <Tabs defaultValue={new URLSearchParams(window.location.search).get("tab") === "complaints" ? "complaints" : "overview"} className="space-y-6">
+        <TabsList className="bg-white/[0.04] border border-white/10 rounded-full h-11 p-1 gap-1 max-w-full overflow-x-auto justify-start">
           {[
             { value: "overview", label: "Overview" },
             { value: "profile", label: "Profile" },
@@ -232,11 +233,12 @@ export default function CustomerDetail() {
             { value: "care", label: "Care" },
             { value: "privacy", label: "Privacy" },
             { value: "activity", label: "Activity" },
+            { value: "complaints", label: "Complaints" },
           ].map((tab) => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className="rounded-full px-5 text-xs font-semibold uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-primary/25"
+              className="rounded-full px-5 shrink-0 text-xs font-semibold uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-primary/25"
             >
               {tab.label}
             </TabsTrigger>
@@ -541,6 +543,9 @@ export default function CustomerDetail() {
         </TabsContent>
 
         {/* ---------------- Activity ---------------- */}
+        <TabsContent value="complaints" className="mt-0">
+          <ComplaintsTab customerId={customer.id} leads={leads} />
+        </TabsContent>
         <TabsContent value="activity" className="mt-0">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-4">

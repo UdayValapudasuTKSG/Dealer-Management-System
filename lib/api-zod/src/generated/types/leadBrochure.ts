@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { LeadBrochureDownPaymentType } from './leadBrochureDownPaymentType';
 
 export interface LeadBrochure {
   id: string;
@@ -12,4 +13,16 @@ export interface LeadBrochure {
   fileName: string;
   sizeBytes: number;
   sendable: boolean;
+  /** @nullable */
+  financeModel?: string | null;
+  /** @nullable */
+  downPaymentType?: LeadBrochureDownPaymentType;
+  /** @nullable */
+  downPaymentValue?: number | null;
+  /** @nullable */
+  monthlyEmi?: number | null;
+  /** @nullable */
+  priceDp?: number | null;
+  /** @nullable */
+  priceDf?: number | null;
 }

@@ -3227,7 +3227,9 @@ export default function LeadDetail() {
 
                   {calls && calls.length > 0 ? (
                     <div className="space-y-3">
-                      {calls.map((c) => (
+                      {[...calls].sort((a, b) =>
+                        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id - b.id
+                      ).reverse().map((c, _, ordered) => (
                         <div
                           key={c.id}
                           className="rounded-xl border border-white/5 bg-foreground/[0.02] p-4"
@@ -3252,6 +3254,15 @@ export default function LeadDetail() {
                                 <span className="text-sm font-semibold capitalize">
                                   {c.direction} call
                                 </span>
+                                {c.direction === "outbound" && c.status !== "in_progress" && (
+                                  <span className="text-xs font-semibold text-primary">
+                                    Attempt {ordered.filter((item) =>
+                                      item.direction === "outbound" && item.status !== "in_progress" &&
+                                      (new Date(item.createdAt).getTime() < new Date(c.createdAt).getTime() ||
+                                        (new Date(item.createdAt).getTime() === new Date(c.createdAt).getTime() && item.id <= c.id))
+                                    ).length}
+                                  </span>
+                                )}
                                 <span
                                   className={cn(
                                     "rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1",
@@ -3262,7 +3273,7 @@ export default function LeadDetail() {
                                 >
                                   {CALL_STATUS_LABEL[c.status] ?? c.status}
                                 </span>
-                                <span
+                                {c.sentiment && !["busy", "no_answer", "wrong_number", "voicemail"].includes(c.status) && <span
                                   className={cn(
                                     "rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ring-1",
                                     CALL_SENTIMENT_STYLE[c.sentiment] ??
@@ -3270,7 +3281,7 @@ export default function LeadDetail() {
                                   )}
                                 >
                                   {c.sentiment}
-                                </span>
+                                </span>}
                                 {c.durationSeconds != null && (
                                   <span className="text-xs text-muted-foreground">
                                     {formatCallDuration(c.durationSeconds)}
@@ -3282,7 +3293,7 @@ export default function LeadDetail() {
                                   {c.notes}
                                 </p>
                               )}
-                              {c.recordingUrl && (
+                              {c.status === "completed" && c.recordingUrl && (
                                 <audio
                                   controls
                                   preload="none"
@@ -3290,19 +3301,19 @@ export default function LeadDetail() {
                                   src={`${import.meta.env.BASE_URL}api/leads/${lead.id}/calls/${c.id}/recording`}
                                 />
                               )}
-                              {c.transcriptStatus === "pending" && (
+                              {c.status === "completed" && c.transcriptStatus === "pending" && (
                                 <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                   Transcribing the conversation…
                                 </div>
                               )}
-                              {c.transcriptStatus === "failed" && (
+                              {c.status === "completed" && c.transcriptStatus === "failed" && (
                                 <div className="mt-2 text-xs text-rose-400">
                                   Transcription failed — the recording is still
                                   available above.
                                 </div>
                               )}
-                              {c.transcript && (
+                              {c.status === "completed" && c.transcript && (
                                 <details className="mt-2.5 rounded-lg border border-white/10 bg-foreground/[0.03] px-3 py-2">
                                   <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-muted-foreground select-none">
                                     Conversation transcript
@@ -3874,10 +3885,18 @@ export default function LeadDetail() {
                       {(brochure.sizeBytes / 1048576).toFixed(1)} MB
                       {!brochure.sendable && " · Too large to attach by email (20 MB limit)"}
                     </span>
+                    {(brochure.financeModel || brochure.monthlyEmi != null || brochure.priceDp != null) && <span className="block text-xs text-muted-foreground">
+                      {brochure.financeModel || brochure.title}
+                      {brochure.downPaymentValue != null && ` · Down ${brochure.downPaymentType === "percent" ? `${brochure.downPaymentValue}%` : `GYD ${brochure.downPaymentValue.toLocaleString()}`}`}
+                      {brochure.monthlyEmi != null && ` · Monthly EMI GYD ${brochure.monthlyEmi.toLocaleString()}`}
+                      {brochure.priceDp != null && ` · DP GYD ${brochure.priceDp.toLocaleString()}`}
+                      {brochure.priceDf != null && ` · DF GYD ${brochure.priceDf.toLocaleString()}`}
+                    </span>}
                   </span>
                 </label>
               ))}
             </div>
+            <p className="text-xs text-muted-foreground">The email includes the selected models’ listed finance figures and a link to the <a className="underline" href="https://demerarabank.com/vehicle-loans/" target="_blank" rel="noopener noreferrer">Demerara Bank vehicle loan application</a> website. Bank paperwork is not attached.</p>
             {selectedBrochures.length > 0 && (
               <p className={`text-xs ${(brochureCatalogQuery.data ?? []).filter((b) => selectedBrochures.includes(b.id)).reduce((sum, b) => sum + b.sizeBytes, 0) > 20 * 1048576 ? "text-destructive" : "text-muted-foreground"}`}>
                 Selected: {((brochureCatalogQuery.data ?? []).filter((b) => selectedBrochures.includes(b.id)).reduce((sum, b) => sum + b.sizeBytes, 0) / 1048576).toFixed(1)} MB / 20 MB maximum.

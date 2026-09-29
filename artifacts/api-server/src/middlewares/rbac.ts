@@ -773,7 +773,13 @@ const PATH_MODULES: Record<string, RouteRule> = {
     module: "leads",
     category: (req) => (req.method === "GET" ? "view" : "edit"),
   },
-  customers: { module: "customers" },
+  customers: {
+    module: "customers",
+    category: (req) =>
+      req.method === "POST" && /^\/customers\/\d+\/complaints\/?$/.test(req.path)
+        ? "edit"
+        : (METHOD_CATEGORY[req.method] ?? "view"),
+  },
   reviews: { module: "customers" },
   cases: { module: "customers" },
   deals: {

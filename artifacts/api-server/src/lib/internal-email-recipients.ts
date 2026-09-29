@@ -20,6 +20,7 @@ export const INTERNAL_EMAIL_MODULES: Partial<Record<EmailTemplate, PermissionMod
   "delivery.ready": "deliveries",
   "delivered.service.handoff": "service",
   "case.opened": "service",
+  "customer.complaint.escalated": "customers",
   "manager.note.advisor": "leads",
   "service.summary.management": "service",
   "collision.claim.action": "service",

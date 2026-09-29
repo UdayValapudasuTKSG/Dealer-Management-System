@@ -7975,6 +7975,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /customers/{id}/complaints:
+    get:
+      operationId: listCustomerComplaints
+      tags: [customers]
+      summary: List complaints linked to a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Customer complaints
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CustomerComplaint" }
+    post:
+      operationId: createCustomerComplaint
+      tags: [customers]
+      summary: Create a complaint and optionally queue a manager escalation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerComplaintInput" }
+      responses:
+        "201":
+          description: Created with honest notification disposition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerComplaintResult" }
+  /customers/{id}/complaints/{complaintId}:
+    patch:
+      operationId: updateCustomerComplaint
+      tags: [customers]
+      summary: Update status or severity and optionally escalate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: complaintId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerComplaintUpdate" }
+      responses:
+        "200":
+          description: Updated complaint and notification disposition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerComplaintResult" }
   /customers/{id}/notes:
     get:
       operationId: listCustomerNotes
@@ -11520,6 +11583,12 @@ components:
         fileName: { type: string }
         sizeBytes: { type: integer }
         sendable: { type: boolean }
+        financeModel: { type: ["string", "null"] }
+        downPaymentType: { type: ["string", "null"], enum: [amount, percent, null] }
+        downPaymentValue: { type: ["number", "null"] }
+        monthlyEmi: { type: ["number", "null"] }
+        priceDp: { type: ["number", "null"] }
+        priceDf: { type: ["number", "null"] }
     DealerBrochure:
       type: object
       required: [id, title, fileName, sizeBytes, sendable, active]
@@ -11530,6 +11599,12 @@ components:
         sizeBytes: { type: integer }
         sendable: { type: boolean }
         active: { type: boolean }
+        financeModel: { type: ["string", "null"] }
+        downPaymentType: { type: ["string", "null"], enum: [amount, percent, null] }
+        downPaymentValue: { type: ["number", "null"] }
+        monthlyEmi: { type: ["number", "null"] }
+        priceDp: { type: ["number", "null"] }
+        priceDf: { type: ["number", "null"] }
     DealerBrochureInput:
       type: object
       required: [title, fileName, objectPath]
@@ -11537,12 +11612,24 @@ components:
         title: { type: string, minLength: 1, maxLength: 120 }
         fileName: { type: string, minLength: 1, maxLength: 120 }
         objectPath: { type: string, minLength: 1 }
+        financeModel: { type: ["string", "null"], maxLength: 120 }
+        downPaymentType: { type: ["string", "null"], enum: [amount, percent, null] }
+        downPaymentValue: { type: ["number", "null"], minimum: 0 }
+        monthlyEmi: { type: ["number", "null"], minimum: 0 }
+        priceDp: { type: ["number", "null"], minimum: 0 }
+        priceDf: { type: ["number", "null"], minimum: 0 }
     DealerBrochureUpdate:
       type: object
       properties:
         title: { type: string, minLength: 1, maxLength: 120 }
         fileName: { type: string, minLength: 1, maxLength: 120 }
         objectPath: { type: string, minLength: 1 }
+        financeModel: { type: ["string", "null"], maxLength: 120 }
+        downPaymentType: { type: ["string", "null"], enum: [amount, percent, null] }
+        downPaymentValue: { type: ["number", "null"], minimum: 0 }
+        monthlyEmi: { type: ["number", "null"], minimum: 0 }
+        priceDp: { type: ["number", "null"], minimum: 0 }
+        priceDf: { type: ["number", "null"], minimum: 0 }
     LeadBrochureSelection:
       type: object
       required: [brochureIds, idempotencyKey]
@@ -13179,10 +13266,11 @@ components:
       type: object
       required: [outcome, notes]
       properties:
-        outcome: { type: string, enum: [interested, follow_up, not_interested] }
+        outcome: { type: string, enum: [interested, follow_up, not_interested, busy, no_answer, wrong_number] }
         notes: { type: string, minLength: 1, maxLength: 10000 }
         durationSeconds: { type: integer, minimum: 0, maximum: 86400 }
         followUpDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', description: "Dealership-local calendar date YYYY-MM-DD" }
+        followUpAt: { type: string, format: date-time, description: "Required future timestamp for busy/no-answer attempts; scheduled in the dealership timezone" }
         existingCallId: { type: integer, minimum: 1 }
     Lead:
       type: object
@@ -13345,7 +13433,7 @@ components:
         direction: { type: string, enum: [outbound, inbound] }
         status: { type: string, enum: [in_progress, completed, no_answer, busy, voicemail, wrong_number, callback] }
         durationSeconds: { type: ["integer", "null"] }
-        sentiment: { type: string, enum: [positive, neutral, negative] }
+        sentiment: { type: ["string", "null"], enum: [positive, neutral, negative, null] }
         notes: { type: ["string", "null"] }
         provider: { type: string }
         providerCallId: { type: ["string", "null"] }
@@ -14134,6 +14222,43 @@ components:
             - { type: string, enum: [email, phone, whatsapp, sms, in_person] }
             - { type: "null" }
         marketingConsent: { type: ["boolean", "null"] }
+    CustomerComplaint:
+      type: object
+      required: [id, customerId, title, details, severity, status, escalated, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        leadId: { type: ["integer", "null"] }
+        title: { type: string }
+        details: { type: string }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        status: { type: string, enum: [open, in_progress, resolved, closed] }
+        escalated: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CustomerComplaintInput:
+      type: object
+      required: [title, details]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        details: { type: string, minLength: 1, maxLength: 10000 }
+        severity: { type: string, enum: [low, medium, high, critical], default: medium }
+        escalated: { type: boolean, default: false }
+        leadId: { type: integer }
+    CustomerComplaintUpdate:
+      type: object
+      properties:
+        severity: { type: string, enum: [low, medium, high, critical] }
+        status: { type: string, enum: [open, in_progress, resolved, closed] }
+        escalated: { type: boolean }
+    CustomerComplaintResult:
+      allOf:
+        - $ref: "#/components/schemas/CustomerComplaint"
+        - type: object
+          required: [notification]
+          properties:
+            notification: { type: string, enum: [not_requested, queued, skipped] }
+            notificationReason: { type: ["string", "null"] }
     CustomerNote:
       type: object
       required: [id, customerId, body, createdAt]

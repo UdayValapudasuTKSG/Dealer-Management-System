@@ -17,6 +17,7 @@ export interface CallLog {
   status: CallLogStatus;
   /** @nullable */
   durationSeconds?: number | null;
+  /** @nullable */
   sentiment: CallLogSentiment;
   /** @nullable */
   notes?: string | null;

@@ -52,24 +52,30 @@ try {
   await db.insert(brochuresTable).values({
     id, dealerId: dealer1, title: "Test brochure", fileName: safeBrochureFileName("test.pdf"),
     objectPath: stored.objectPath, sha: stored.sha, sizeBytes: stored.sizeBytes,
+    financeModel: "Test model", downPaymentType: "percent", downPaymentValue: 10,
+    monthlyEmi: 49900, priceDp: 4500000, financeCustomized: true,
   });
   assert.equal((await listBrochures(dealer1)).some((b) => b.id === id), true);
   assert.equal((await listBrochures(dealer2)).some((b) => b.id === id), false);
   assert.equal((await db.select().from(brochuresTable).where(eq(brochuresTable.dealerId, dealer2))).length, 0);
   await assert.rejects(() => selectDealerBrochures(dealer2!, [id]), /Unknown or archived/);
   const [snapshot] = await selectDealerBrochures(dealer1, [id]);
+  assert.deepEqual([snapshot.financeModel, snapshot.downPaymentType, snapshot.downPaymentValue,
+    snapshot.monthlyEmi, snapshot.priceDp], ["Test model", "percent", 10, 49900, 4500000]);
   assert.deepEqual((await loadBrochureSnapshotAttachments([snapshot], dealer1))[0].content, body);
   const replacementBody = Buffer.from("%PDF-1.7\n2 0 obj\n<<>>\nendobj\n%%EOF\n");
   const replacement = await commitBrochureUpload(dealer1, await stage(dealer1, replacementBody));
   objectFiles.push(replacement.objectFile);
   const [updated] = await db.update(brochuresTable).set({
     title: "Updated", fileName: "updated.pdf", objectPath: replacement.objectPath,
-    sha: replacement.sha, sizeBytes: replacement.sizeBytes,
+    sha: replacement.sha, sizeBytes: replacement.sizeBytes, monthlyEmi: 69900,
   }).where(eq(brochuresTable.id, id)).returning();
   assert.equal(brochureView(updated).title, "Updated");
   const [newSnapshot] = await selectDealerBrochures(dealer1, [id]);
   assert.equal(newSnapshot.fileName, "updated.pdf");
   assert.notEqual(snapshot.objectPath, newSnapshot.objectPath);
+  assert.equal(snapshot.monthlyEmi, 49900, "queued finance figures remain immutable after settings changes");
+  assert.equal(newSnapshot.monthlyEmi, 69900);
   assert.deepEqual((await loadBrochureSnapshotAttachments([snapshot], dealer1))[0].content, body,
     "queued snapshots continue to reference original bytes and filename");
   await db.update(brochuresTable).set({ active: false }).where(eq(brochuresTable.id, id));
