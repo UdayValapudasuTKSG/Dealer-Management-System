@@ -523,6 +523,13 @@ import type {
   WhatsappSettings,
   WhatsappTestResult,
   WhatsappThread,
+  WorkshopOil,
+  WorkshopOilInput,
+  WorkshopOilOption,
+  WorkshopOilProcessInput,
+  WorkshopOilRequest,
+  WorkshopOilRequestInput,
+  WorkshopOilUpdate,
   WorkshopWipItem
 } from './api.schemas';
 
@@ -552,6 +559,486 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListWorkshopOilsUrl = () => {
+
+
+
+
+  return `/api/parts/oils`
+}
+
+export const listWorkshopOils = async ( options?: RequestInit): Promise<WorkshopOil[]> => {
+
+  return customFetch<WorkshopOil[]>(getListWorkshopOilsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkshopOilsQueryKey = () => {
+    return [
+    `/api/parts/oils`
+    ] as const;
+    }
+
+
+export const getListWorkshopOilsQueryOptions = <TData = Awaited<ReturnType<typeof listWorkshopOils>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWorkshopOils>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkshopOilsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkshopOils>>> = ({ signal }) => listWorkshopOils({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkshopOils>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListWorkshopOilsQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkshopOils>>>
+export type ListWorkshopOilsQueryError = ErrorType<unknown>
+
+
+
+export function useListWorkshopOils<TData = Awaited<ReturnType<typeof listWorkshopOils>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWorkshopOils>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListWorkshopOilsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateWorkshopOilUrl = () => {
+
+
+
+
+  return `/api/parts/oils`
+}
+
+export const createWorkshopOil = async (workshopOilInput: WorkshopOilInput, options?: RequestInit): Promise<WorkshopOil> => {
+
+  return customFetch<WorkshopOil>(getCreateWorkshopOilUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(workshopOilInput)
+  }
+);}
+
+
+
+
+
+export const getCreateWorkshopOilMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkshopOil>>, TError,{data: BodyType<WorkshopOilInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWorkshopOil>>, TError,{data: BodyType<WorkshopOilInput>}, TContext> => {
+
+const mutationKey = ['createWorkshopOil'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWorkshopOil>>, {data: BodyType<WorkshopOilInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createWorkshopOil(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWorkshopOilMutationResult = NonNullable<Awaited<ReturnType<typeof createWorkshopOil>>>
+    export type CreateWorkshopOilMutationBody = BodyType<WorkshopOilInput>
+    export type CreateWorkshopOilMutationError = ErrorType<unknown>
+
+    export const useCreateWorkshopOil = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkshopOil>>, TError,{data: BodyType<WorkshopOilInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createWorkshopOil>>,
+        TError,
+        {data: BodyType<WorkshopOilInput>},
+        TContext
+      > => {
+      return useMutation(getCreateWorkshopOilMutationOptions(options));
+    }
+
+export const getUpdateWorkshopOilUrl = (id: number,) => {
+
+
+
+
+  return `/api/parts/oils/${id}`
+}
+
+export const updateWorkshopOil = async (id: number,
+    workshopOilUpdate: WorkshopOilUpdate, options?: RequestInit): Promise<WorkshopOil> => {
+
+  return customFetch<WorkshopOil>(getUpdateWorkshopOilUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(workshopOilUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateWorkshopOilMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWorkshopOil>>, TError,{id: number;data: BodyType<WorkshopOilUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateWorkshopOil>>, TError,{id: number;data: BodyType<WorkshopOilUpdate>}, TContext> => {
+
+const mutationKey = ['updateWorkshopOil'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateWorkshopOil>>, {id: number;data: BodyType<WorkshopOilUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateWorkshopOil(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateWorkshopOilMutationResult = NonNullable<Awaited<ReturnType<typeof updateWorkshopOil>>>
+    export type UpdateWorkshopOilMutationBody = BodyType<WorkshopOilUpdate>
+    export type UpdateWorkshopOilMutationError = ErrorType<unknown>
+
+    export const useUpdateWorkshopOil = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWorkshopOil>>, TError,{id: number;data: BodyType<WorkshopOilUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateWorkshopOil>>,
+        TError,
+        {id: number;data: BodyType<WorkshopOilUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateWorkshopOilMutationOptions(options));
+    }
+
+export const getListJobOilRequestsUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/oils`
+}
+
+export const listJobOilRequests = async (id: number, options?: RequestInit): Promise<WorkshopOilRequest[]> => {
+
+  return customFetch<WorkshopOilRequest[]>(getListJobOilRequestsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJobOilRequestsQueryKey = (id: number,) => {
+    return [
+    `/api/job-cards/${id}/oils`
+    ] as const;
+    }
+
+
+export const getListJobOilRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listJobOilRequests>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobOilRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJobOilRequestsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobOilRequests>>> = ({ signal }) => listJobOilRequests(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJobOilRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJobOilRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listJobOilRequests>>>
+export type ListJobOilRequestsQueryError = ErrorType<unknown>
+
+
+
+export function useListJobOilRequests<TData = Awaited<ReturnType<typeof listJobOilRequests>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobOilRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJobOilRequestsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRequestJobOilUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/oils`
+}
+
+export const requestJobOil = async (id: number,
+    workshopOilRequestInput: WorkshopOilRequestInput, options?: RequestInit): Promise<WorkshopOilRequest> => {
+
+  return customFetch<WorkshopOilRequest>(getRequestJobOilUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(workshopOilRequestInput)
+  }
+);}
+
+
+
+
+
+export const getRequestJobOilMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestJobOil>>, TError,{id: number;data: BodyType<WorkshopOilRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestJobOil>>, TError,{id: number;data: BodyType<WorkshopOilRequestInput>}, TContext> => {
+
+const mutationKey = ['requestJobOil'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestJobOil>>, {id: number;data: BodyType<WorkshopOilRequestInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  requestJobOil(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestJobOilMutationResult = NonNullable<Awaited<ReturnType<typeof requestJobOil>>>
+    export type RequestJobOilMutationBody = BodyType<WorkshopOilRequestInput>
+    export type RequestJobOilMutationError = ErrorType<unknown>
+
+    export const useRequestJobOil = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestJobOil>>, TError,{id: number;data: BodyType<WorkshopOilRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestJobOil>>,
+        TError,
+        {id: number;data: BodyType<WorkshopOilRequestInput>},
+        TContext
+      > => {
+      return useMutation(getRequestJobOilMutationOptions(options));
+    }
+
+export const getListJobAvailableOilsUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/oils/catalog`
+}
+
+export const listJobAvailableOils = async (id: number, options?: RequestInit): Promise<WorkshopOilOption[]> => {
+
+  return customFetch<WorkshopOilOption[]>(getListJobAvailableOilsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJobAvailableOilsQueryKey = (id: number,) => {
+    return [
+    `/api/job-cards/${id}/oils/catalog`
+    ] as const;
+    }
+
+
+export const getListJobAvailableOilsQueryOptions = <TData = Awaited<ReturnType<typeof listJobAvailableOils>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobAvailableOils>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJobAvailableOilsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobAvailableOils>>> = ({ signal }) => listJobAvailableOils(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJobAvailableOils>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJobAvailableOilsQueryResult = NonNullable<Awaited<ReturnType<typeof listJobAvailableOils>>>
+export type ListJobAvailableOilsQueryError = ErrorType<unknown>
+
+
+
+export function useListJobAvailableOils<TData = Awaited<ReturnType<typeof listJobAvailableOils>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobAvailableOils>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJobAvailableOilsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getProcessJobOilRequestUrl = (id: number,
+    requestId: number,
+    action: 'approve' | 'issue' | 'return' | 'cancel',) => {
+
+
+
+
+  return `/api/job-cards/${id}/oils/${requestId}/${action}`
+}
+
+export const processJobOilRequest = async (id: number,
+    requestId: number,
+    action: 'approve' | 'issue' | 'return' | 'cancel',
+    workshopOilProcessInput?: WorkshopOilProcessInput, options?: RequestInit): Promise<WorkshopOilRequest> => {
+
+  return customFetch<WorkshopOilRequest>(getProcessJobOilRequestUrl(id,requestId,action),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(workshopOilProcessInput)
+  }
+);}
+
+
+
+
+
+export const getProcessJobOilRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processJobOilRequest>>, TError,{id: number;requestId: number;action: 'approve' | 'issue' | 'return' | 'cancel';data?: BodyType<WorkshopOilProcessInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof processJobOilRequest>>, TError,{id: number;requestId: number;action: 'approve' | 'issue' | 'return' | 'cancel';data?: BodyType<WorkshopOilProcessInput>}, TContext> => {
+
+const mutationKey = ['processJobOilRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processJobOilRequest>>, {id: number;requestId: number;action: 'approve' | 'issue' | 'return' | 'cancel';data?: BodyType<WorkshopOilProcessInput>}> = (props) => {
+          const {id,requestId,action,data} = props ?? {};
+
+          return  processJobOilRequest(id,requestId,action,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProcessJobOilRequestMutationResult = NonNullable<Awaited<ReturnType<typeof processJobOilRequest>>>
+    export type ProcessJobOilRequestMutationBody = BodyType<WorkshopOilProcessInput> | undefined
+    export type ProcessJobOilRequestMutationError = ErrorType<unknown>
+
+    export const useProcessJobOilRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processJobOilRequest>>, TError,{id: number;requestId: number;action: 'approve' | 'issue' | 'return' | 'cancel';data?: BodyType<WorkshopOilProcessInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof processJobOilRequest>>,
+        TError,
+        {id: number;requestId: number;action: 'approve' | 'issue' | 'return' | 'cancel';data?: BodyType<WorkshopOilProcessInput>},
+        TContext
+      > => {
+      return useMutation(getProcessJobOilRequestMutationOptions(options));
+    }
 
 export const getListAnthropicConversationsUrl = () => {
 

@@ -22,6 +22,7 @@ export * from "./invoices";
 export * from "./payments";
 export * from "./serviceOrders";
 export * from "./workshop";
+export * from "./workshopOils";
 export * from "./partRequisitions";
 export * from "./serviceCustomerActions";
 export * from "./collisionClaims";

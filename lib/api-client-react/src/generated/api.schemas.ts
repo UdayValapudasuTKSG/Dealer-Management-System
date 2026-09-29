@@ -5,6 +5,86 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export interface WorkshopOil {
+  id: number;
+  name: string;
+  grade: string;
+  specification: string;
+  brand: string;
+  purchaseCostPerLitre: number;
+  sellingPricePerLitre: number;
+  stockLitres: number;
+  reorderLitres: number;
+  active: boolean;
+}
+
+export interface WorkshopOilInput {
+  /** @minLength 1 */
+  name: string;
+  grade?: string;
+  specification?: string;
+  brand?: string;
+  /** @minimum 0 */
+  purchaseCostPerLitre: number;
+  /** @minimum 0 */
+  sellingPricePerLitre: number;
+  /** @minimum 0 */
+  stockLitres?: number;
+  /** @minimum 0 */
+  reorderLitres?: number;
+  active?: boolean;
+}
+
+export interface WorkshopOilUpdate {
+  /** @minLength 1 */
+  name?: string;
+  grade?: string;
+  specification?: string;
+  brand?: string;
+  /** @minimum 0 */
+  purchaseCostPerLitre?: number;
+  /** @minimum 0 */
+  sellingPricePerLitre?: number;
+  /** @minimum 0 */
+  stockLitres?: number;
+  /** @minimum 0 */
+  reorderLitres?: number;
+  active?: boolean;
+}
+
+export interface WorkshopOilRequest {
+  id: number;
+  jobCardId: number;
+  oilId: number;
+  name: string;
+  requestedLitres: number;
+  issuedLitres: number;
+  returnedLitres: number;
+  unitPricePerLitre: number;
+  status: string;
+}
+
+export interface WorkshopOilRequestInput {
+  /** @minimum 1 */
+  oilId: number;
+  /** @exclusiveMinimum 0 */
+  litres: number;
+}
+
+export interface WorkshopOilOption {
+  id: number;
+  name: string;
+  grade: string;
+  stockLitres: number;
+  availableLitres: number;
+  sellingPricePerLitre: number;
+}
+
+export interface WorkshopOilProcessInput {
+  /** @exclusiveMinimum 0 */
+  litres?: number;
+}
+
 export interface LeadBrochure {
   id: string;
   title: string;

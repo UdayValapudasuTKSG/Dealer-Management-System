@@ -69,6 +69,111 @@ tags:
   - name: whatsapp
     description: Per-dealer Meta WhatsApp Business channel settings
 paths:
+  /parts/oils:
+    get:
+      operationId: listWorkshopOils
+      tags: [parts]
+      responses:
+        "200":
+          description: Dealership oil catalogue
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkshopOil" }
+    post:
+      operationId: createWorkshopOil
+      tags: [parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkshopOilInput" }
+      responses:
+        "201":
+          description: Created oil
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkshopOil" }
+  /parts/oils/{id}:
+    patch:
+      operationId: updateWorkshopOil
+      tags: [parts]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkshopOilUpdate" }
+      responses:
+        "200":
+          description: Updated oil
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkshopOil" }
+  /job-cards/{id}/oils:
+    get:
+      operationId: listJobOilRequests
+      tags: [service]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Oil requests on job
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkshopOilRequest" }
+    post:
+      operationId: requestJobOil
+      tags: [service]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkshopOilRequestInput" }
+      responses:
+        "201":
+          description: Requested oil
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkshopOilRequest" }
+  /job-cards/{id}/oils/catalog:
+    get:
+      operationId: listJobAvailableOils
+      tags: [service]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Sale-facing oil catalogue for assigned work
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkshopOilOption" }
+  /job-cards/{id}/oils/{requestId}/{action}:
+    post:
+      operationId: processJobOilRequest
+      tags: [service]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+        - { in: path, name: requestId, required: true, schema: { type: integer } }
+        - { in: path, name: action, required: true, schema: { type: string, enum: [approve, issue, return, cancel] } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkshopOilProcessInput" }
+      responses:
+        "200":
+          description: Updated request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkshopOilRequest" }
   /anthropic/conversations:
     get:
       operationId: listAnthropicConversations
@@ -11334,6 +11439,78 @@ paths:
 
 components:
   schemas:
+    WorkshopOil:
+      type: object
+      required: [id, name, grade, specification, brand, purchaseCostPerLitre, sellingPricePerLitre, stockLitres, reorderLitres, active]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        grade: { type: string }
+        specification: { type: string }
+        brand: { type: string }
+        purchaseCostPerLitre: { type: number }
+        sellingPricePerLitre: { type: number }
+        stockLitres: { type: number }
+        reorderLitres: { type: number }
+        active: { type: boolean }
+    WorkshopOilInput:
+      type: object
+      required: [name, purchaseCostPerLitre, sellingPricePerLitre]
+      properties:
+        name: { type: string, minLength: 1 }
+        grade: { type: string }
+        specification: { type: string }
+        brand: { type: string }
+        purchaseCostPerLitre: { type: number, minimum: 0 }
+        sellingPricePerLitre: { type: number, minimum: 0 }
+        stockLitres: { type: number, minimum: 0, multipleOf: 0.001 }
+        reorderLitres: { type: number, minimum: 0, multipleOf: 0.001 }
+        active: { type: boolean }
+    WorkshopOilUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        grade: { type: string }
+        specification: { type: string }
+        brand: { type: string }
+        purchaseCostPerLitre: { type: number, minimum: 0 }
+        sellingPricePerLitre: { type: number, minimum: 0 }
+        stockLitres: { type: number, minimum: 0, multipleOf: 0.001 }
+        reorderLitres: { type: number, minimum: 0, multipleOf: 0.001 }
+        active: { type: boolean }
+    WorkshopOilRequest:
+      type: object
+      required: [id, jobCardId, oilId, name, requestedLitres, issuedLitres, returnedLitres, unitPricePerLitre, status]
+      properties:
+        id: { type: integer }
+        jobCardId: { type: integer }
+        oilId: { type: integer }
+        name: { type: string }
+        requestedLitres: { type: number }
+        issuedLitres: { type: number }
+        returnedLitres: { type: number }
+        unitPricePerLitre: { type: number }
+        status: { type: string }
+    WorkshopOilRequestInput:
+      type: object
+      required: [oilId, litres]
+      properties:
+        oilId: { type: integer, minimum: 1 }
+        litres: { type: number, exclusiveMinimum: 0, multipleOf: 0.001 }
+    WorkshopOilOption:
+      type: object
+      required: [id, name, grade, stockLitres, availableLitres, sellingPricePerLitre]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        grade: { type: string }
+        stockLitres: { type: number }
+        availableLitres: { type: number }
+        sellingPricePerLitre: { type: number }
+    WorkshopOilProcessInput:
+      type: object
+      properties:
+        litres: { type: number, exclusiveMinimum: 0, multipleOf: 0.001 }
     LeadBrochure:
       type: object
       required: [id, title, fileName, sizeBytes, sendable]

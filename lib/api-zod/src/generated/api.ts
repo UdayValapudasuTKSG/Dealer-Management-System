@@ -8,6 +8,192 @@
 import * as zod from 'zod';
 
 
+export const ListWorkshopOilsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "grade": zod.string(),
+  "specification": zod.string(),
+  "brand": zod.string(),
+  "purchaseCostPerLitre": zod.number(),
+  "sellingPricePerLitre": zod.number(),
+  "stockLitres": zod.number(),
+  "reorderLitres": zod.number(),
+  "active": zod.boolean()
+})
+export const ListWorkshopOilsResponse = zod.array(ListWorkshopOilsResponseItem)
+
+
+
+export const createWorkshopOilBodyPurchaseCostPerLitreMin = 0;
+
+export const createWorkshopOilBodySellingPricePerLitreMin = 0;
+
+export const createWorkshopOilBodyStockLitresMin = 0;
+export const createWorkshopOilBodyStockLitresMultipleOf = 0.001;
+
+export const createWorkshopOilBodyReorderLitresMin = 0;
+export const createWorkshopOilBodyReorderLitresMultipleOf = 0.001;
+
+
+
+export const CreateWorkshopOilBody = zod.object({
+  "name": zod.string().min(1),
+  "grade": zod.string().optional(),
+  "specification": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "purchaseCostPerLitre": zod.number().min(createWorkshopOilBodyPurchaseCostPerLitreMin),
+  "sellingPricePerLitre": zod.number().min(createWorkshopOilBodySellingPricePerLitreMin),
+  "stockLitres": zod.number().min(createWorkshopOilBodyStockLitresMin).multipleOf(createWorkshopOilBodyStockLitresMultipleOf).optional(),
+  "reorderLitres": zod.number().min(createWorkshopOilBodyReorderLitresMin).multipleOf(createWorkshopOilBodyReorderLitresMultipleOf).optional(),
+  "active": zod.boolean().optional()
+})
+
+export const CreateWorkshopOilResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "grade": zod.string(),
+  "specification": zod.string(),
+  "brand": zod.string(),
+  "purchaseCostPerLitre": zod.number(),
+  "sellingPricePerLitre": zod.number(),
+  "stockLitres": zod.number(),
+  "reorderLitres": zod.number(),
+  "active": zod.boolean()
+})
+
+
+export const UpdateWorkshopOilParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const updateWorkshopOilBodyPurchaseCostPerLitreMin = 0;
+
+export const updateWorkshopOilBodySellingPricePerLitreMin = 0;
+
+export const updateWorkshopOilBodyStockLitresMin = 0;
+export const updateWorkshopOilBodyStockLitresMultipleOf = 0.001;
+
+export const updateWorkshopOilBodyReorderLitresMin = 0;
+export const updateWorkshopOilBodyReorderLitresMultipleOf = 0.001;
+
+
+
+export const UpdateWorkshopOilBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "grade": zod.string().optional(),
+  "specification": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "purchaseCostPerLitre": zod.number().min(updateWorkshopOilBodyPurchaseCostPerLitreMin).optional(),
+  "sellingPricePerLitre": zod.number().min(updateWorkshopOilBodySellingPricePerLitreMin).optional(),
+  "stockLitres": zod.number().min(updateWorkshopOilBodyStockLitresMin).multipleOf(updateWorkshopOilBodyStockLitresMultipleOf).optional(),
+  "reorderLitres": zod.number().min(updateWorkshopOilBodyReorderLitresMin).multipleOf(updateWorkshopOilBodyReorderLitresMultipleOf).optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateWorkshopOilResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "grade": zod.string(),
+  "specification": zod.string(),
+  "brand": zod.string(),
+  "purchaseCostPerLitre": zod.number(),
+  "sellingPricePerLitre": zod.number(),
+  "stockLitres": zod.number(),
+  "reorderLitres": zod.number(),
+  "active": zod.boolean()
+})
+
+
+export const ListJobOilRequestsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListJobOilRequestsResponseItem = zod.object({
+  "id": zod.number(),
+  "jobCardId": zod.number(),
+  "oilId": zod.number(),
+  "name": zod.string(),
+  "requestedLitres": zod.number(),
+  "issuedLitres": zod.number(),
+  "returnedLitres": zod.number(),
+  "unitPricePerLitre": zod.number(),
+  "status": zod.string()
+})
+export const ListJobOilRequestsResponse = zod.array(ListJobOilRequestsResponseItem)
+
+
+export const RequestJobOilParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const requestJobOilBodyLitresExclusiveMin = 0;
+export const requestJobOilBodyLitresMultipleOf = 0.001;
+
+
+
+export const RequestJobOilBody = zod.object({
+  "oilId": zod.number().min(1),
+  "litres": zod.number().gt(requestJobOilBodyLitresExclusiveMin).multipleOf(requestJobOilBodyLitresMultipleOf)
+})
+
+export const RequestJobOilResponse = zod.object({
+  "id": zod.number(),
+  "jobCardId": zod.number(),
+  "oilId": zod.number(),
+  "name": zod.string(),
+  "requestedLitres": zod.number(),
+  "issuedLitres": zod.number(),
+  "returnedLitres": zod.number(),
+  "unitPricePerLitre": zod.number(),
+  "status": zod.string()
+})
+
+
+export const ListJobAvailableOilsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListJobAvailableOilsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "grade": zod.string(),
+  "stockLitres": zod.number(),
+  "availableLitres": zod.number(),
+  "sellingPricePerLitre": zod.number()
+})
+export const ListJobAvailableOilsResponse = zod.array(ListJobAvailableOilsResponseItem)
+
+
+export const ProcessJobOilRequestParams = zod.object({
+  "id": zod.coerce.number(),
+  "requestId": zod.coerce.number(),
+  "action": zod.enum(['approve', 'issue', 'return', 'cancel'])
+})
+
+export const processJobOilRequestBodyLitresExclusiveMin = 0;
+export const processJobOilRequestBodyLitresMultipleOf = 0.001;
+
+
+
+export const ProcessJobOilRequestBody = zod.object({
+  "litres": zod.number().gt(processJobOilRequestBodyLitresExclusiveMin).multipleOf(processJobOilRequestBodyLitresMultipleOf).optional()
+})
+
+export const ProcessJobOilRequestResponse = zod.object({
+  "id": zod.number(),
+  "jobCardId": zod.number(),
+  "oilId": zod.number(),
+  "name": zod.string(),
+  "requestedLitres": zod.number(),
+  "issuedLitres": zod.number(),
+  "returnedLitres": zod.number(),
+  "unitPricePerLitre": zod.number(),
+  "status": zod.string()
+})
+
+
 /**
  * @summary List all conversations
  */

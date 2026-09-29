@@ -10,6 +10,7 @@ import {
 import { computeServiceTax, ensureDealerTaxes } from "./taxes";
 import { loadPartsEstimateCharges } from "./parts-estimate-charges";
 import { nonTaxChargeLines } from "./parts-billing-money";
+import { oilCharges } from "./workshop-oils";
 import {
   calculateQuotedLaborTotal,
   effectiveQuotedLaborHours,
@@ -156,6 +157,13 @@ export async function buildServiceEstimateBreakdown(
     });
   }
 
+  // Requests alone are not a charge. Issued oil is priced per litre at the
+  // request-time snapshot, and returns reduce the un-invoiced charge.
+  for (const oil of await oilCharges(tx, card.dealerId, card.id)) {
+    internalPartsTotal = cents(internalPartsTotal + oil.amount);
+    lines.push({ kind: "part", description: `${oil.name} · ${oil.litres.toFixed(3)} L @ GYD ${oil.price.toFixed(2)}/L`,
+      quantity: oil.litres, amount: oil.amount });
+  }
   let externalPartsTotal = 0;
   for (const line of external) {
     const amount = cents(line.quantity * line.unitPrice);

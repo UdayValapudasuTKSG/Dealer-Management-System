@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { PartsEstimateCharges } from "@/components/service/parts-estimate-charges";
+import { JobOils } from "@/components/parts/job-oils";
 import { useRoute, Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -221,6 +222,12 @@ function estimateDecisionLabel(state: string): string {
 
 function apiErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function assignedTechnicianLabel(card: JobCard): string {
+  // Legacy/imported cards may have an assigned user id but no display name.
+  return card.technicianName?.trim()
+    || (card.technicianUserId != null ? `Assigned user #${card.technicianUserId}` : "Unassigned");
 }
 
 export default function JobCardDetailPage() {
@@ -719,7 +726,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
               </span>
               <span>·</span>
               <PenTool className="w-3 h-3" />
-              {card.technicianName ?? "Unassigned"}
+              {assignedTechnicianLabel(card)}
                <span>
                  · Booked {bookedHoursForCard(card)}h · Quoted {card.quotedLaborHours ?? card.laborHours}h @ {money.gyd(card.laborRate)}/hr
                </span>
@@ -781,7 +788,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                 <DetailDatum label="VIN" value={serviceOrder.vin || "Not recorded"} />
                 <DetailDatum label="Scheduled" value={formatDealerDateShort(serviceOrder.scheduledDate)} />
                 <DetailDatum label="Service type" value={serviceOrder.type.replaceAll("_", " ")} />
-                <DetailDatum label="Technician" value={card.technicianName ?? "Unassigned"} />
+                <DetailDatum label="Technician" value={assignedTechnicianLabel(card)} />
                 <DetailDatum label="Payment" value={serviceOrder.payType?.replaceAll("_", " ") ?? "Not recorded"} />
               </div>
             )}
@@ -817,6 +824,8 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
           </TabsContent>
 
           <TabsContent value="parts" className="space-y-3">
+        <JobOils cardId={card.id} technicianId={card.technicianUserId} status={card.status}
+          invoiced={Boolean(linkedInvoice)} onChanged={invalidate} />
         <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-1.5">
           <div className="flex items-center justify-between text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
             <span className="flex items-center gap-1.5">
@@ -1803,7 +1812,7 @@ function WaitingSection({ card, onChanged }: { card: JobCard; onChanged: () => v
             {isWaiting ? `Waiting: ${waitingReasonLabel(card.waitingReason)}` : "Work is not on a recorded wait"}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Responsible: {card.technicianName ?? "Unassigned"}
+            Responsible: {assignedTechnicianLabel(card)}
             {card.nextAction ? ` · Next action: ${card.nextAction}` : ""}
             {card.followUpDate ? ` · Follow up ${formatGuyanaDate(card.followUpDate)}` : ""}
           </p>

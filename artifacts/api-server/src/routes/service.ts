@@ -31,6 +31,7 @@ import {
 } from "../lib/service-labour-pricing";
 import { buildServiceEstimateBreakdown } from "../lib/service-estimate-breakdown";
 import { snapshotServicePartsCharges, loadServiceInvoicePartsCharges } from "../lib/parts-estimate-charges";
+import { oilCharges, snapshotInvoiceOils, invoiceOilCharges } from "../lib/workshop-oils";
 import { effectiveQuotedLaborHours } from "../lib/service-labor-hours";
 import {
   clearEstimateStaffAcknowledgement,
@@ -4938,7 +4939,8 @@ async function issueServiceInvoice(
     (sum, line) => sum + line.unitPrice * line.quantity,
     0,
   );
-  const partsTotal = internalPartsTotal + externalPartsTotal;
+  const preIssueOilCharges = await oilCharges(db, card.dealerId, card.id);
+  const partsTotal = internalPartsTotal + externalPartsTotal + preIssueOilCharges.reduce((sum, oil) => sum + oil.amount, 0);
   const laborTotal =
     effectiveQuotedLaborHours(card.quotedLaborHours, card.laborHours) *
     card.laborRate;
@@ -5128,6 +5130,8 @@ async function issueServiceInvoice(
         .returning();
 
       await snapshotServicePartsCharges(tx, card.dealerId, created.id, lockedBreakdown);
+      await snapshotInvoiceOils(tx, card.dealerId, created.id,
+        await oilCharges(tx, card.dealerId, card.id));
       // Stamp the collision split on the claim: the customer owes the
       // deductible (capped at the invoice total); the insurer owes the rest.
       // The claim auto-advances insurer_signoff → invoiced with an audit event.
@@ -5840,6 +5844,7 @@ router.get("/service-invoices/:id/pdf", async (req, res): Promise<void> => {
     await dealerTimezone(invoice.dealerId),
     await getDealerPdfBranding(invoice.dealerId),
     await loadServiceInvoicePartsCharges(invoice.dealerId, invoice.id),
+    await invoiceOilCharges(invoice.dealerId, invoice.id),
   );
   res
     .setHeader("Content-Type", "application/pdf")

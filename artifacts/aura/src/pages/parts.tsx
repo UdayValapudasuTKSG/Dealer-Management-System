@@ -94,9 +94,11 @@ import { cn } from "@/lib/utils";
 import { formatGuyanaDate, useMoney } from "@/lib/format";
 
 import { CreateInventoryRequisitionButton, RequisitionsWorkspace } from "@/components/parts/requisitions-workspace";
+import { OilCatalog } from "@/components/parts/oil-catalog";
 
 const TABS = [
   { key: "parts", label: "Parts", icon: Package },
+  { key: "oils", label: "Oils", icon: Package },
   { key: "locations", label: "Locations & Bins", icon: MapPin },
   { key: "ledger", label: "Stock Ledger", icon: History },
   { key: "holds", label: "Holds", icon: Lock },
@@ -278,6 +280,7 @@ export default function Parts() {
           transition={{ duration: 0.2 }}
         >
           {tab === "parts" && <PartsTab />}
+          {tab === "oils" && <OilCatalog />}
           {tab === "locations" && <LocationsTab />}
           {tab === "ledger" && <LedgerTab />}
           {tab === "holds" && <HoldsTab />}

@@ -912,6 +912,7 @@ export function buildServiceInvoicePdf(
   tz: string,
   branding?: PdfBranding | null,
   charges: { shippingTotal: number; dutiesTotal: number } = { shippingTotal: 0, dutiesTotal: 0 },
+  oils: { name: string; litres: number; price: number; amount: number }[] = [],
 ): Promise<Buffer> {
   return collect((doc) => {
     let y = header(doc, "SERVICE INVOICE", [
@@ -951,9 +952,12 @@ export function buildServiceInvoicePdf(
         ? invoice.externalPartsTotal
         : 0;
     const lines: [string, number][] = [
-      ["Parts & consumables", invoice.partsTotal - externalPartsTotal],
+      ["Parts & consumables", invoice.partsTotal - externalPartsTotal - oils.reduce((sum, oil) => sum + oil.amount, 0)],
       ["Labour", invoice.laborTotal],
     ];
+    for (const oil of oils) {
+      lines.push([`${oil.name} · ${oil.litres.toFixed(3)} L @ GYD ${oil.price.toFixed(2)}/L`, oil.amount]);
+    }
     if (externalPartsTotal > 0) {
       lines.splice(1, 0, ["External parts", externalPartsTotal]);
     }

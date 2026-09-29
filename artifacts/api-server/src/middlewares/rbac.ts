@@ -832,6 +832,7 @@ const PATH_MODULES: Record<string, RouteRule> = {
   "job-cards": {
     module: "service",
     category: (req) => {
+      if (req.method === "POST" && /^\/job-cards\/\d+\/oils(?:\/\d+\/(?:approve|issue|return|cancel))?\/?$/.test(req.path)) return "edit";
       if (
         (req.method === "POST" && /^\/job-cards\/\d+\/parts\/\d+\/issue\/?$/.test(req.path)) ||
         (req.method === "DELETE" && /^\/job-cards\/\d+\/parts\/\d+\/?$/.test(req.path))
