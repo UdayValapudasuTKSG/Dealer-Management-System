@@ -5,10 +5,15 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { GetCallCentreReportFormat } from './getCallCentreReportFormat';
 
 export type GetCallCentreReportParams = {
 /**
  * @minimum 1
  */
 divisionId?: number;
+/**
+ * Request a dealer-branded PDF instead of the JSON summary
+ */
+format?: GetCallCentreReportFormat;
 };

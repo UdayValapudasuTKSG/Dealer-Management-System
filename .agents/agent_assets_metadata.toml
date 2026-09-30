@@ -335,3 +335,17 @@ mtime_ms = 1790308032522
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/77e2fb08-2487-4399-abd5-aa7344723a6c/0b69587b-baac-4852-9074-7e19e8cd4bb7"
 storage_version_token = "1790308059440082"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "JBaMBaxq17YexG7LT4zc2"
+uri = "file://artifacts/api-server/outputs/demo-report-sales-pipeline.pdf"
+type = "pdf"
+title = "Branded report layout — demo PDF"
+description = "Sample with fictional dealership and figures illustrating the new PDF branding, chart and table layout."
+logical_id = "b4bcd792-eeb6-4e44-8899-e866c0557dad"
+content_hash = "sha256:8c4d639229d4607b2983fa3b3e85f531ff9470b90f57fa51aab989ad63c51930"
+size = 3978
+mtime_ms = 1790737616064
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/b4bcd792-eeb6-4e44-8899-e866c0557dad/f48d1903-13b6-4962-82c3-1884d38678cf"
+storage_version_token = "1790738233187990"
+content_type = "application/pdf"

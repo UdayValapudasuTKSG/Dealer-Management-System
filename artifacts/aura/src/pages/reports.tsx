@@ -128,10 +128,12 @@ async function downloadExport(
   for (const [key, value] of Object.entries({ ...params, format })) {
     if (value !== undefined) qs.set(key, String(value));
   }
+  qs.set("_export", String(Date.now()));
   const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
   const res = await fetch(`${apiBase}/reports?${qs.toString()}`, {
     credentials: "include",
     headers,
+    cache: "no-store",
   });
   if (!res.ok) {
     throw new Error(`Export failed (HTTP ${res.status})`);
@@ -505,10 +507,10 @@ function StandardReport({
     setExporting(format);
     try {
       await downloadExport(params, format);
-    } catch {
+    } catch (error) {
       toast({
         title: "Export failed",
-        description: "The report could not be exported. Try again.",
+        description: error instanceof Error ? error.message : "The report could not be exported. Try again.",
         variant: "destructive",
       });
     } finally {
@@ -737,10 +739,10 @@ function SalesAdvisorActivityReport({
         { type: GetReportType.sales_advisor_activity, from, to },
         format,
       );
-    } catch {
+    } catch (error) {
       toast({
         title: "Export failed",
-        description: "The report could not be exported. Try again.",
+        description: error instanceof Error ? error.message : "The report could not be exported. Try again.",
         variant: "destructive",
       });
     } finally {

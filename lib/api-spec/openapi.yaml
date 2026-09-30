@@ -2316,12 +2316,19 @@ paths:
           in: query
           required: false
           schema: { type: integer, minimum: 1 }
+        - name: format
+          in: query
+          required: false
+          description: Request a dealer-branded PDF instead of the JSON summary
+          schema: { type: string, enum: [pdf] }
       responses:
         "200":
-          description: Dealer-scoped call centre KPIs
+          description: Dealer-scoped call centre KPIs or PDF export
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CallCentreReport" }
+            application/pdf:
+              schema: { type: string, format: binary }
 
   /leads/{id}/call-centre-disposition:
     post:

@@ -12177,7 +12177,18 @@ export type GetCallCentreReportParams = {
  * @minimum 1
  */
 divisionId?: number;
+/**
+ * Request a dealer-branded PDF instead of the JSON summary
+ */
+format?: GetCallCentreReportFormat;
 };
+
+export type GetCallCentreReportFormat = typeof GetCallCentreReportFormat[keyof typeof GetCallCentreReportFormat];
+
+
+export const GetCallCentreReportFormat = {
+  pdf: 'pdf',
+} as const;
 
 export type ListCustomersParams = {
 /**

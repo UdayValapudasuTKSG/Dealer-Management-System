@@ -4010,7 +4010,8 @@ export const SendLeadQuoteResponse = zod.object({
 
 
 export const GetCallCentreReportQueryParams = zod.object({
-  "divisionId": zod.coerce.number().min(1).optional()
+  "divisionId": zod.coerce.number().min(1).optional(),
+  "format": zod.enum(['pdf']).optional().describe('Request a dealer-branded PDF instead of the JSON summary')
 })
 
 export const getCallCentreReportResponseActiveFollowUpMin = 0;

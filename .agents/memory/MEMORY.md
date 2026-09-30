@@ -83,4 +83,5 @@
 - [Call-centre qualification](call-centre-qualification.md) — interested means sales handover, not completion of sales qualification gates; historical rep attribution is not edit permission.
 - [Internal email recipient policy](internal-email-recipient-policy.md) — email-only dealer overrides; empty means off, defaults remain until customized, and queued mail respects current policy.
 - [Brochure brand boundaries](brochure-brand-boundaries.md) — supplied BYD PDFs are GT-branded, not shared across dealerships; preserve originals when making email-sized copies.
+- [Mixed-source report redaction](report-money-redaction.md) — derived report currency must respect every contributing financial permission, including PDF charts.
 - [Workshop oil boundaries](workshop-oil-boundaries.md) — fractional litres stay distinct from countable parts; issue deducts once, and physical returns do not imply financial credits.

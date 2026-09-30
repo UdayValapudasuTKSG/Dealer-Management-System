@@ -7300,9 +7300,9 @@ export const getGetCallCentreReportUrl = (params?: GetCallCentreReportParams,) =
 /**
  * @summary Call centre active follow-up and qualified transfer volumes
  */
-export const getCallCentreReport = async (params?: GetCallCentreReportParams, options?: RequestInit): Promise<CallCentreReport> => {
+export const getCallCentreReport = async (params?: GetCallCentreReportParams, options?: RequestInit): Promise<CallCentreReport | Blob> => {
 
-  return customFetch<CallCentreReport>(getGetCallCentreReportUrl(params),
+  return customFetch<CallCentreReport | Blob>(getGetCallCentreReportUrl(params),
   {
     ...options,
     method: 'GET'

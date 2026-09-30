@@ -428,6 +428,7 @@ export * from './gateStatus';
 export * from './gateType';
 export * from './generateQuoteInput';
 export * from './getCalendarParams';
+export * from './getCallCentreReportFormat';
 export * from './getCallCentreReportParams';
 export * from './getDailyTechnicianTimesheetParams';
 export * from './getNamedPartsValuationFormat';

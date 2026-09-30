@@ -51,6 +51,7 @@ import {
 } from "../lib/report-scope";
 import { dealerTimezone, formatDealerDateTime, zonedParts } from "../lib/timezone";
 import { renderReportExport } from "../lib/report-export";
+import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { fieldAccessFor } from "../lib/field-permissions";
 
 const router: IRouter = Router();
@@ -1313,9 +1314,13 @@ const agentActivity: Builder = async (ctx) => {
 /* ------------------------------------------------------------------ */
 
 /** Which field group governs each report's money figures. */
-const REPORT_FIELD_GROUP: Record<string, { module: "leads" | "deals"; group: string }> = {
-  sales_pipeline: { module: "deals", group: "deal_financials" },
-  sales_performance: { module: "deals", group: "deal_financials" },
+const REPORT_FIELD_GROUP: Record<string, { module: "leads" | "deals" | "inventory"; group: string }[]> = {
+  sales_pipeline: [
+    { module: "deals", group: "deal_financials" },
+    { module: "inventory", group: "vehicle_pricing" },
+  ],
+  sales_performance: [{ module: "deals", group: "deal_financials" }],
+  inventory_aging: [{ module: "inventory", group: "vehicle_pricing" }],
 };
 
 const MONEY_RE = /GYD\s[\d,.]+/g;
@@ -1330,12 +1335,12 @@ async function redactReportPayload(
   type: string,
   payload: ReportPayload,
 ): Promise<ReportPayload> {
-  const rule = REPORT_FIELD_GROUP[type];
-  if (!rule) return payload;
-  const grants = await fieldAccessFor(user, rule.module);
-  const hidden = grants.some(
-    (g) => g.group.key === rule.group && g.access === "hidden",
-  );
+  const rules = REPORT_FIELD_GROUP[type];
+  if (!rules) return payload;
+  const grants = await Promise.all(rules.map(rule => fieldAccessFor(user, rule.module)));
+  const hidden = rules.some((rule, i) => grants[i]!.some(
+    g => g.group.key === rule.group && g.access === "hidden",
+  ));
   if (!hidden) return payload;
   const mask = (s: string) => s.replace(MONEY_RE, "—");
   return {
@@ -1347,11 +1352,12 @@ async function redactReportPayload(
     })),
     chart: {
       ...payload.chart,
-      /* Money can appear in the primary series (currency charts) or in the
-         secondary series (e.g. weighted pipeline value) — strip both. */
-      points: payload.chart.points.map((p) => ({
+      /* Do not represent restricted figures as zero or leak them through a
+         legend/axis. Non-monetary primary counts remain available. */
+      valueLabel: payload.chart.currency ? "Restricted by field permissions" : payload.chart.valueLabel,
+      currency: false,
+      points: payload.chart.currency ? [] : payload.chart.points.map((p) => ({
         ...p,
-        value: payload.chart.currency ? 0 : p.value,
         secondary: undefined,
       })),
       secondaryLabel: undefined,
@@ -1631,6 +1637,48 @@ router.get("/reports/call-centre", async (req, res): Promise<void> => {
       where ${isNotNull(leadsTable.callCentreTransferredAt)}
     )::int`,
   }).from(leadsTable).where(where);
+  if (req.query.format === "pdf") {
+    const tz = await dealerTimezone(dealerId);
+    const [dealer] = await db.select().from(dealersTable).where(eq(dealersTable.id, dealerId));
+    const branding = await getDealerPdfBranding(dealerId);
+    const [actor] = await db.select({ name: usersTable.name, email: usersTable.email })
+      .from(usersTable).where(eq(usersTable.id, user.id));
+    await db.insert(auditLogsTable).values({
+      dealerId, actorUserId: user.id, actorName: actor?.name ?? null,
+      actorEmail: actor?.email ?? null, action: "export", module: "leads",
+      entityType: "report", entityId: "call_centre",
+      summary: `${actor?.name ?? `user ${user.id}`} exported the Call Centre Qualification report as PDF`,
+      details: { type: "call_centre", format: "pdf", divisionId: requestedDivision },
+    });
+    await renderReportExport(res, {
+      type: "call_centre",
+      label: "Call Centre Qualification",
+      from: new Date(0).toISOString(),
+      to: new Date().toISOString(),
+      kpis: [
+        { label: "Active call-centre follow-ups", value: String(totals?.activeFollowUp ?? 0),
+          sub: "Pending or follow-up leads not won or lost · all time" },
+        { label: "Qualified & transferred", value: String(totals?.qualifiedTransferred ?? 0),
+          sub: "Leads handed to a sales advisor · all time" },
+      ],
+      chart: {
+        kind: "bar", valueLabel: "Lead count",
+        points: [
+          { label: "Active follow-ups", value: totals?.activeFollowUp ?? 0 },
+          { label: "Qualified & transferred", value: totals?.qualifiedTransferred ?? 0 },
+        ],
+      },
+      table: { columns: ["Measure", "Count"], rows: [
+        ["Active call-centre follow-ups", String(totals?.activeFollowUp ?? 0)],
+        ["Qualified & transferred", String(totals?.qualifiedTransferred ?? 0)],
+      ] },
+    }, "pdf", {
+      dealerName: branding.displayName ?? dealer?.name ?? `Dealer ${dealerId}`,
+      logo: branding.logo, address: dealer?.address, phone: dealer?.servicePhone,
+      color: dealer?.themeColor, timezone: tz, usdExchangeRate: dealer?.usdExchangeRate ?? 1,
+    });
+    return;
+  }
   res.json({
     activeFollowUp: totals?.activeFollowUp ?? 0,
     qualifiedTransferred: totals?.qualifiedTransferred ?? 0,
@@ -1767,8 +1815,13 @@ router.get("/reports", async (req, res): Promise<void> => {
         detail: `${type} · ${dealerDateLabel(from, tz)} – ${dealerDateLabel(to, tz)}`,
       }),
     ]);
+    const branding = format === "pdf" ? await getDealerPdfBranding(dealerId) : null;
     await renderReportExport(res, payload, format as "csv" | "xlsx" | "pdf", {
-      dealerName: dealer?.name ?? `Dealer ${dealerId}`,
+      dealerName: branding?.displayName ?? dealer?.name ?? `Dealer ${dealerId}`,
+      logo: branding?.logo,
+      address: dealer?.address,
+      phone: dealer?.servicePhone,
+      color: dealer?.themeColor,
       usdExchangeRate: rate,
       timezone: tz,
     });
