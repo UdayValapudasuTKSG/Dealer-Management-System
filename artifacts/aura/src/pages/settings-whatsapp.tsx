@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -8,6 +8,7 @@ import {
   useUpdateWhatsappSettings,
   useTestWhatsappConnection,
   getGetWhatsappSettingsQueryKey,
+  getGetTestDrivePolicyQueryKey,
 } from "@workspace/api-client-react";
 import { PageHero } from "@/components/layout/page-hero";
 import { SettingsTabs } from "@/components/settings-nav";
@@ -15,6 +16,7 @@ import { Page } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Form,
   FormControl,
@@ -90,7 +92,8 @@ export default function SettingsWhatsapp() {
     activeDealer?.roleName === "General Manager" ||
     !!me?.isSuperAdmin;
 
-  const { data: settings, isLoading } = useGetWhatsappSettings();
+  const { data: settings, isLoading, error: settingsError } = useGetWhatsappSettings();
+  const [showroomAddress, setShowroomAddress] = useState("");
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -106,6 +109,7 @@ export default function SettingsWhatsapp() {
 
   useEffect(() => {
     if (settings) {
+      setShowroomAddress(settings.showroomAddress ?? "");
       form.reset({
         wabaId: settings.wabaId ?? "",
         phoneNumberId: settings.phoneNumberId ?? "",
@@ -117,13 +121,15 @@ export default function SettingsWhatsapp() {
     }
   }, [settings, form]);
 
-  const refreshSettings = () =>
-    qc.invalidateQueries({ queryKey: getGetWhatsappSettingsQueryKey() });
+  const refreshSettings = () => {
+    void qc.invalidateQueries({ queryKey: getGetWhatsappSettingsQueryKey() });
+    void qc.invalidateQueries({ queryKey: getGetTestDrivePolicyQueryKey() });
+  };
 
   const save = useUpdateWhatsappSettings({
     mutation: {
       onSuccess: () => {
-        toast({ title: "WhatsApp connection saved" });
+        toast({ title: "Settings saved" });
         form.setValue("accessToken", "");
         form.setValue("appSecret", "");
         refreshSettings();
@@ -205,6 +211,52 @@ export default function SettingsWhatsapp() {
       />
       <SettingsTabs />
       <Page className="space-y-5 pt-0">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-5">
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            Customer experience · this dealership only
+          </div>
+          {settingsError && <p role="alert" className="text-sm text-destructive">Unable to load settings. Please refresh and try again.</p>}
+          <div className="flex items-start justify-between gap-6">
+            <div className="space-y-1">
+              <label htmlFor="test-drives-enabled" className="font-semibold">Test drives enabled</label>
+              <p className="text-sm text-muted-foreground max-w-2xl">
+                Allow new test-drive bookings through staff, customer links and agents.
+                When disabled, WhatsApp says we cannot facilitate test drives and does not offer or arrange them.
+                Existing bookings, history and cancellation remain available.
+              </p>
+            </div>
+            <Switch
+              id="test-drives-enabled"
+              data-testid="switch-test-drives-enabled"
+              checked={settings?.testDrivesEnabled ?? true}
+              disabled={!isGm || !settings || save.isPending}
+              onCheckedChange={(checked) => save.mutate({ data: { testDrivesEnabled: checked } })}
+            />
+          </div>
+          <div className="space-y-2 max-w-xl">
+            <label htmlFor="showroom-address" className="text-sm font-semibold">WhatsApp showroom address</label>
+            <Input
+              id="showroom-address"
+              data-testid="input-whatsapp-showroom-address"
+              value={showroomAddress}
+              maxLength={300}
+              onChange={(event) => setShowroomAddress(event.target.value)}
+              disabled={!isGm || !settings || save.isPending}
+              placeholder="Customer-facing showroom address"
+            />
+            <p className="text-xs text-muted-foreground">
+              The bot replies with this exact address when asked. This does not change other dealerships or the address printed on documents.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="button-save-whatsapp-showroom-address"
+              disabled={!isGm || !settings || !showroomAddress.trim() || save.isPending}
+              onClick={() => save.mutate({ data: { showroomAddress: showroomAddress.trim() } })}
+            >Save address</Button>
+          </div>
+          {!isGm && <p className="text-xs text-muted-foreground">Only the general manager or an authorized platform administrator can change these settings.</p>}
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Status Panel */}
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">

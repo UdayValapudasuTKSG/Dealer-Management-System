@@ -8,6 +8,7 @@ import {
   type TestDriveStatus,
 } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
+import { dealerCustomerPolicy, TEST_DRIVES_DISABLED } from "../lib/dealer-customer-policy";
 import {
   checkLeadMutationOwnership,
   LEAD_NOT_OWNED,
@@ -62,6 +63,14 @@ async function syncLeadColumns(
     .where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId)));
 }
 
+router.get("/test-drives/policy", async (_req, res): Promise<void> => {
+  const policy = await dealerCustomerPolicy(activeDealerId(res));
+  res.json({
+    testDrivesEnabled: policy.testDrivesEnabled,
+    bookingDisabledReason: policy.testDrivesEnabled ? null : TEST_DRIVES_DISABLED,
+  });
+});
+
 router.get("/test-drives", async (req, res): Promise<void> => {
   const query = ListTestDrivesQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -107,21 +116,29 @@ router.post("/test-drives", async (req, res): Promise<void> => {
     res.status(403).json(LEAD_NOT_OWNED);
     return;
   }
-  const [created] = await db
-    .insert(testDrivesTable)
-    .values({
-      dealerId,
-      leadId: lead.id,
-      vehicleId: body.data.vehicleId ?? lead.interestedVehicleId ?? null,
-      customerId: lead.customerId ?? null,
-      status: "scheduled",
-      scheduledAt: new Date(body.data.scheduledAt),
-      branch: body.data.branch ?? null,
-      licenceNumber: body.data.licenceNumber ?? null,
-      waiverAccepted: body.data.waiverAccepted ?? false,
-      bookedVia: "staff",
-    })
-    .returning();
+  const created = await db.transaction(async (tx) => {
+    if (!(await dealerCustomerPolicy(dealerId, tx, true)).testDrivesEnabled) return null;
+    const [row] = await tx
+      .insert(testDrivesTable)
+      .values({
+        dealerId,
+        leadId: lead.id,
+        vehicleId: body.data.vehicleId ?? lead.interestedVehicleId ?? null,
+        customerId: lead.customerId ?? null,
+        status: "scheduled",
+        scheduledAt: new Date(body.data.scheduledAt),
+        branch: body.data.branch ?? null,
+        licenceNumber: body.data.licenceNumber ?? null,
+        waiverAccepted: body.data.waiverAccepted ?? false,
+        bookedVia: "staff",
+      })
+      .returning();
+    return row;
+  });
+  if (!created) {
+    res.status(409).json({ error: TEST_DRIVES_DISABLED });
+    return;
+  }
   await syncLeadColumns(dealerId, lead.id);
   await db.insert(timelineEventsTable).values({
     dealerId,
@@ -184,36 +201,49 @@ router.patch("/test-drives/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [updated] = await db
-    .update(testDrivesTable)
-    .set({
-      status: nextStatus,
-      scheduledAt: body.data.scheduledAt
-        ? new Date(body.data.scheduledAt)
-        : drive.scheduledAt,
-      branch: body.data.branch !== undefined ? body.data.branch : drive.branch,
-      licenceNumber:
-        body.data.licenceNumber !== undefined
-          ? body.data.licenceNumber
-          : drive.licenceNumber,
-      waiverAccepted: body.data.waiverAccepted ?? drive.waiverAccepted,
-      outcomeNotes:
-        body.data.outcomeNotes !== undefined
-          ? body.data.outcomeNotes
-          : drive.outcomeNotes,
-      completedAt:
-        nextStatus === "completed" && drive.status !== "completed"
-          ? new Date()
-          : drive.completedAt,
-      cancelledAt:
-        nextStatus === "cancelled" && drive.status !== "cancelled"
-          ? new Date()
-          : nextStatus === "scheduled"
-            ? null
-            : drive.cancelledAt,
-    })
-    .where(eq(testDrivesTable.id, drive.id))
-    .returning();
+  const rescheduling = nextStatus === "scheduled" &&
+    (drive.status !== "scheduled" ||
+      (body.data.scheduledAt !== undefined &&
+        new Date(body.data.scheduledAt).getTime() !== drive.scheduledAt.getTime()));
+  const updated = await db.transaction(async (tx) => {
+    if (rescheduling &&
+        !(await dealerCustomerPolicy(dealerId, tx, true)).testDrivesEnabled) return null;
+    const [row] = await tx
+      .update(testDrivesTable)
+      .set({
+        status: nextStatus,
+        scheduledAt: body.data.scheduledAt
+          ? new Date(body.data.scheduledAt)
+          : drive.scheduledAt,
+        branch: body.data.branch !== undefined ? body.data.branch : drive.branch,
+        licenceNumber:
+          body.data.licenceNumber !== undefined
+            ? body.data.licenceNumber
+            : drive.licenceNumber,
+        waiverAccepted: body.data.waiverAccepted ?? drive.waiverAccepted,
+        outcomeNotes:
+          body.data.outcomeNotes !== undefined
+            ? body.data.outcomeNotes
+            : drive.outcomeNotes,
+        completedAt:
+          nextStatus === "completed" && drive.status !== "completed"
+            ? new Date()
+            : drive.completedAt,
+        cancelledAt:
+          nextStatus === "cancelled" && drive.status !== "cancelled"
+            ? new Date()
+            : nextStatus === "scheduled"
+              ? null
+              : drive.cancelledAt,
+      })
+      .where(and(eq(testDrivesTable.id, drive.id), eq(testDrivesTable.dealerId, dealerId)))
+      .returning();
+    return row;
+  });
+  if (!updated) {
+    res.status(409).json({ error: TEST_DRIVES_DISABLED });
+    return;
+  }
   await syncLeadColumns(dealerId, drive.leadId);
 
   if (body.data.status && body.data.status !== drive.status) {

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, whatsappChannelsTable } from "@workspace/db";
+import { db, dealersTable, whatsappChannelsTable } from "@workspace/db";
 import {
   GetWhatsappSettingsResponse,
   UpdateWhatsappSettingsBody,
@@ -11,6 +11,7 @@ import { activeDealerId } from "../middlewares/rbac";
 import { encryptToken } from "../lib/whatsapp-crypto";
 import { getChannelByDealerId } from "../lib/whatsapp-channel";
 import { logger } from "../lib/logger";
+import { dealerCustomerPolicy } from "../lib/dealer-customer-policy";
 
 const router: IRouter = Router();
 
@@ -36,7 +37,7 @@ function databaseErrorCode(err: unknown): string | undefined {
       : undefined;
 }
 
-function canManageWhatsapp(res: Parameters<typeof activeDealerId>[0]): boolean {
+export function canManageWhatsapp(res: Parameters<typeof activeDealerId>[0]): boolean {
   const user = res.locals.user;
   const dealerId = activeDealerId(res);
   const membership = user?.dealers.find(
@@ -50,6 +51,11 @@ function canManageWhatsapp(res: Parameters<typeof activeDealerId>[0]): boolean {
 }
 
 async function settingsPayload(dealerId: number) {
+  const policy = await dealerCustomerPolicy(dealerId);
+  const customerSettings = {
+    testDrivesEnabled: policy.testDrivesEnabled,
+    showroomAddress: policy.showroomAddress,
+  };
   const [row] = await db
     .select()
     .from(whatsappChannelsTable)
@@ -59,6 +65,7 @@ async function settingsPayload(dealerId: number) {
     const legacy = await getChannelByDealerId(dealerId);
     if (legacy) {
       return {
+        ...customerSettings,
         configured: true,
         enabled: true,
         wabaId: legacy.wabaId || null,
@@ -75,6 +82,7 @@ async function settingsPayload(dealerId: number) {
       };
     }
     return {
+      ...customerSettings,
       configured: false,
       enabled: false,
       wabaId: null,
@@ -91,6 +99,7 @@ async function settingsPayload(dealerId: number) {
     };
   }
   return {
+    ...customerSettings,
     configured: true,
     enabled: row.enabled,
     wabaId: row.wabaId,
@@ -123,6 +132,27 @@ router.put("/whatsapp/settings", async (req, res): Promise<void> => {
     return;
   }
   const dealerId = activeDealerId(res);
+
+  const policyUpdates: Partial<typeof dealersTable.$inferInsert> = {};
+  if (body.data.testDrivesEnabled !== undefined)
+    policyUpdates.testDrivesEnabled = body.data.testDrivesEnabled;
+  if (body.data.showroomAddress !== undefined) {
+    if (body.data.showroomAddress !== null && !body.data.showroomAddress.trim()) {
+      res.status(400).json({ error: "Showroom address cannot be blank; use null to restore the dealership address" });
+      return;
+    }
+    policyUpdates.whatsappShowroomAddress = body.data.showroomAddress?.trim() ?? null;
+  }
+  const hasPolicyUpdates = Object.keys(policyUpdates).length > 0;
+  // Policy settings do not require a connected channel or Meta credentials.
+  const channelKeys = ["wabaId", "phoneNumberId", "accessToken", "appSecret", "enabled", "serviceTemplateName", "serviceTemplateLanguage"] as const;
+  const hasChannelUpdates = channelKeys.some((key) => body.data[key] !== undefined);
+  if (!hasChannelUpdates) {
+    if (hasPolicyUpdates)
+      await db.update(dealersTable).set(policyUpdates).where(eq(dealersTable.id, dealerId));
+    res.json(UpdateWhatsappSettingsResponse.parse(await settingsPayload(dealerId)));
+    return;
+  }
 
   // Check whether this is an initial config or an update.
   const [existing] = await db
@@ -269,6 +299,8 @@ router.put("/whatsapp/settings", async (req, res): Promise<void> => {
     return;
   }
 
+  if (hasPolicyUpdates)
+    await db.update(dealersTable).set(policyUpdates).where(eq(dealersTable.id, dealerId));
   res.json(UpdateWhatsappSettingsResponse.parse(await settingsPayload(dealerId)));
 });
 

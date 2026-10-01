@@ -4,6 +4,8 @@ import {
   useUpdateLead,
   useAssignLead,
   useScheduleTestDrive,
+  useGetTestDrivePolicy,
+  getGetTestDrivePolicyQueryKey,
   useCheckLeadAvailability,
   useRecordLeadDecision,
   useListLeadAdvisors,
@@ -139,6 +141,9 @@ export function LeadWorkflowDialog({
   const assignLead = useAssignLead();
   const updateLead = useUpdateLead();
   const scheduleTestDrive = useScheduleTestDrive();
+  const { data: testDrivePolicy, error: testDrivePolicyError } = useGetTestDrivePolicy({
+    query: { queryKey: getGetTestDrivePolicyQueryKey(), enabled: open, staleTime: 0 },
+  });
   const checkAvailability = useCheckLeadAvailability();
   const recordDecision = useRecordLeadDecision();
 
@@ -336,6 +341,10 @@ export function LeadWorkflowDialog({
                     {l.testDriveBranch ? ` — ${l.testDriveBranch}` : ""}
                   </p>
                 )}
+                {testDrivePolicy?.testDrivesEnabled === false && (
+                  <p role="status" className="text-sm text-amber-500">{testDrivePolicy.bookingDisabledReason} Existing bookings and history are retained.</p>
+                )}
+                {testDrivePolicyError && <p role="alert" className="text-sm text-destructive">Unable to check the dealership's test-drive policy. Booking is unavailable until settings can be loaded.</p>}
                 <div className="grid grid-cols-2 gap-2">
                   <Input
                     type="date"
@@ -371,6 +380,7 @@ export function LeadWorkflowDialog({
                   <Button
                     size="sm"
                     disabled={
+                      testDrivePolicy?.testDrivesEnabled !== true ||
                       !tdDate ||
                       !tdTime ||
                       !tdLicence.trim() ||
@@ -436,7 +446,7 @@ export function LeadWorkflowDialog({
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!vehicle || checkAvailability.isPending}
+                  disabled={testDrivePolicy?.testDrivesEnabled !== true || !vehicle || checkAvailability.isPending}
                   onClick={async () => {
                     try {
                       const updated = await checkAvailability.mutateAsync({ id: l.id });

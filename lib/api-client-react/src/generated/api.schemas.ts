@@ -389,6 +389,13 @@ export interface VehicleOnboardingState {
 }
 
 export interface WhatsappSettings {
+  /** Dealership-wide new test-drive booking gate. Defaults to enabled; existing bookings remain. */
+  testDrivesEnabled: boolean;
+  /**
+     * Dealer-scoped WhatsApp showroom address
+     * @nullable
+     */
+  showroomAddress: string | null;
   configured: boolean;
   enabled: boolean;
   /** @nullable */
@@ -413,6 +420,14 @@ export interface WhatsappSettings {
 }
 
 export interface UpdateWhatsappSettingsRequest {
+  testDrivesEnabled?: boolean;
+  /**
+     * Customer-facing WhatsApp showroom address; null uses this dealer's document address
+     * @minLength 1
+     * @maxLength 300
+     * @nullable
+     */
+  showroomAddress?: string | null;
   /**
      * @minLength 5
      * @maxLength 64
@@ -4084,7 +4099,16 @@ export interface TestDriveDay {
   slots: TestDriveSlot[];
 }
 
+export interface TestDrivePolicy {
+  testDrivesEnabled: boolean;
+  /** @nullable */
+  bookingDisabledReason: string | null;
+}
+
 export interface TestDriveInvite {
+  testDrivesEnabled: boolean;
+  /** @nullable */
+  bookingDisabledReason: string | null;
   leadName: string;
   /** @nullable */
   vehicle: string | null;

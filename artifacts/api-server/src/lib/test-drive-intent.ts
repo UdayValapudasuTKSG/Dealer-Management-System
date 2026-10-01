@@ -27,6 +27,7 @@ import { getActiveChecklist } from "./stage-checklists";
 import { buildStageChecks, nextAdvanceStage, ADVANCE_TARGET_PHASE, ADVANCE_STAGE_LABEL } from "./stage-review";
 import { ensureAccountForLead } from "./accounts";
 import { logger } from "./logger";
+import { dealerCustomerPolicy, TEST_DRIVES_DISABLED } from "./dealer-customer-policy";
 import {
   dealerTimezone,
   formatDealerSlot,
@@ -195,6 +196,8 @@ async function sendSelectionLink(
   reason: string,
   opts?: { reschedule?: boolean },
 ): Promise<string> {
+  if (!(await dealerCustomerPolicy(lead.dealerId)).testDrivesEnabled)
+    return ` ${TEST_DRIVES_DISABLED} No invitation sent.`;
   const email = await leadEmailAddress(lead);
   const phone = (lead.phone ?? "").replace(/\D/g, "") || null;
   const firstName = lead.name.split(/\s+/)[0];
@@ -315,13 +318,17 @@ async function rescheduleDrive(
   started: number,
   tz: string,
 ): Promise<void> {
-  const [updated] = await db
-    .update(leadsTable)
-    .set({ testDriveAt: when })
-    .where(
-      and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)),
-    )
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    if (!(await dealerCustomerPolicy(lead.dealerId, tx, true)).testDrivesEnabled) return null;
+    const [row] = await tx
+      .update(leadsTable)
+      .set({ testDriveAt: when })
+      .where(
+        and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)),
+      )
+      .returning();
+    return row;
+  });
   if (!updated) return;
 
   // First-class record: supersede the scheduled drive, insert the new slot.
@@ -448,6 +455,19 @@ export async function handleTestDriveIntent(
   extraction: TestDriveIntentExtraction,
 ): Promise<void> {
   try {
+    if (!(await dealerCustomerPolicy(call.dealerId)).testDrivesEnabled) {
+      await recordAgentRun({
+        dealerId: call.dealerId,
+        agentKey: AGENT_KEY,
+        runType: RUN_TYPE,
+        inputSource: "calls",
+        refType: "call_log",
+        refId: call.id,
+        status: "blocked",
+        errorMessage: TEST_DRIVES_DISABLED,
+      });
+      return;
+    }
     if (await alreadyProcessed(call)) return; // duplicate transcription/webhook retry
     const tz = await dealerTimezone(call.dealerId);
     const started = Date.now();
@@ -609,18 +629,22 @@ export async function handleTestDriveIntent(
     }
 
     // ---- Auto-book ---------------------------------------------------------
-    const [updated] = await db
-      .update(leadsTable)
-      .set({
-        testDriveAt: when,
-        testDriveBranch:
-          lead.testDriveBranch ?? lead.preferredBranch ?? "Main Showroom",
-        status: "test_drive",
-      })
-      .where(
-        and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)),
-      )
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      if (!(await dealerCustomerPolicy(lead.dealerId, tx, true)).testDrivesEnabled) return null;
+      const [row] = await tx
+        .update(leadsTable)
+        .set({
+          testDriveAt: when,
+          testDriveBranch:
+            lead.testDriveBranch ?? lead.preferredBranch ?? "Main Showroom",
+          status: "test_drive",
+        })
+        .where(
+          and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)),
+        )
+        .returning();
+      return row;
+    });
     if (!updated) return;
     updated.customerId = await ensureAccountForLead(updated);
 

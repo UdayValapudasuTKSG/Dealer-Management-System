@@ -1014,6 +1014,7 @@ export * from './testDrive';
 export * from './testDriveCreate';
 export * from './testDriveDay';
 export * from './testDriveInvite';
+export * from './testDrivePolicy';
 export * from './testDriveSlot';
 export * from './testDriveStatus';
 export * from './testDriveUpdate';

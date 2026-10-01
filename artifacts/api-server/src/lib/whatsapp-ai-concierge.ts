@@ -231,7 +231,11 @@ export async function interpretWhatsappLeadMessage(input: {
   inventory: ConciergeInventoryItem[];
 }): Promise<ConciergeInterpretation | null> {
   const started = Date.now();
-  const inventory = input.inventory.slice(0, 60);
+  // Model-level representatives, not one row per stock unit. The extractor
+  // must not learn stock quantities by counting duplicate labels.
+  const inventory = [...new Map(
+    input.inventory.map((vehicle) => [vehicle.label.toLowerCase(), vehicle]),
+  ).values()].slice(0, 60);
   const inventoryText =
     inventory.length > 0
       ? inventory.map((vehicle) => `${vehicle.id}: ${vehicle.label}`).join("\n")

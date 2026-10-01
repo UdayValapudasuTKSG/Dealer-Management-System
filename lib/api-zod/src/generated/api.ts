@@ -2608,6 +2608,8 @@ export const GetTestDriveInviteParams = zod.object({
 })
 
 export const GetTestDriveInviteResponse = zod.object({
+  "testDrivesEnabled": zod.boolean(),
+  "bookingDisabledReason": zod.string().nullable(),
   "leadName": zod.string(),
   "vehicle": zod.string().nullable(),
   "vehicleImageUrl": zod.string().nullable(),
@@ -2643,6 +2645,8 @@ export const BookTestDriveSlotBody = zod.object({
 })
 
 export const BookTestDriveSlotResponse = zod.object({
+  "testDrivesEnabled": zod.boolean(),
+  "bookingDisabledReason": zod.string().nullable(),
   "leadName": zod.string(),
   "vehicle": zod.string().nullable(),
   "vehicleImageUrl": zod.string().nullable(),
@@ -14073,6 +14077,15 @@ export const ReceivePartPurchaseResponse = zod.object({
 
 
 /**
+ * @summary Read the active dealership's new test-drive booking policy
+ */
+export const GetTestDrivePolicyResponse = zod.object({
+  "testDrivesEnabled": zod.boolean(),
+  "bookingDisabledReason": zod.string().nullable()
+})
+
+
+/**
  * @summary Test-drive records, newest first
  */
 export const ListTestDrivesQueryParams = zod.object({
@@ -18841,6 +18854,8 @@ export const GetStorageObjectResponse = zod.unknown()
  * @summary WhatsApp channel settings for the active dealership (token masked)
  */
 export const GetWhatsappSettingsResponse = zod.object({
+  "testDrivesEnabled": zod.boolean().describe('Dealership-wide new test-drive booking gate. Defaults to enabled; existing bookings remain.'),
+  "showroomAddress": zod.string().nullable().describe('Dealer-scoped WhatsApp showroom address'),
   "configured": zod.boolean(),
   "enabled": zod.boolean(),
   "wabaId": zod.string().nullish(),
@@ -18860,6 +18875,8 @@ export const GetWhatsappSettingsResponse = zod.object({
 /**
  * @summary Create or update the WhatsApp channel for the active dealership
  */
+export const updateWhatsappSettingsBodyShowroomAddressMax = 300;
+
 export const updateWhatsappSettingsBodyWabaIdMin = 5;
 export const updateWhatsappSettingsBodyWabaIdMax = 64;
 
@@ -18890,6 +18907,8 @@ export const updateWhatsappSettingsBodyServiceTemplateLanguageRegExp = new RegEx
 
 
 export const UpdateWhatsappSettingsBody = zod.object({
+  "testDrivesEnabled": zod.boolean().optional(),
+  "showroomAddress": zod.string().min(1).max(updateWhatsappSettingsBodyShowroomAddressMax).nullish().describe('Customer-facing WhatsApp showroom address; null uses this dealer\'s document address'),
   "wabaId": zod.string().min(updateWhatsappSettingsBodyWabaIdMin).max(updateWhatsappSettingsBodyWabaIdMax).regex(updateWhatsappSettingsBodyWabaIdRegExp).optional(),
   "phoneNumberId": zod.string().min(updateWhatsappSettingsBodyPhoneNumberIdMin).max(updateWhatsappSettingsBodyPhoneNumberIdMax).regex(updateWhatsappSettingsBodyPhoneNumberIdRegExp).optional(),
   "accessToken": zod.string().min(updateWhatsappSettingsBodyAccessTokenMin).max(updateWhatsappSettingsBodyAccessTokenMax).optional().describe('Meta access token — stored encrypted; omit to preserve the existing token'),
@@ -18900,6 +18919,8 @@ export const UpdateWhatsappSettingsBody = zod.object({
 })
 
 export const UpdateWhatsappSettingsResponse = zod.object({
+  "testDrivesEnabled": zod.boolean().describe('Dealership-wide new test-drive booking gate. Defaults to enabled; existing bookings remain.'),
+  "showroomAddress": zod.string().nullable().describe('Dealer-scoped WhatsApp showroom address'),
   "configured": zod.boolean(),
   "enabled": zod.boolean(),
   "wabaId": zod.string().nullish(),

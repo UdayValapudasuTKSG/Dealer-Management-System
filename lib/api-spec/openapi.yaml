@@ -7108,6 +7108,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /test-drives/policy:
+    get:
+      operationId: getTestDrivePolicy
+      tags: [Leads]
+      summary: Read the active dealership's new test-drive booking policy
+      responses:
+        "200":
+          description: Current booking gate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestDrivePolicy"
   /test-drives:
     get:
       operationId: listTestDrives
@@ -11785,8 +11797,10 @@ components:
               originalName: { type: ["string", "null"] }
     WhatsappSettings:
       type: object
-      required: [configured, enabled, hasAccessToken, hasAppSecret, serviceTemplateLanguage]
+      required: [configured, enabled, hasAccessToken, hasAppSecret, serviceTemplateLanguage, testDrivesEnabled, showroomAddress]
       properties:
+        testDrivesEnabled: { type: boolean, description: "Dealership-wide new test-drive booking gate. Defaults to enabled; existing bookings remain." }
+        showroomAddress: { type: ["string", "null"], description: "Dealer-scoped WhatsApp showroom address" }
         configured: { type: boolean }
         enabled: { type: boolean }
         wabaId: { type: ["string", "null"] }
@@ -11803,6 +11817,8 @@ components:
     UpdateWhatsappSettingsRequest:
       type: object
       properties:
+        testDrivesEnabled: { type: boolean }
+        showroomAddress: { type: ["string", "null"], minLength: 1, maxLength: 300, description: "Customer-facing WhatsApp showroom address; null uses this dealer's document address" }
         wabaId: { type: string, minLength: 5, maxLength: 64, pattern: "^[0-9]+$" }
         phoneNumberId: { type: string, minLength: 5, maxLength: 64, pattern: "^[0-9]+$" }
         accessToken: { type: string, minLength: 20, maxLength: 4096, description: "Meta access token — stored encrypted; omit to preserve the existing token" }
@@ -13919,10 +13935,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TestDriveSlot"
+    TestDrivePolicy:
+      type: object
+      required: [testDrivesEnabled, bookingDisabledReason]
+      properties:
+        testDrivesEnabled: { type: boolean }
+        bookingDisabledReason: { type: ["string", "null"] }
     TestDriveInvite:
       type: object
-      required: [leadName, vehicle, vehicleImageUrl, branch, bookedAt, bookedLabel, days]
+      required: [leadName, vehicle, vehicleImageUrl, branch, bookedAt, bookedLabel, days, testDrivesEnabled, bookingDisabledReason]
       properties:
+        testDrivesEnabled: { type: boolean }
+        bookingDisabledReason: { type: ["string", "null"] }
         leadName: { type: string }
         vehicle: { type: ["string", "null"] }
         vehicleImageUrl: { type: ["string", "null"] }

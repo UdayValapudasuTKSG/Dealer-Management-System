@@ -27,6 +27,7 @@ import {
   type TemplateData,
 } from "./email";
 import { buildServiceEstimateBreakdown } from "./service-estimate-breakdown";
+import { dealerCustomerPolicy, TEST_DRIVES_DISABLED } from "./dealer-customer-policy";
 
 /** Name + phone of the lead's assigned (round-robin) sales advisor. */
 export async function leadAdvisorContact(
@@ -278,6 +279,8 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
 export async function sendTestDriveInviteEmail(
   lead: Lead,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!(await dealerCustomerPolicy(lead.dealerId)).testDrivesEnabled)
+    return { ok: false, status: 409, error: TEST_DRIVES_DISABLED };
   const { to, name } = await leadRecipient(lead);
   if (!to) {
     return {

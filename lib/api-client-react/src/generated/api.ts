@@ -491,6 +491,7 @@ import type {
   TestDrive,
   TestDriveCreate,
   TestDriveInvite,
+  TestDrivePolicy,
   TestDriveUpdate,
   TestEmailRequest,
   TestEmailResult,
@@ -25254,6 +25255,83 @@ export const useReceivePartPurchase = <TError = ErrorType<Error>,
       > => {
       return useMutation(getReceivePartPurchaseMutationOptions(options));
     }
+
+export const getGetTestDrivePolicyUrl = () => {
+
+
+
+
+  return `/api/test-drives/policy`
+}
+
+/**
+ * @summary Read the active dealership's new test-drive booking policy
+ */
+export const getTestDrivePolicy = async ( options?: RequestInit): Promise<TestDrivePolicy> => {
+
+  return customFetch<TestDrivePolicy>(getGetTestDrivePolicyUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTestDrivePolicyQueryKey = () => {
+    return [
+    `/api/test-drives/policy`
+    ] as const;
+    }
+
+
+export const getGetTestDrivePolicyQueryOptions = <TData = Awaited<ReturnType<typeof getTestDrivePolicy>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTestDrivePolicy>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTestDrivePolicyQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTestDrivePolicy>>> = ({ signal }) => getTestDrivePolicy({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTestDrivePolicy>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTestDrivePolicyQueryResult = NonNullable<Awaited<ReturnType<typeof getTestDrivePolicy>>>
+export type GetTestDrivePolicyQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Read the active dealership's new test-drive booking policy
+ */
+
+export function useGetTestDrivePolicy<TData = Awaited<ReturnType<typeof getTestDrivePolicy>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTestDrivePolicy>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTestDrivePolicyQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListTestDrivesUrl = (params?: ListTestDrivesParams,) => {
   const normalizedParams = new URLSearchParams();

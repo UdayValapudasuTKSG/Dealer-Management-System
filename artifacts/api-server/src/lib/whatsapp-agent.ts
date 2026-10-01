@@ -21,6 +21,8 @@ import type { WhatsappTransport } from "./whatsapp";
 import { linkWhatsappMessagesToLead } from "./whatsapp-log";
 import { normalizeWhatsappPhone } from "./whatsapp-phone";
 import { logger } from "./logger";
+import { dealerCustomerPolicy, TEST_DRIVES_DISABLED, type DealerCustomerPolicy } from "./dealer-customer-policy";
+import { containsPrivateStock, PRIVATE_STOCK_REPLY, safeWhatsappReply } from "./whatsapp-customer-policy";
 
 // ---------------------------------------------------------------------------
 // Conversational WhatsApp intake agent — an LLM tool-loop that behaves like a
@@ -368,19 +370,7 @@ function normalizedInventoryText(value: string): string {
  * question; only assistant-authored history and durable summaries are
  * redacted. Prices and model years are deliberately left alone. */
 export function redactAssistantStockCounts(value: string): string {
-  return value
-    .replace(
-      /\b(?:all\s+)?\d+\s+(?=(?:[\w-]+\s+){0,4}(?:units?|vehicles?|cars?)\b)/gi,
-      "[stock quantity withheld] ",
-    )
-    .replace(
-      /\b\d+\s+(?=(?:are\s+)?(?:currently\s+)?(?:available|in stock)\b)/gi,
-      "[stock quantity withheld] ",
-    )
-    .replace(
-      /\b(?:both|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?=(?:[\w-]+\s+){0,4}(?:ones?|units?|vehicles?|cars?)\b)/gi,
-      "[stock quantity withheld] ",
-    );
+  return containsPrivateStock(value) ? PRIVATE_STOCK_REPLY : value;
 }
 
 function inventoryVehicleMatches(
@@ -503,10 +493,11 @@ export function requiresFreshInventoryLookup(
   });
 }
 
-async function runTool(
+export async function runTool(
   ctx: ToolCtx,
   name: string,
   input: Record<string, unknown>,
+  readPolicy: (dealerId: number) => Promise<DealerCustomerPolicy> = dealerCustomerPolicy,
 ): Promise<string> {
   switch (name) {
     case "search_inventory": {
@@ -623,6 +614,8 @@ async function runTool(
     }
 
     case "get_test_drive_booking_link": {
+      if (!(await readPolicy(ctx.dealerId)).testDrivesEnabled)
+        return JSON.stringify({ error: TEST_DRIVES_DISABLED, test_drives_enabled: false });
       const lead = ctx.lead ?? (await findOpenLeadByPhone(ctx.dealerId, ctx.phone));
       ctx.lead = lead;
       if (!lead) {
@@ -829,6 +822,7 @@ export function buildSystemPrompt(
   dealerName: string,
   memory: AgentMemory,
   hasOpenLead: boolean,
+  policy?: DealerCustomerPolicy,
 ): string {
   const safeMemory = Object.fromEntries(
     Object.entries(memory).map(([key, value]) => [
@@ -853,6 +847,9 @@ WHAT YOU DO
 - For EVERY message asking about inventory, availability, models, colors, or price — including a follow-up that only names a model — call search_inventory again in that turn. Never rely on an earlier stock answer because inventory and the customer's requested model may have changed.
 - search_inventory returns current model/color availability, prices, specifications, and a representative vehicle id. It deliberately does NOT return stock-unit quantities. When query is omitted it represents the dealership's complete available model range.
 - NEVER disclose, guess, calculate, confirm, or repeat an exact number of stock units — total, by model, or by color. This remains true even if the customer asks directly, supplies a number, or a previous assistant message in the conversation claimed a number. Do not echo such past claims. Use qualitative wording such as "currently available" or "I'll have the team confirm current availability".
+- Never mention stock numbers, internal stock identifiers, or VINs. A question about "stock numbers" can mean quantities; answer availability without quantities or identifiers.
+- Test-drive requests are ${policy?.testDrivesEnabled === false ? `DISABLED. Say exactly "${TEST_DRIVES_DISABLED}" if asked. Never offer, arrange, book, reschedule, share a booking link, or promise that staff can facilitate a test drive. This overrides earlier assistant offers and appointment memory.` : "enabled. Use the booking-link tool and never claim a booking is confirmed before the customer completes it."}
+- Verified showroom address: ${JSON.stringify(policy?.showroomAddress ?? null)}. If asked for the showroom address, reply with exactly this address and nothing else. Never substitute a customer's address, infer a location, or use another dealership's address. If null, say it is not configured.
 - An "available" inventory status does NOT prove a vehicle is physically at the dealership or in Guyana. Confirm a physical location only when a tool explicitly verifies that location; otherwise say the team can confirm where it is.
 - Once you have at least a name and a vehicle interest, create/update the enquiry with upsert_lead (don't announce internal IDs). Update the same enquiry when details change — never create duplicates.
 - Resolve references like "that one" / "is it available?" from the conversation context.
@@ -974,7 +971,8 @@ export async function handleConversationalWhatsapp(
         .toLowerCase(),
     };
 
-    const system = buildSystemPrompt(dealerName, memory, !!existingLead);
+    const policy = await dealerCustomerPolicy(dealerId);
+    const system = buildSystemPrompt(dealerName, memory, !!existingLead, policy);
     const messages: Array<{ role: "user" | "assistant"; content: unknown }> = [];
     for (const m of transcript) {
       const historyText =
@@ -1059,7 +1057,7 @@ export async function handleConversationalWhatsapp(
       replyText =
         "Thanks for your patience — I'm having a little trouble on my end right now. I've made a note for our team and someone will follow up with you shortly.";
     }
-    replyText = replyText.slice(0, 1800);
+    replyText = safeWhatsappReply(replyText.slice(0, 1800), await dealerCustomerPolicy(dealerId));
 
     await t.sendText(msg.from, replyText);
     await saveMemory(dealerId, phone, ctx.memory);

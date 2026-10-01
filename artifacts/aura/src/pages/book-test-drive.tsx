@@ -51,7 +51,7 @@ export default function BookTestDrive({
   );
 
   const confirm = async () => {
-    if (!selectedSlot) return;
+    if (!selectedSlot || data?.testDrivesEnabled !== true) return;
     setBookError(null);
     try {
       const refreshed = await book.mutateAsync({
@@ -70,6 +70,8 @@ export default function BookTestDrive({
       const status = errorStatus(err);
       if (status === 409) {
         const serverMessage = (
+          err as { data?: { error?: string }; response?: { data?: { error?: string } } }
+        )?.data?.error ?? (
           err as { response?: { data?: { error?: string } } }
         )?.response?.data?.error;
         setBookError(
@@ -131,6 +133,11 @@ export default function BookTestDrive({
           </div>
         ) : (
           <div className="space-y-6">
+            {data.testDrivesEnabled === false && (
+              <div role="status" className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-sm">
+                {data.bookingDisabledReason} New bookings and rescheduling are unavailable. Existing booking details remain below; contact your advisor for help or cancellation.
+              </div>
+            )}
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
               {data.vehicleImageUrl && (
                 <div className="relative h-52 sm:h-64">
@@ -187,11 +194,12 @@ export default function BookTestDrive({
                       setJustBooked(false);
                       setRescheduling(true);
                     }}
+                    disabled={!data.testDrivesEnabled}
                   >
                     Choose a different time
                   </Button>
                 </motion.div>
-              ) : (
+              ) : data.testDrivesEnabled ? (
                 <motion.div
                   key="picker"
                   initial={{ opacity: 0, y: 12 }}
@@ -296,7 +304,7 @@ export default function BookTestDrive({
                     <Button
                       className="rounded-full px-8"
                       disabled={
-                        !selectedSlot || !licence.trim() || !waiver || book.isPending
+                        !data.testDrivesEnabled || !selectedSlot || !licence.trim() || !waiver || book.isPending
                       }
                       onClick={confirm}
                     >
@@ -324,7 +332,7 @@ export default function BookTestDrive({
                     )}
                   </div>
                 </motion.div>
-              )}
+              ) : null}
             </AnimatePresence>
 
             <p className="text-center text-[11px] text-white/30 leading-relaxed">

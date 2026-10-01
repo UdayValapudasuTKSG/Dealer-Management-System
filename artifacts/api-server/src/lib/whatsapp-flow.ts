@@ -34,6 +34,8 @@ import {
 } from "./whatsapp-ai-concierge";
 import { normalizeWhatsappPhone } from "./whatsapp-phone";
 import { handleConversationalWhatsapp } from "./whatsapp-agent";
+import { dealerCustomerPolicy, TEST_DRIVES_DISABLED } from "./dealer-customer-policy";
+import { customerPolicyReply, customerSafeTransport } from "./whatsapp-customer-policy";
 import { dealerTimezone, formatDealerSlot } from "./timezone";
 
 // ---------------------------------------------------------------------------
@@ -126,6 +128,7 @@ async function upsertConversation(
     profileName: string | null;
     menu: string | null;
     brand: string | null;
+    aiContext: string | null;
   }>,
 ): Promise<void> {
   const canonical = digits(phone);
@@ -819,14 +822,15 @@ async function handleTestDriveReminderReply(
       `Perfect — you're confirmed for ${whenLabel}. The car will be detailed and waiting. See you then!`,
     );
   } else {
-    const link = rescheduleLink(lead);
+    const drivesEnabled = (await dealerCustomerPolicy(lead.dealerId)).testDrivesEnabled;
+    const link = drivesEnabled ? rescheduleLink(lead) : null;
     await db.insert(timelineEventsTable).values({
       dealerId: lead.dealerId,
       customerId: lead.customerId,
       domain: "leads",
       kind: "test_drive_reschedule_requested",
       title: `${lead.name} asked to reschedule their test drive`,
-      detail: `Replied NO to the WhatsApp reminder for ${whenLabel}. Reschedule link sent.`,
+      detail: `Replied NO to the WhatsApp reminder for ${whenLabel}. ${drivesEnabled ? "Reschedule link offered." : "New bookings are disabled; no reschedule link offered."}`,
       actor: "WhatsApp",
       isAgent: true,
       refType: "lead",
@@ -844,7 +848,9 @@ async function handleTestDriveReminderReply(
     }
     await t.sendText(
       msg.from,
-      link
+      !drivesEnabled
+        ? TEST_DRIVES_DISABLED
+        : link
         ? `No problem — you can pick a new time here (takes under a minute): ${link}`
         : `No problem — your advisor will reach out shortly to find a new time.`,
     );
@@ -1523,9 +1529,10 @@ export async function handleWhatsappMessage(
   dealerId: number,
 ): Promise<void> {
   const phone = msg.from;
-  const t = rawTransport.durable
+  const recording = rawTransport.durable
     ? rawTransport
     : recordingTransport(rawTransport, "AURA WhatsApp Bot", dealerId);
+  const t = customerSafeTransport(recording, () => dealerCustomerPolicy(dealerId));
   try {
     // R6.4: STOP/START must always work — even when the bot is paused.
     const optReply = await handleOptKeyword(dealerId, phone, msg.text);
@@ -1567,6 +1574,24 @@ export async function handleWhatsappMessage(
     });
     let convo = await activeConversation(dealerId, phone);
     let startedNewConversation = false;
+    const policyAnswer = customerPolicyReply(
+      await dealerCustomerPolicy(dealerId),
+      msg.text || msg.replyId || msg.replyTitle || "",
+      convo?.step,
+    );
+    if (policyAnswer) {
+      if (policyAnswer.resetTestDriveFlow) {
+        // Reset only the stale booking subflow, retaining collected identity
+        // and vehicle interest. Do not touch leads or existing bookings.
+        await upsertConversation(dealerId, phone, {
+          step: "name",
+          menu: null,
+          aiContext: null,
+        });
+      }
+      await t.sendText(phone, policyAnswer.reply);
+      return;
+    }
 
     // If there is an active conversation in the ni_* steps, we are in a
     // repeat-customer new-enquiry intake. Route to handleRepeatCustomerMessage
@@ -1853,7 +1878,10 @@ export async function handleWhatsappOneShot(
   msg: InboundWhatsappMessage,
   dealerId: number,
 ): Promise<void> {
-  const t = recordingTransport(rawTransport, "AURA WhatsApp Bot", dealerId);
+  const t = customerSafeTransport(
+    recordingTransport(rawTransport, "AURA WhatsApp Bot", dealerId),
+    () => dealerCustomerPolicy(dealerId),
+  );
   try {
     // R6.4: STOP/START must always work — even when the bot is paused.
     const optReply = await handleOptKeyword(dealerId, msg.from, msg.text);
@@ -1885,6 +1913,14 @@ export async function handleWhatsappOneShot(
       body: msg.text || msg.replyTitle || "",
       dealerId,
     });
+    const policyAnswer = customerPolicyReply(
+      await dealerCustomerPolicy(dealerId),
+      msg.text || msg.replyId || msg.replyTitle || "",
+    );
+    if (policyAnswer) {
+      await t.sendText(msg.from, policyAnswer.reply);
+      return;
+    }
     const existing = await findOpenLeadByPhone(dealerId, msg.from);
     if (existing) {
       if (await handleTestDriveReminderReply(t, existing, msg)) return;

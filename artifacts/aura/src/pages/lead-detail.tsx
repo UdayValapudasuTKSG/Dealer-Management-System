@@ -28,6 +28,8 @@ import {
   useRequestQuoteDiscount,
   useSendLeadQuote,
   useSendTestDriveInvite,
+  useGetTestDrivePolicy,
+  getGetTestDrivePolicyQueryKey,
   useListGates,
   useCreateDeal,
   useDeleteLead,
@@ -969,6 +971,9 @@ export default function LeadDetail() {
   const { data: quote } = useGetLeadQuote(id);
   const { data: quoteVersions } = useListLeadQuotes(id);
   const sendInvite = useSendTestDriveInvite();
+  const { data: testDrivePolicy, error: testDrivePolicyError } = useGetTestDrivePolicy({
+    query: { queryKey: getGetTestDrivePolicyQueryKey(), staleTime: 0 },
+  });
   // Skip module-wide lists the role cannot view (avoids eager 403s, e.g.
   // for Call Centre Representatives who only hold leads:view).
   const { can: canView } = useAuthz();
@@ -2535,6 +2540,10 @@ export default function LeadDetail() {
                   </Section>
 
                   <Section title="Test Drive">
+                    {testDrivePolicy?.testDrivesEnabled === false && (
+                      <p className="text-xs text-amber-500">{testDrivePolicy.bookingDisabledReason} Existing bookings and history are retained.</p>
+                    )}
+                    {testDrivePolicyError && <p role="alert" className="text-xs text-destructive">Unable to load test-drive policy. New booking invitations are unavailable.</p>}
                     <InlineField label="Test Drive Scheduled">
                       <Bool value={testDriveScheduled} />
                     </InlineField>
@@ -2549,7 +2558,7 @@ export default function LeadDetail() {
                           variant="outline"
                           size="sm"
                           className="h-7 gap-1.5 text-xs"
-                          disabled={sendInvite.isPending || !lead.email}
+                          disabled={testDrivePolicy?.testDrivesEnabled !== true || sendInvite.isPending || !lead.email}
                           onClick={() =>
                             sendInvite.mutate(
                               { id: lead.id },

@@ -7,6 +7,13 @@
  */
 
 export interface WhatsappSettings {
+  /** Dealership-wide new test-drive booking gate. Defaults to enabled; existing bookings remain. */
+  testDrivesEnabled: boolean;
+  /**
+     * Dealer-scoped WhatsApp showroom address
+     * @nullable
+     */
+  showroomAddress: string | null;
   configured: boolean;
   enabled: boolean;
   /** @nullable */

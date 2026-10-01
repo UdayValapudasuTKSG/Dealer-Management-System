@@ -42,6 +42,7 @@ import {
   zonedDayKey,
   zonedStartOfDay,
 } from "../lib/timezone";
+import { dealerCustomerPolicy, TEST_DRIVES_DISABLED } from "../lib/dealer-customer-policy";
 
 // ---------------------------------------------------------------------------
 // PUBLIC self-service test-drive booking — reached from the unique link
@@ -122,6 +123,7 @@ async function takenSlotTimes(
 }
 
 async function buildInvite(lead: Lead) {
+  const policy = await dealerCustomerPolicy(lead.dealerId);
   const tz = await dealerTimezone(lead.dealerId);
   const [v] = lead.interestedVehicleId
     ? await db
@@ -134,11 +136,15 @@ async function buildInvite(lead: Lead) {
           ),
         )
     : [];
-  const taken = await takenSlotTimes(lead.dealerId, lead.id, tz);
+  const taken = policy.testDrivesEnabled
+    ? await takenSlotTimes(lead.dealerId, lead.id, tz)
+    : new Set<number>();
   // Advisor/vehicle capacity blocks hide those slots from the customer.
-  const blocked = await leadCapacityBlocks(lead);
+  const blocked: BlockedDays = policy.testDrivesEnabled
+    ? await leadCapacityBlocks(lead)
+    : new Map();
 
-  const days = windowDays(tz).map((day) => ({
+  const days = policy.testDrivesEnabled ? windowDays(tz).map((day) => ({
     date: zonedDayKey(day, tz),
     label: day.toLocaleDateString("en-US", {
       timeZone: tz,
@@ -151,9 +157,11 @@ async function buildInvite(lead: Lead) {
       label: timeLabel(t, tz),
       available: !taken.has(t.getTime()) && !isSlotBlocked(blocked, t, tz),
     })),
-  }));
+  })) : [];
 
   return {
+    testDrivesEnabled: policy.testDrivesEnabled,
+    bookingDisabledReason: policy.testDrivesEnabled ? null : TEST_DRIVES_DISABLED,
     leadName: lead.name,
     vehicle: v ? `${v.year} ${v.make} ${v.model}` : null,
     vehicleImageUrl: v?.imageUrl ?? null,
@@ -208,6 +216,10 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!(await dealerCustomerPolicy(lead.dealerId)).testDrivesEnabled) {
+    res.status(409).json({ error: TEST_DRIVES_DISABLED });
+    return;
+  }
   const when = new Date(body.data.slot);
   const tz = await dealerTimezone(lead.dealerId);
   if (Number.isNaN(when.getTime())) {
@@ -248,6 +260,10 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
   // so two simultaneous requests can never both take the same slot.
   let claimError: string | null = null;
   const updated = await db.transaction(async (tx) => {
+    if (!(await dealerCustomerPolicy(lead.dealerId, tx, true)).testDrivesEnabled) {
+      claimError = TEST_DRIVES_DISABLED;
+      return null;
+    }
     await tx.execute(
       sql`select pg_advisory_xact_lock(42001, ${lead.dealerId})`,
     );

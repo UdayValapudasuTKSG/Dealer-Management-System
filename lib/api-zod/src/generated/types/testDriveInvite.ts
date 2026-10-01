@@ -8,6 +8,9 @@
 import type { TestDriveDay } from './testDriveDay';
 
 export interface TestDriveInvite {
+  testDrivesEnabled: boolean;
+  /** @nullable */
+  bookingDisabledReason: string | null;
   leadName: string;
   /** @nullable */
   vehicle: string | null;

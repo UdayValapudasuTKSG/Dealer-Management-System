@@ -204,6 +204,7 @@ import {
   findBlockedEditField,
   redactHiddenFields,
 } from "../lib/field-permissions";
+import { dealerCustomerPolicy, TEST_DRIVES_DISABLED } from "../lib/dealer-customer-policy";
 import {
   afterTestDriveBooked,
   offeredSlotTimes,
@@ -2558,6 +2559,10 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!(await dealerCustomerPolicy(existing.dealerId)).testDrivesEnabled) {
+    res.status(409).json({ error: TEST_DRIVES_DISABLED });
+    return;
+  }
   if (!parsed.data.waiverAccepted) {
     res.status(422).json({
       error: "The customer must sign the test-drive waiver before booking",
@@ -2598,6 +2603,10 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   // capacity re-check, so a staff booking can't race a self-service one.
   let claimError: string | null = null;
   const lead = await db.transaction(async (tx) => {
+    if (!(await dealerCustomerPolicy(existing.dealerId, tx, true)).testDrivesEnabled) {
+      claimError = TEST_DRIVES_DISABLED;
+      return null;
+    }
     await tx.execute(
       sql`select pg_advisory_xact_lock(42001, ${existing.dealerId})`,
     );

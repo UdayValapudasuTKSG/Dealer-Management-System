@@ -7,6 +7,14 @@
  */
 
 export interface UpdateWhatsappSettingsRequest {
+  testDrivesEnabled?: boolean;
+  /**
+     * Customer-facing WhatsApp showroom address; null uses this dealer's document address
+     * @minLength 1
+     * @maxLength 300
+     * @nullable
+     */
+  showroomAddress?: string | null;
   /**
      * @minLength 5
      * @maxLength 64

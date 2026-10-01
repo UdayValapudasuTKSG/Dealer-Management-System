@@ -86,6 +86,10 @@ export const dealersTable = pgTable(
   // Contact details printed on customer-facing documents (e.g. the warranty
   // certificate): street address, service line(s), 24h emergency line.
   address: text("address"),
+  /** Dealership-wide gate for NEW test-drive bookings; history is retained. */
+  testDrivesEnabled: boolean("test_drives_enabled").notNull().default(true),
+  /** Customer-facing WhatsApp showroom address, independent of document address. */
+  whatsappShowroomAddress: text("whatsapp_showroom_address"),
   servicePhone: text("service_phone"),
   emergencyPhone: text("emergency_phone"),
   status: text("status").notNull().default("active"),
