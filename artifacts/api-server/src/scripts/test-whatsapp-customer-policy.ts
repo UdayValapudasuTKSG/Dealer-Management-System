@@ -24,7 +24,7 @@ assert.equal(customerPolicyReply(enabled, "Please book a test drive"), null);
 assert.equal(customerPolicyReply(disabled, "Can I take it for a spin?")?.reply, TEST_DRIVES_DISABLED);
 assert.deepEqual(customerPolicyReply(disabled, "yes", "td_confirm"), { reply: TEST_DRIVES_DISABLED, resetTestDriveFlow: true });
 assert.equal(customerPolicyReply(disabled, "I want a Toyota", "model"), null);
-for (const question of ["What is your showroom address?", "Where are you located?", "address", "location?"]) {
+for (const question of ["What is your showroom address?", "Where are you located?", "address", "location?", "Where should I come for service?", "What is the workshop address?", "Service location?"]) {
   assert.equal(customerPolicyReply(disabled, question)?.reply, "220 Camp St, Georgetown");
 }
 assert.equal(resolveShowroomAddress({ id: 1, name: "GT Automotive", address: "220 Camp Street, Georgetown, Guyana.", whatsappShowroomAddress: null }), enabled.showroomAddress);

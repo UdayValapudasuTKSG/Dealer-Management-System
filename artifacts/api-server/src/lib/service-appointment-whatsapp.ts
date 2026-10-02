@@ -25,6 +25,12 @@ export const SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE = {
 
 export const SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT = 8;
 
+/** Use the approved dealership variable for the venue; never alter Meta's copy
+ * or variable count to add an address outside the customer-service window. */
+export function serviceAppointmentVenue(name: string, address: string | null): string {
+  return [name.trim(), address?.trim()].filter(Boolean).join(" — ").replace(/\s+/g, " ");
+}
+
 export function renderServiceAppointmentConfirmedBody(
   bodyParameters: readonly string[],
 ): string {

@@ -27,7 +27,7 @@ import {
   type TemplateData,
 } from "./email";
 import { buildServiceEstimateBreakdown } from "./service-estimate-breakdown";
-import { dealerCustomerPolicy, TEST_DRIVES_DISABLED } from "./dealer-customer-policy";
+import { dealerCustomerPolicy, resolveShowroomAddress, TEST_DRIVES_DISABLED } from "./dealer-customer-policy";
 
 /** Name + phone of the lead's assigned (round-robin) sales advisor. */
 export async function leadAdvisorContact(
@@ -677,9 +677,10 @@ export async function queueServiceAppointmentConfirmation(
     .limit(1);
   if (!card?.scheduledAt) return null;
   const [dealer] = await db
-    .select({ name: dealersTable.name, address: dealersTable.address })
+    .select({ id: dealersTable.id, name: dealersTable.name, address: dealersTable.address, whatsappShowroomAddress: dealersTable.whatsappShowroomAddress })
     .from(dealersTable)
     .where(eq(dealersTable.id, order.dealerId));
+  const location = dealer ? resolveShowroomAddress(dealer) : null;
   const tz = await dealerTimezone(order.dealerId);
   const base: TemplateData = {
     ...(c.name ? { name: c.name } : {}),
@@ -688,8 +689,8 @@ export async function queueServiceAppointmentConfirmation(
     date: serviceDateLabel(card.scheduledAt, tz),
     time: formatDealerTime(card.scheduledAt, tz),
     ...(card.technicianName ? { advisor: card.technicianName } : {}),
-    ...(dealer?.address || dealer?.name
-      ? { location: dealer.address || dealer.name }
+    ...(location
+      ? { location }
       : {}),
     serviceOrderId: String(order.id),
     reminderScheduledAt: card.scheduledAt.toISOString(),
@@ -711,7 +712,7 @@ export async function queueServiceAppointmentConfirmation(
         customerEmail: c.email,
         customerName: c.name,
         advisor: card.technicianName,
-        location: dealer?.address || dealer?.name,
+        location,
       }),
     },
   });

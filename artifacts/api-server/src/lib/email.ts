@@ -764,7 +764,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: (x) => `${d(x, "window", "Upcoming")}: your service appointment`,
     heading: () => "A reminder about your service appointment",
     body: (x) =>
-      `Your <strong>${d(x, "service", "service")}</strong> appointment for the <strong>${d(x, "vehicle", "vehicle")}</strong> is on <strong>${d(x, "date", "the confirmed date")}</strong> at <strong>${d(x, "time", "the confirmed time")}</strong>. Please reply if anything has changed.`,
+      `Your <strong>${d(x, "service", "service")}</strong> appointment for the <strong>${d(x, "vehicle", "vehicle")}</strong> is on <strong>${d(x, "date", "the confirmed date")}</strong> at <strong>${d(x, "time", "the confirmed time")}</strong>. ${x.location ? `Please arrive at <strong>${x.location}</strong>. ` : ""}Please reply if anything has changed.`,
     sample: { window: "In 48 hours", vehicle: "2025 BMW X7", service: "maintenance", date: "August 14, 2026", time: "9:00 AM" },
   },
   "service.checkin.receipt": {

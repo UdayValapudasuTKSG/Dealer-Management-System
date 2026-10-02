@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
+import { renderEmail } from "../lib/email";
 import {
   SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE,
   renderServiceAppointmentConfirmedBody,
+  serviceAppointmentVenue,
 } from "../lib/service-appointment-whatsapp";
+assert.equal(serviceAppointmentVenue("GT Automotive", "220 Camp St, Georgetown"), "GT Automotive — 220 Camp St, Georgetown");
+assert.equal(serviceAppointmentVenue("Other Dealer", "Other\n configured address"), "Other Dealer — Other configured address");
+assert.equal(serviceAppointmentVenue("Other Dealer", null), "Other Dealer");
+for (const template of ["service.appointment.confirmed", "service.appointment.reminder"] as const) {
+  const email = renderEmail(template, { location: "220 Camp St, Georgetown", date: "October 10, 2026", time: "9:00 AM" });
+  assert.ok(email.html.includes("220 Camp St, Georgetown"));
+}
 import {
   sendWhatsappTemplate,
   whatsappTemplateMessagePayload,

@@ -224,7 +224,9 @@ import {
   isApprovedWhatsappTemplateReady,
 } from "../lib/whatsapp";
 import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
+import { dealerCustomerPolicy } from "../lib/dealer-customer-policy";
 import {
+  serviceAppointmentVenue,
   renderServiceAppointmentConfirmedBody,
   SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT,
   SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE,
@@ -1392,6 +1394,7 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
     .from(dealersTable)
     .where(eq(dealersTable.id, order.dealerId))
     .limit(1);
+  const serviceAddress = (await dealerCustomerPolicy(order.dealerId)).showroomAddress;
   const timezone = await dealerTimezone(order.dealerId);
   const customerName = order.customerName?.trim() || contact.name?.trim();
   const dealershipName = dealer?.name?.trim();
@@ -1403,7 +1406,7 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
   }
   const bodyParameters = [
     customerName,
-    dealershipName,
+    serviceAppointmentVenue(dealershipName, serviceAddress),
     `RO-${String(order.id).padStart(5, "0")}`,
     order.type,
     formatDealerDate(card.scheduledAt, timezone),

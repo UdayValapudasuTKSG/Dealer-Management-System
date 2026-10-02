@@ -14,3 +14,6 @@ description: Non-obvious rules for the LLM tool-loop WhatsApp concierge layered 
 - A WhatsApp quote promise requires a persisted quote/email action or a durable sales follow-up; updating lead notes is not a handoff. Never describe an outbox enqueue as delivery.
   **Why:** A customer supplied an email and was promised a quote, but the bot only updated the existing lead; no quote, outbox row or staff notification existed.
   **How to apply:** Use canonical quote generation and shared per-revision email dedupe, retain approval guards, and prefer tool-confirmed wording over model-written assurances. Do not send old requests retroactively while testing a fix.
+- Service confirmations and service-location answers must use the same configured dealership address as the WhatsApp showroom address, not a separate inferred workshop location.
+  **Why:** The user explicitly requested the same configured dealer address in service emails and WhatsApp bot replies.
+  **How to apply:** Apply the shared address resolution to email/calendar locations and WhatsApp confirmations; omit missing addresses rather than inventing one.

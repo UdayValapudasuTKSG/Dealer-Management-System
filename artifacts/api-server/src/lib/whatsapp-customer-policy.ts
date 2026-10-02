@@ -6,6 +6,8 @@ export const PRIVATE_STOCK_REPLY =
   "I can help with model availability and pricing, but exact stock quantities and internal vehicle identifiers aren't shared here.";
 
 export function isShowroomAddressQuestion(text: string): boolean {
+  if (/\b(?:service|workshop|servicing)\b/i.test(text) &&
+    /\b(?:address|location|located|where)\b/i.test(text)) return true;
   return /\b(?:showroom|dealership|shop|office|you(?:r)?)\b.*\b(?:address|locat(?:ion|ed)|where)\b|\b(?:address|where|locat(?:ion|ed))\b.*\b(?:showroom|dealership|shop|office|you(?:r)?)\b|^(?:what(?:'s| is) (?:the |your )?)?(?:address|location)[? .!]*$/i.test(text);
 }
 
