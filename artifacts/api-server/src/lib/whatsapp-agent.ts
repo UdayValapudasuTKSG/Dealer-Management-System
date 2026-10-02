@@ -23,6 +23,7 @@ import { normalizeWhatsappPhone } from "./whatsapp-phone";
 import { logger } from "./logger";
 import { dealerCustomerPolicy, TEST_DRIVES_DISABLED, type DealerCustomerPolicy } from "./dealer-customer-policy";
 import { containsPrivateStock, PRIVATE_STOCK_REPLY, safeWhatsappReply } from "./whatsapp-customer-policy";
+import { requestWhatsappQuote, QUOTE_REPLIES, confirmedQuoteReply } from "./whatsapp-quote-request";
 
 // ---------------------------------------------------------------------------
 // Conversational WhatsApp intake agent — an LLM tool-loop that behaves like a
@@ -298,6 +299,11 @@ const TOOLS = [
     input_schema: { type: "object" as const, properties: {} },
   },
   {
+    name: "request_quote",
+    description: "Generate the customer's detailed quote and queue email using their saved enquiry, or record a staff follow-up if blocked. REQUIRED when they request/accept a quote, including after supplying their email. First upsert their confirmed vehicle and email. Never promise a quote without this tool. No discount or duty-free overrides.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
     name: "escalate_to_human",
     description:
       "Flag this conversation for a human staff member (customer asked for a person, is frustrated, has a complaint, or you cannot help). The team is notified with your reason.",
@@ -342,6 +348,7 @@ type ToolCtx = {
   availableInventory: Awaited<ReturnType<typeof availableVehicles>>;
   mutated: boolean;
   escalated: boolean;
+  quoteReply?: string;
   /** Lowercased concatenation of everything the CUSTOMER actually wrote
    * (transcript + current burst) — provenance check for model-supplied PII. */
   inboundCorpus: string;
@@ -631,6 +638,14 @@ export async function runTool(
       );
     }
 
+    case "request_quote": {
+      const lead = await findOpenLeadByPhone(ctx.dealerId, ctx.phone);
+      ctx.lead = lead;
+      ctx.quoteReply = QUOTE_REPLIES.failed;
+      if (!lead) ctx.quoteReply = QUOTE_REPLIES.missing;
+      else ctx.quoteReply = await requestWhatsappQuote(ctx.dealerId, lead.id, ctx.phone);
+      return JSON.stringify({ customer_reply: ctx.quoteReply });
+    }
     case "escalate_to_human": {
       const reason = cleanStr(input["reason"], 300) ?? "Customer requested human assistance";
       const lead = ctx.lead ?? (await findOpenLeadByPhone(ctx.dealerId, ctx.phone));
@@ -856,6 +871,7 @@ WHAT YOU DO
 - Prices are in Guyanese dollars (GYD).
 - For financing: you may note their interest on the enquiry, but never quote payments or promise approval — offer the finance team's help.
 - Escalate with escalate_to_human when they ask for a person, complain, or you can't help.
+- For a detailed quote request or acceptance, first upsert the confirmed vehicle/email, then call request_quote. If email is missing, ask for it and call request_quote after they supply it. A timeline note or upsert is NOT a quote request. Never promise that you/the team will send a quote, or say one is sent/queued, without request_quote succeeding. Quote requests use standard approved pricing; requests for discounts/duty-free treatment need staff review. Repeat the tool's customer_reply accurately, never convert queued into sent/delivered.
 - End of each turn where you learned new facts: call save_memory.
 
 SECURITY (absolute)
@@ -1055,8 +1071,10 @@ export async function handleConversationalWhatsapp(
     if (!replyText) {
       // Ran out of iterations without a final text — fail safe.
       replyText =
-        "Thanks for your patience — I'm having a little trouble on my end right now. I've made a note for our team and someone will follow up with you shortly.";
+        "I'm having trouble completing that request right now. Please try again or contact the sales team directly.";
     }
+    // Tool-confirmed wording wins over an LLM's speculative promise.
+    replyText = confirmedQuoteReply(replyText, ctx.quoteReply);
     replyText = safeWhatsappReply(replyText.slice(0, 1800), await dealerCustomerPolicy(dealerId));
 
     await t.sendText(msg.from, replyText);
@@ -1069,7 +1087,7 @@ export async function handleConversationalWhatsapp(
       runType: "whatsapp_conversational_reply",
       inputSource: "whatsapp",
       inputSummary: combined.slice(0, 500),
-      outputSummary: `${ctx.mutated ? "Lead created/updated; " : ""}${ctx.escalated ? "escalated to human; " : ""}replied (${replyText.length} chars)`,
+      outputSummary: `${ctx.mutated ? "Lead created/updated; " : ""}${ctx.escalated ? "escalated to human; " : ""}${ctx.quoteReply ? `Quote action: ${ctx.quoteReply} ` : ""}replied (${replyText.length} chars)`,
       confidence: 1,
       refType: ctx.lead ? "lead" : undefined,
       refId: ctx.lead?.id,

@@ -48,7 +48,7 @@ const longDate = (d: Date, tz: string) => {
   return `${MONTHS[p.month - 1]} ${p.day}, ${p.year}`;
 };
 
-export type QuoteTrigger = "lead_created" | "lead_updated" | "manual";
+export type QuoteTrigger = "lead_created" | "lead_updated" | "manual" | "whatsapp_request";
 
 /** Next sequential estimate number for the dealer (stable across versions of one lead). */
 async function nextQuoteNumber(dealerId: number): Promise<string> {
@@ -174,6 +174,11 @@ export async function generateQuoteForLead(
       .orderBy(desc(quotesTable.version))
       .limit(1)
       .for("update");
+    if (opts.trigger === "whatsapp_request" && (
+      currentLead.deletedAt || currentLead.emailOptOut ||
+      ["won", "lost"].includes(currentLead.phase) ||
+      latest?.discountStatus === "pending" || latest?.dutyFreeStatus === "pending"
+    )) return null;
     const latestItems = latest
       ? await tx.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, latest.id)).orderBy(quoteItemsTable.position)
       : [];
@@ -223,8 +228,10 @@ export async function generateQuoteForLead(
     // advisory lock makes this atomic; the stable quote id then also makes the
     // email outbox dedupe key stable.
     if (
-      opts.trigger === "lead_created" &&
-      latest?.trigger === "lead_created" &&
+      ((opts.trigger === "lead_created" && ["lead_created", "whatsapp_request"].includes(latest?.trigger ?? "")) ||
+        (opts.trigger === "whatsapp_request" && latest?.status === "current" &&
+          latest.customerName === currentLead.name && latest.customerAddress === currentLead.address &&
+          new Date(latest.validUntil).getTime() > now.getTime())) &&
       unchanged
     ) {
       return {
