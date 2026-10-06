@@ -1,0 +1,227 @@
+Business Requirement Document (BRD) 
+
+Project Name: Automated Daily Workshop WIP & Work Complete Revenue Realization Report 
+
+System: AURA Dealership OS – Aftersales / Workshop Management Module 
+
+Document Version: 1.0 
+
+Date: October 6, 2026 
+
+Status: Draft / Pending Review 
+
+1. Executive Summary 
+
+To prevent revenue leakage and eliminate end-of-month invoicing bottlenecks, the service and workshop operations require an automated, email-delivered daily report within AURA Dealership OS. This report will monitor open "Work in Progress" (WIP) repair orders and "Work Complete" jobs that remain uninvoiced, equipping service managers and advisors with real-time financial and labor data needed to facilitate prompt billing and maximize daily revenue realization. 
+
+2. Business Objectives 
+
+Prevent Revenue Leakage: Gain visibility into unbilled labor, parts, and sublet items on open and closed repair orders. 
+
+Eliminate End-of-Month Bottlenecks: Spread invoicing activities evenly throughout the month rather than delaying billing to month-end. 
+
+Improve Cash Flow & Revenue Realization: Shorten the duration between job completion and invoice generation. 
+
+Operational Accountability: Identify delayed repair orders (ROs) and assign actionable follow-ups to specific service advisors or technicians. 
+
+3. Scope 
+
+In Scope: 
+
+Automated scheduled generation and email delivery of the Daily Revenue Realization Report. 
+
+Calculation and tracking of WIP (Work in Progress) and Work Complete (Uninvoiced) Repair Orders. 
+
+Capturing key metrics: Parts Sold, Labor Hours Sold, Labor Revenue, and Sublet Costs. 
+
+Configuration settings for dispatch timing and recipient lists. 
+
+Drill-down/exportable report format (PDF & Excel/CSV attachments). 
+
+Out of Scope: 
+
+Automated customer invoice dispatch (invoicing remains a manual or separate trigger within AURA Dealership OS). 
+
+Direct payment gateway integration within the report email. 
+
+4. Key Metrics & Definitions 
+
+Term / Metric 
+
+Technical Definition within AURA Dealership OS 
+
+Work in Progress (WIP) 
+
+All active Repair Orders currently open in the workshop where work has commenced but the job status has not been marked as "Work Complete". 
+
+Work Complete (Uninvoiced) 
+
+Repair Orders where all physical/technical labor and parts allocation are completed, but the RO has not been closed/financial invoice generated. 
+
+Hours Sold (Billed Hours) 
+
+Total flat-rate or actual billable labor hours assigned to work lines on the RO. 
+
+Parts Sold 
+
+Total monetary value (and quantity count) of parts issued/allocated to open or completed RO lines. 
+
+Labor Revenue 
+
+Total monetary value of labor lines calculated using applied labor rates. 
+
+5. Detailed Functional Requirements 
+
+5.1 Trigger & Delivery Mechanism 
+
+FR-01 (Schedule): The system shall automatically compile and transmit the report daily via email at a configurable time (default: 18:00 hrs local workshop time or 07:00 hrs next business morning). 
+
+FR-02 (Recipients): System administrators must be able to configure recipient email lists based on dealership branch, department, and role (e.g., Workshop Manager, Service Manager, Finance Manager). 
+
+FR-03 (Format): The email shall contain an inline executive HTML summary table along with attached downloadable formats (PDF for quick viewing and Excel/CSV for detailed auditing). 
+
+5.2 Summary Data Section (Email Body) 
+
+The top section of the daily report must display aggregate high-level financial metrics for the active branch: 
+
++---------------------------------------------------------------------------------------------+ 
+
+|                                DAILY WORKSHOP REVENUE REALIZATION                           | 
+
++----------------------+--------------------+--------------------+----------------------------+ 
+
+| Category             | Active RO Count    | Total Hours Sold   | Total Value (Parts + Labor)| 
+
++----------------------+--------------------+--------------------+----------------------------+ 
+
+| Work in Progress     | [ Count ]          | [ Total Hours ]    | [ $ Total Amount ]         | 
+
+| Work Complete (Unbilled)| [ Count ]       | [ Total Hours ]    | [ $ Total Amount ]         | 
+
+| TOTAL AT RISK        | [ Sum Count ]      | [ Sum Hours ]      | [ $ Sum Amount ]           | 
+
++----------------------+--------------------+--------------------+----------------------------+ 
+
+5.3 Detailed Report Structure (Data Fields Required) 
+
+The report detail table must itemize all ROs under WIP and Work Complete statuses, sorted by Aging (Days Open) descending. 
+
+Field Name 
+
+Description 
+
+Source Data Entity 
+
+RO Number 
+
+Unique Repair Order Identifier 
+
+RO_Header.RO_Number 
+
+RO Open Date & Age 
+
+Date opened & total days active 
+
+RO_Header.Created_Date 
+
+Customer Name / Vehicle 
+
+Customer identity & Registration / VIN 
+
+Customer.Name, Vehicle.Reg_No 
+
+Service Advisor 
+
+Assigned Service Advisor name 
+
+User.Advisor_Name 
+
+Current Status 
+
+Status (e.g., In Progress, Awaiting Parts, Work Complete) 
+
+RO_Header.Status 
+
+Parts Sold ($) 
+
+Total value of parts billed/allocated to RO lines 
+
+RO_Parts.Total_Price 
+
+Labor Hours Sold 
+
+Total billable hours on line items 
+
+RO_Labor.Billable_Hours 
+
+Labor Revenue ($) 
+
+Total monetary value of labor 
+
+RO_Labor.Total_Labor_Price 
+
+Sublet / Extra ($) 
+
+Value of external third-party services 
+
+RO_Sublet.Total_Cost 
+
+Est. Total Invoice Value 
+
+Sum of (Parts + Labor + Sublet + Taxes) 
+
+Calculated 
+
+Action / Bottleneck 
+
+Flag indicating missing billing details (e.g., Unpriced Part, Technician Time Unassigned) 
+
+System Flag Rule 
+
+6. Functional Business Rules 
+
+Rule 1 (Zero-Value Warning): If an RO is marked "Work Complete" but has 0 parts or 0 labor hours assigned, the report must flag the record in Red Text indicating "Pending Cost Allocation". 
+
+Rule 2 (Aging Threshold): Any RO remaining in "Work Complete" status for greater than 24 hours without being invoiced must be highlighted under an "Urgent Action Required" header. 
+
+Rule 3 (Branch Filtering): For multi-location dealerships, users must only receive data belonging to their authorized dealership locations unless assigned a multi-site administrative role. 
+
+7. Non-Functional Requirements 
+
+Performance: Report generation and data extraction must run asynchronously without impacting core AURA Dealership OS workshop operations during peak hours. 
+
+Accuracy: Financial figures in the daily report must reconcile 100% with real-time General Ledger (GL) pending entries in the core accounting module. 
+
+Security: Transmitted PDF/Excel files containing customer name and vehicle registration data must be delivered strictly over encrypted protocols (TLS/SSL). 
+
+8. User Story Examples for Jira Backlog 
+
+User Story 1: Daily Automated Report Generation 
+
+As a Service Manager, 
+
+I want to receive an automated email every evening with a summary of open WIP and completed-unbilled repair orders, 
+
+So that I can ensure all completed jobs are invoiced immediately and no revenue is lost. 
+
+Acceptance Criteria: 
+
+Given that the clock reaches 18:00, the system triggers the report generation for the active dealership branch. 
+
+The email contains an HTML summary table and attached .xlsx and .pdf files. 
+
+If no open WIP or Work Complete ROs exist, the email sends stating "No Uninvoiced Work Outstanding". 
+
+User Story 2: Highlighting Invoicing Bottlenecks 
+
+As a Billing Officer, 
+
+I want to see missing parts pricing or labor hours highlighted on the daily report, 
+
+So that I can quickly fix missing inputs and bill the job without searching through individual ROs. 
+
+Acceptance Criteria: 
+
+The report flags any Work Complete RO with zero labor hours or unpriced parts as "Pending Cost Allocation". 
+
+ 
