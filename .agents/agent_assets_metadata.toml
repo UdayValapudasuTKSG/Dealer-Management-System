@@ -349,3 +349,17 @@ mtime_ms = 1790737616064
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/b4bcd792-eeb6-4e44-8899-e866c0557dad/f48d1903-13b6-4962-82c3-1884d38678cf"
 storage_version_token = "1790738233187990"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "l5InQKN9liS2eNG9NAUGw"
+uri = "file://docs/workshop-revenue-realization-brd-v1.1.html"
+type = "html"
+title = "Revised Workshop Revenue Report BRD — v1.1"
+description = "Print-ready requirements document with clarified financial definitions, 18 acceptance criteria, proposed defaults, and decisions requiring approval before implementation."
+logical_id = "682f4af8-c91d-410f-8c64-0361c65ff114"
+content_hash = "sha256:f5fc55e040a65951b1c03fef0b9b1471c7a88fbd678ed056f678866605ad72f7"
+size = 26711
+mtime_ms = 1791310316858
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/682f4af8-c91d-410f-8c64-0361c65ff114/087cbadf-0d5c-4186-aaab-4d6a9600b30e"
+storage_version_token = "1791310338132600"
+content_type = "text/html"
