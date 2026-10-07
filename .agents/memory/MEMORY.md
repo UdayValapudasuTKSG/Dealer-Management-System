@@ -85,3 +85,4 @@
 - [Brochure brand boundaries](brochure-brand-boundaries.md) — supplied BYD PDFs are GT-branded, not shared across dealerships; preserve originals when making email-sized copies.
 - [Mixed-source report redaction](report-money-redaction.md) — derived report currency must respect every contributing financial permission, including PDF charts.
 - [Workshop oil boundaries](workshop-oil-boundaries.md) — fractional litres stay distinct from countable parts; issue deducts once, and physical returns do not imply financial credits.
+- [Workshop revenue report approval](workshop-revenue-report-approval.md) — approved BRD baseline; branch isolation and GL reconciliation cannot be silently omitted.

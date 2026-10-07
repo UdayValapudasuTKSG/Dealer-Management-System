@@ -1,182 +1,946 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AURA — Workshop Revenue Realization BRD v1.1</title>
-<style>
-body{margin:0;background:#f2f4f7;color:#192a3b;font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
-main{max-width:1040px;margin:32px auto;background:#fff;padding:48px 56px}
-h1{font-size:32px;line-height:1.2;margin:12px 0 18px}h2{font-size:22px;border-bottom:2px solid #d9e2ea;padding-bottom:8px;margin-top:36px}
-h3{font-size:17px;margin-top:24px}p,li{max-width:95ch}.eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#47617a;font-weight:700}
-.meta{color:#526779}.notice{background:#fff4da;border-left:4px solid #ad7519;padding:14px 20px;margin:24px 0}
-.summary{background:#edf4fa;padding:16px 22px}table{width:100%;border-collapse:collapse;margin:18px 0;font-size:13px}th{background:#edf2f6;text-align:left}
-td,th{border:1px solid #d9e2ea;padding:10px;vertical-align:top}code{font-size:13px}a{color:#175887}.small{font-size:12px;color:#526779}
-@media(max-width:700px){main{margin:0;padding:24px 18px}table{font-size:12px}td,th{padding:6px}}
-@media print{body{background:#fff;font-size:10pt}main{margin:0;padding:0;max-width:none}h2,h3{break-after:avoid}tr,.notice{break-inside:avoid}thead{display:table-header-group}a{color:inherit}@page{size:A4;margin:16mm}}
-</style>
-</head>
-<body><main>
-<div class="eyebrow">AURA Dealership OS · Aftersales / Workshop Management</div>
-<h1>Daily Workshop WIP &amp; Completed-Uninvoiced Revenue Realization Report</h1>
-<p class="meta"><strong>Business Requirements Document · Version 1.1</strong><br>
-Date: October 6, 2026 · Status: Revised draft — pending business and technical approval<br>
-Audience: Workshop Management, Service Management, Finance and Engineering</p>
-<div class="notice"><strong>Approval boundary.</strong> This document revises the supplied v1.0 BRD following a source-code review. It is not evidence of implementation, production-data validation or business approval. Proposed defaults below remain recommendations. Branch authorization, sublet billing and GL reconciliation must not be presented as existing capabilities without verification.</div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>AURA — Workshop Revenue Realization BRD v1.1</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f2f4f7;
+        color: #192a3b;
+        font:
+          15px/1.6 system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+      }
+      main {
+        max-width: 1040px;
+        margin: 32px auto;
+        background: #fff;
+        padding: 48px 56px;
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.2;
+        margin: 12px 0 18px;
+      }
+      h2 {
+        font-size: 22px;
+        border-bottom: 2px solid #d9e2ea;
+        padding-bottom: 8px;
+        margin-top: 36px;
+      }
+      h3 {
+        font-size: 17px;
+        margin-top: 24px;
+      }
+      p,
+      li {
+        max-width: 95ch;
+      }
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #47617a;
+        font-weight: 700;
+      }
+      .meta {
+        color: #526779;
+      }
+      .notice {
+        background: #fff4da;
+        border-left: 4px solid #ad7519;
+        padding: 14px 20px;
+        margin: 24px 0;
+      }
+      .summary {
+        background: #edf4fa;
+        padding: 16px 22px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 18px 0;
+        font-size: 13px;
+      }
+      th {
+        background: #edf2f6;
+        text-align: left;
+      }
+      td,
+      th {
+        border: 1px solid #d9e2ea;
+        padding: 10px;
+        vertical-align: top;
+      }
+      code {
+        font-size: 13px;
+      }
+      a {
+        color: #175887;
+      }
+      .small {
+        font-size: 12px;
+        color: #526779;
+      }
+      @media (max-width: 700px) {
+        main {
+          margin: 0;
+          padding: 24px 18px;
+        }
+        table {
+          font-size: 12px;
+        }
+        td,
+        th {
+          padding: 6px;
+        }
+      }
+      @media print {
+        body {
+          background: #fff;
+          font-size: 10pt;
+        }
+        main {
+          margin: 0;
+          padding: 0;
+          max-width: none;
+        }
+        h2,
+        h3 {
+          break-after: avoid;
+        }
+        tr,
+        .notice {
+          break-inside: avoid;
+        }
+        thead {
+          display: table-header-group;
+        }
+        a {
+          color: inherit;
+        }
+        @page {
+          size: A4;
+          margin: 16mm;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">
+        AURA Dealership OS · Aftersales / Workshop Management
+      </div>
+      <h1>
+        Daily Workshop WIP &amp; Completed-Uninvoiced Revenue Realization Report
+      </h1>
+      <p class="meta">
+        <strong>Business Requirements Document · Version 1.1</strong><br />
+        Date: October 6, 2026 · Status: Business requirements approved;
+        technical prerequisites remain open<br />
+        Audience: Workshop Management, Service Management, Finance and
+        Engineering
+      </p>
+      <div class="notice">
+        <strong>Approval boundary.</strong> This document revises the supplied
+        v1.0 BRD following a source-code review. The user approved this
+        requirements baseline and its recommended defaults. Approval is not
+        evidence of implementation or production-data validation. Unresolved
+        mappings and prerequisites still require confirmation. Branch authorization,
+        sublet billing and GL reconciliation must not be presented as existing
+        capabilities without verification.
+      </div>
 
-<h2>1. Purpose and business outcomes</h2>
-<p>Provide service and finance managers with a daily, auditable view of workshop work not yet invoiced. Identify completed jobs requiring billing attention, incomplete pricing and operational delays without creating invoices, sending customer invoices or changing accounting balances.</p>
-<ul>
-<li>Reduce the elapsed time between physical completion and invoice issuance.</li>
-<li>Expose omitted chargeable labour, parts and other approved charges.</li>
-<li>Distribute invoicing throughout the month rather than concentrating it at month-end.</li>
-<li>Identify a responsible advisor and technician, or explicitly flag missing assignments.</li>
-</ul>
-<p><strong>Success measures:</strong> count and value of completed-uninvoiced jobs older than 24 hours; median completion-to-invoice time; number of unresolved pricing exceptions; successful scheduled delivery rate. Establish baselines before rollout and agree improvement targets with Finance. Estimated uninvoiced value is not recognized revenue, profit, cash due or proven revenue loss.</p>
+      <h2>1. Purpose and business outcomes</h2>
+      <p>
+        Provide service and finance managers with a daily, auditable view of
+        workshop work not yet invoiced. Identify completed jobs requiring
+        billing attention, incomplete pricing and operational delays without
+        creating invoices, sending customer invoices or changing accounting
+        balances.
+      </p>
+      <ul>
+        <li>
+          Reduce the elapsed time between physical completion and invoice
+          issuance.
+        </li>
+        <li>
+          Expose omitted chargeable labour, parts and other approved charges.
+        </li>
+        <li>
+          Distribute invoicing throughout the month rather than concentrating it
+          at month-end.
+        </li>
+        <li>
+          Identify a responsible advisor and technician, or explicitly flag
+          missing assignments.
+        </li>
+      </ul>
+      <p>
+        <strong>Success measures:</strong> count and value of
+        completed-uninvoiced jobs older than 24 hours; median
+        completion-to-invoice time; number of unresolved pricing exceptions;
+        successful scheduled delivery rate. Establish baselines before rollout
+        and agree improvement targets with Finance. Estimated uninvoiced value
+        is not recognized revenue, profit, cash due or proven revenue loss.
+      </p>
 
-<h2>2. Ownership and approval</h2>
-<table><thead><tr><th>Role</th><th>Proposed responsibility</th></tr></thead><tbody>
-<tr><td>Driver — Service Operations owner, nominee pending</td><td>Own definitions, workflow fit and acceptance review.</td></tr>
-<tr><td>Single approver — dealership sponsor, nominee pending</td><td>Approve scope and proposed defaults after contributor review.</td></tr>
-<tr><td>Contributors</td><td>Workshop Manager: status and aging; Finance Manager: valuation and GL mapping; Engineering/Security: data, access and delivery feasibility.</td></tr>
-<tr><td>Informed</td><td>Authorized service advisors, technicians and report recipients.</td></tr>
-</tbody></table>
+      <h2>2. Ownership and approval</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Proposed responsibility</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Driver — Service Operations owner, nominee pending</td>
+            <td>Own definitions, workflow fit and acceptance review.</td>
+          </tr>
+          <tr>
+            <td>Single approver — dealership sponsor, nominee pending</td>
+            <td>
+              Approve scope and proposed defaults after contributor review.
+            </td>
+          </tr>
+          <tr>
+            <td>Contributors</td>
+            <td>
+              Workshop Manager: status and aging; Finance Manager: valuation and
+              GL mapping; Engineering/Security: data, access and delivery
+              feasibility.
+            </td>
+          </tr>
+          <tr>
+            <td>Informed</td>
+            <td>
+              Authorized service advisors, technicians and report recipients.
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-<h2>3. Scope and existing foundations</h2>
-<p><strong>In scope:</strong> configurable scheduled delivery, scoped recipients, inline HTML summary, PDF and XLSX attachments, optional CSV export, authorized drill-down, persisted report snapshots, pricing/aging warnings, delivery audit and explicit empty-state reporting. Branch isolation and accounting reconciliation remain original requirements, subject to the prerequisites below.</p>
-<p><strong>Out of scope:</strong> automatic invoice creation or customer invoice dispatch, payment collection, automatic GL adjustments, automatic stock movements, automatic pricing corrections, and unrelated sales reporting.</p>
-<p>AURA currently provides operational WIP reporting, workshop timestamps, service-pricing calculations, dealer-local dates, email queues, recipient-policy mechanisms and report export infrastructure. These should be reused where appropriate. Existing WIP is not the financial report specified here; an existing stock location does not establish staff branch access.</p>
-<p><strong>Alternative to this change:</strong> managers can inspect live WIP and billing records separately. That does not provide a single scheduled, financially consistent exception report.</p>
+      <h2>3. Scope and existing foundations</h2>
+      <p>
+        <strong>In scope:</strong> configurable scheduled delivery, scoped
+        recipients, inline HTML summary, PDF and XLSX attachments, optional CSV
+        export, authorized drill-down, persisted report snapshots, pricing/aging
+        warnings, delivery audit and explicit empty-state reporting. Branch
+        isolation and accounting reconciliation remain original requirements,
+        subject to the prerequisites below.
+      </p>
+      <p>
+        <strong>Out of scope:</strong> automatic invoice creation or customer
+        invoice dispatch, payment collection, automatic GL adjustments,
+        automatic stock movements, automatic pricing corrections, and unrelated
+        sales reporting.
+      </p>
+      <p>
+        AURA currently provides operational WIP reporting, workshop timestamps,
+        service-pricing calculations, dealer-local dates, email queues,
+        recipient-policy mechanisms and report export infrastructure. These
+        should be reused where appropriate. Existing WIP is not the financial
+        report specified here; an existing stock location does not establish
+        staff branch access.
+      </p>
+      <p>
+        <strong>Alternative to this change:</strong> managers can inspect live
+        WIP and billing records separately. That does not provide a single
+        scheduled, financially consistent exception report.
+      </p>
 
-<h2>4. Definitions and population rules</h2>
-<p><strong>Reporting unit:</strong> one repair-order/job-card billing unit with an unambiguous parent service-order reference. Confirm any one-to-many relationships before implementing totals. Count each billing unit once; joins must not multiply labour, parts or RO counts.</p>
-<table><thead><tr><th>Category</th><th>Required inclusion rule</th></tr></thead><tbody>
-<tr><td>Received — not started</td><td>Vehicle physically received, work not started, not cancelled and no issued service invoice. Show separately from commenced WIP.</td></tr>
-<tr><td>Work in Progress</td><td>Work has started, including on-hold work, but the job is not physically completed or cancelled and has no issued service invoice. Retain the actual workflow status and waiting reason.</td></tr>
-<tr><td>Work Complete — uninvoiced</td><td>Physically completed, not cancelled, and no issued service invoice as of the snapshot cutoff.</td></tr>
-<tr><td>Closed without invoice — exception</td><td>Closed jobs without an issued service invoice. Count once, show as an explicit exception rather than silently dropping them or treating them as normal WIP.</td></tr>
-<tr><td>Excluded from uninvoiced totals</td><td>Future/unreceived bookings, cancelled jobs, and jobs with issued service invoices. Invoiced-but-unpaid balances belong in receivables, not this report.</td></tr>
-</tbody></table>
-<p>Draft estimates and quotations are not issued invoices. Voided/cancelled invoice treatment must be mapped to AURA's real document lifecycle. A credit note, financial adjustment or parts return must never automatically restore the whole job to the uninvoiced population. Orphaned charges or inconsistent statuses are data-quality exceptions.</p>
-<p>Separate customer-pay jobs from warranty, internal, goodwill and other configured pay types. Report operational counts for all authorized types, but do not label non-customer-pay amounts as customer-collectible revenue. Finance must approve their valuation basis.</p>
+      <h2>4. Definitions and population rules</h2>
+      <p>
+        <strong>Reporting unit:</strong> one repair-order/job-card billing unit
+        with an unambiguous parent service-order reference. Confirm any
+        one-to-many relationships before implementing totals. Count each billing
+        unit once; joins must not multiply labour, parts or RO counts.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Required inclusion rule</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Received — not started</td>
+            <td>
+              Vehicle physically received, work not started, not cancelled and
+              no issued service invoice. Show separately from commenced WIP.
+            </td>
+          </tr>
+          <tr>
+            <td>Work in Progress</td>
+            <td>
+              Work has started, including on-hold work, but the job is not
+              physically completed or cancelled and has no issued service
+              invoice. Retain the actual workflow status and waiting reason.
+            </td>
+          </tr>
+          <tr>
+            <td>Work Complete — uninvoiced</td>
+            <td>
+              Physically completed, not cancelled, and no issued service invoice
+              as of the snapshot cutoff.
+            </td>
+          </tr>
+          <tr>
+            <td>Closed without invoice — exception</td>
+            <td>
+              Closed jobs without an issued service invoice. Count once, show as
+              an explicit exception rather than silently dropping them or
+              treating them as normal WIP.
+            </td>
+          </tr>
+          <tr>
+            <td>Excluded from uninvoiced totals</td>
+            <td>
+              Future/unreceived bookings, cancelled jobs, and jobs with issued
+              service invoices. Invoiced-but-unpaid balances belong in
+              receivables, not this report.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Draft estimates and quotations are not issued invoices. Voided/cancelled
+        invoice treatment must be mapped to AURA's real document lifecycle. A
+        credit note, financial adjustment or parts return must never
+        automatically restore the whole job to the uninvoiced population.
+        Orphaned charges or inconsistent statuses are data-quality exceptions.
+      </p>
+      <p>
+        Separate customer-pay jobs from warranty, internal, goodwill and other
+        configured pay types. Report operational counts for all authorized
+        types, but do not label non-customer-pay amounts as customer-collectible
+        revenue. Finance must approve their valuation basis.
+      </p>
 
-<h2>5. Valuation and calculation rules</h2>
-<ul>
-<li><strong>Currency:</strong> GYD, with explicit currency labels. Reuse AURA's labour-rate resolution and conversion rules; do not introduce a second FX conversion.</li>
-<li><strong>Hours sold:</strong> customer-billable quoted labour hours, using AURA's existing legacy fallback where no override exists. Actual technician time is a separate operational measure, never an automatic replacement.</li>
-<li><strong>Labour value:</strong> use the canonical service-pricing calculation and applied rate. Do not independently multiply a potentially stale rate in the report.</li>
-<li><strong>Parts value:</strong> use the same unbilled chargeable lines as the canonical invoice/estimate calculation. Net returns at their applicable price and exclude lines already billed separately. Show allocated/reserved inventory separately from chargeable value; do not treat reservation as physical issue.</li>
-<li><strong>Quantity:</strong> countable part quantities and oil quantities in litres must have separate columns or units. Do not sum unlike units into a single parts count.</li>
-<li><strong>External parts and sublet:</strong> keep externally sourced parts distinct from outsourced service labour. Supplier cost and customer selling value are separate measures. Only customer-chargeable selling value contributes to the invoice estimate.</li>
-<li><strong>Other charges:</strong> include applicable shipping, duties, issued oil, approved surcharges and other items supported by canonical service pricing. Preserve component visibility to explain the total.</li>
-<li><strong>Discounts and approvals:</strong> reflect only amounts authorized by existing pricing rules. Pending discounts, duty/tax exemptions or other approvals are exceptions, not granted savings.</li>
-<li><strong>Taxes and rounding:</strong> use the same taxable basis, tax rules and rounding order as AURA service pricing. Sum the resulting line/component amounts, not a separately rounded report formula.</li>
-</ul>
-<div class="summary"><strong>Estimated invoice value</strong> = canonical unbilled chargeable parts + billable labour + supported customer-chargeable extras − applicable approved discounts + applicable taxes.<br>
-Allocated-but-not-chargeable value and supplier costs are disclosed separately and excluded from this total. Missing prices are marked <strong>Not valued</strong>, not silently represented as a known zero. Aggregates containing missing values must be labelled incomplete.</div>
-<p>The existing pricing service may perform initialization or other side effects. Reporting must use a read-only calculation path or pre-established configuration; generating a report must not write tax defaults, pricing decisions, invoices or inventory changes.</p>
+      <h2>5. Valuation and calculation rules</h2>
+      <ul>
+        <li>
+          <strong>Currency:</strong> GYD, with explicit currency labels. Reuse
+          AURA's labour-rate resolution and conversion rules; do not introduce a
+          second FX conversion.
+        </li>
+        <li>
+          <strong>Hours sold:</strong> customer-billable quoted labour hours,
+          using AURA's existing legacy fallback where no override exists. Actual
+          technician time is a separate operational measure, never an automatic
+          replacement.
+        </li>
+        <li>
+          <strong>Labour value:</strong> use the canonical service-pricing
+          calculation and applied rate. Do not independently multiply a
+          potentially stale rate in the report.
+        </li>
+        <li>
+          <strong>Parts value:</strong> use the same unbilled chargeable lines
+          as the canonical invoice/estimate calculation. Net returns at their
+          applicable price and exclude lines already billed separately. Show
+          allocated/reserved inventory separately from chargeable value; do not
+          treat reservation as physical issue.
+        </li>
+        <li>
+          <strong>Quantity:</strong> countable part quantities and oil
+          quantities in litres must have separate columns or units. Do not sum
+          unlike units into a single parts count.
+        </li>
+        <li>
+          <strong>External parts and sublet:</strong> keep externally sourced
+          parts distinct from outsourced service labour. Supplier cost and
+          customer selling value are separate measures. Only customer-chargeable
+          selling value contributes to the invoice estimate.
+        </li>
+        <li>
+          <strong>Other charges:</strong> include applicable shipping, duties,
+          issued oil, approved surcharges and other items supported by canonical
+          service pricing. Preserve component visibility to explain the total.
+        </li>
+        <li>
+          <strong>Discounts and approvals:</strong> reflect only amounts
+          authorized by existing pricing rules. Pending discounts, duty/tax
+          exemptions or other approvals are exceptions, not granted savings.
+        </li>
+        <li>
+          <strong>Taxes and rounding:</strong> use the same taxable basis, tax
+          rules and rounding order as AURA service pricing. Sum the resulting
+          line/component amounts, not a separately rounded report formula.
+        </li>
+      </ul>
+      <div class="summary">
+        <strong>Estimated invoice value</strong> = canonical unbilled chargeable
+        parts + billable labour + supported customer-chargeable extras −
+        applicable approved discounts + applicable taxes.<br />
+        Allocated-but-not-chargeable value and supplier costs are disclosed
+        separately and excluded from this total. Missing prices are marked
+        <strong>Not valued</strong>, not silently represented as a known zero.
+        Aggregates containing missing values must be labelled incomplete.
+      </div>
+      <p>
+        The existing pricing service may perform initialization or other side
+        effects. Reporting must use a read-only calculation path or
+        pre-established configuration; generating a report must not write tax
+        defaults, pricing decisions, invoices or inventory changes.
+      </p>
 
-<h2>6. Required report content</h2>
-<h3>6.1 Header and executive summary</h3>
-<p>Include dealership and branch scope, report ID, scheduled reporting date, actual cutoff timestamp, timezone, currency, generation time, valuation basis and completeness/reconciliation status.</p>
-<p>Summary rows: Received—not started; WIP; Work Complete—uninvoiced; Closed-without-invoice exceptions; and total estimated uninvoiced value. Display RO count, billable hours, parts selling value, labour value, other selling charges, approved discounts, estimated tax and estimated invoice total. Provide pay-type breakdowns. Display allocated-only value separately.</p>
-<p>An <strong>Urgent Action Required</strong> section identifies completed-uninvoiced jobs over 24 hours old. Unknown completion times appear in a separate data-quality section.</p>
-<h3>6.2 Detail table and exports</h3>
-<p>Each row shall contain:</p>
-<ul>
-<li>RO/job-card number and parent reference; branch; reporting category and actual status.</li>
-<li>Customer name, vehicle description, registration/VIN where available, and pay type.</li>
-<li>RO creation date, received date, work-start date, completion date, workshop age and completed-unbilled hours.</li>
-<li>Assigned service advisor and technician; show “Unassigned” rather than using the creator as a substitute.</li>
-<li>Countable parts quantity, oil litres, unbilled parts selling value, allocated-only value, billable hours and labour selling value.</li>
-<li>External parts, sublet supplier cost and selling value where supported, other charges, discounts, taxes and estimated total.</li>
-<li>Action flags, waiting reason, recorded next action/follow-up date, valuation completeness, reconciliation state and authorized drill-down reference.</li>
-</ul>
-<p>Sort each section by workshop age descending, then stable RO/job-card identifier. Sort urgent completed jobs by completion age descending. Missing fields remain visibly unknown; no inferred advisor, price, branch or date.</p>
-<p>PDF and XLSX attachments are mandatory; CSV is an additional export, not a substitute for XLSX. All formats derive from the same saved snapshot and access-filtered payload. Long PDFs repeat column headings and must not truncate rows. Spreadsheet exports must neutralize formula-injection values from customer-supplied text.</p>
+      <h2>6. Required report content</h2>
+      <h3>6.1 Header and executive summary</h3>
+      <p>
+        Include dealership and branch scope, report ID, scheduled reporting
+        date, actual cutoff timestamp, timezone, currency, generation time,
+        valuation basis and completeness/reconciliation status.
+      </p>
+      <p>
+        Summary rows: Received—not started; WIP; Work Complete—uninvoiced;
+        Closed-without-invoice exceptions; and total estimated uninvoiced value.
+        Display RO count, billable hours, parts selling value, labour value,
+        other selling charges, approved discounts, estimated tax and estimated
+        invoice total. Provide pay-type breakdowns. Display allocated-only value
+        separately.
+      </p>
+      <p>
+        An <strong>Urgent Action Required</strong> section identifies
+        completed-uninvoiced jobs over 24 hours old. Unknown completion times
+        appear in a separate data-quality section.
+      </p>
+      <h3>6.2 Detail table and exports</h3>
+      <p>Each row shall contain:</p>
+      <ul>
+        <li>
+          RO/job-card number and parent reference; branch; reporting category
+          and actual status.
+        </li>
+        <li>
+          Customer name, vehicle description, registration/VIN where available,
+          and pay type.
+        </li>
+        <li>
+          RO creation date, received date, work-start date, completion date,
+          workshop age and completed-unbilled hours.
+        </li>
+        <li>
+          Assigned service advisor and technician; show “Unassigned” rather than
+          using the creator as a substitute.
+        </li>
+        <li>
+          Countable parts quantity, oil litres, unbilled parts selling value,
+          allocated-only value, billable hours and labour selling value.
+        </li>
+        <li>
+          External parts, sublet supplier cost and selling value where
+          supported, other charges, discounts, taxes and estimated total.
+        </li>
+        <li>
+          Action flags, waiting reason, recorded next action/follow-up date,
+          valuation completeness, reconciliation state and authorized drill-down
+          reference.
+        </li>
+      </ul>
+      <p>
+        Sort each section by workshop age descending, then stable RO/job-card
+        identifier. Sort urgent completed jobs by completion age descending.
+        Missing fields remain visibly unknown; no inferred advisor, price,
+        branch or date.
+      </p>
+      <p>
+        PDF and XLSX attachments are mandatory; CSV is an additional export, not
+        a substitute for XLSX. All formats derive from the same saved snapshot
+        and access-filtered payload. Long PDFs repeat column headings and must
+        not truncate rows. Spreadsheet exports must neutralize formula-injection
+        values from customer-supplied text.
+      </p>
 
-<h2>7. Aging and action rules</h2>
-<table><thead><tr><th>ID</th><th>Rule</th></tr></thead><tbody>
-<tr><td>BR-01</td><td>Workshop age uses dealership-local calendar days since physical receipt. If absent, use a known work-start timestamp labelled “Legacy fallback”. If both are absent, show “Unknown”; never use booking creation silently.</td></tr>
-<tr><td>BR-02</td><td>Urgent means more than 24 elapsed hours between valid completion and cutoff. Exactly 24 hours is not greater than 24. The calculation is not based on calendar-day boundaries.</td></tr>
-<tr><td>BR-03</td><td>After reopening, the job returns to its applicable operational category. A later completion starts a new completion-aging interval; preserve the prior transition history.</td></tr>
-<tr><td>BR-04</td><td>Completed jobs with missing chargeable parts prices or expected billable labour hours receive “Pending Cost Allocation”. Zero parts, zero hours and no charges each receive distinct review flags.</td></tr>
-<tr><td>BR-05</td><td>Legitimate labour-only, parts-only, warranty and no-charge work must be distinguishable from missing allocation. Any exception acknowledgement requires an authorized actor, reason and audit history.</td></tr>
-<tr><td>BR-06</td><td>Warnings use explicit text/icons in addition to red styling so they remain meaningful in monochrome PDF, Excel and accessible views.</td></tr>
-</tbody></table>
+      <h2>7. Aging and action rules</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Rule</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>BR-01</td>
+            <td>
+              Workshop age uses dealership-local calendar days since physical
+              receipt. If absent, use a known work-start timestamp labelled
+              “Legacy fallback”. If both are absent, show “Unknown”; never use
+              booking creation silently.
+            </td>
+          </tr>
+          <tr>
+            <td>BR-02</td>
+            <td>
+              Urgent means more than 24 elapsed hours between valid completion
+              and cutoff. Exactly 24 hours is not greater than 24. The
+              calculation is not based on calendar-day boundaries.
+            </td>
+          </tr>
+          <tr>
+            <td>BR-03</td>
+            <td>
+              After reopening, the job returns to its applicable operational
+              category. A later completion starts a new completion-aging
+              interval; preserve the prior transition history.
+            </td>
+          </tr>
+          <tr>
+            <td>BR-04</td>
+            <td>
+              Completed jobs with missing chargeable parts prices or expected
+              billable labour hours receive “Pending Cost Allocation”. Zero
+              parts, zero hours and no charges each receive distinct review
+              flags.
+            </td>
+          </tr>
+          <tr>
+            <td>BR-05</td>
+            <td>
+              Legitimate labour-only, parts-only, warranty and no-charge work
+              must be distinguishable from missing allocation. Any exception
+              acknowledgement requires an authorized actor, reason and audit
+              history.
+            </td>
+          </tr>
+          <tr>
+            <td>BR-06</td>
+            <td>
+              Warnings use explicit text/icons in addition to red styling so
+              they remain meaningful in monochrome PDF, Excel and accessible
+              views.
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-<h2>8. Scheduling and delivery</h2>
-<p><strong>Proposed default:</strong> report disabled until configured; after opt-in, daily at 18:00 in the dealership's configured timezone, including weekends. A 07:00 next-business-morning option requires an approved working-day/holiday calendar and clear prior-day reporting semantics.</p>
-<ul>
-<li>Administrators configure enabled state, local dispatch time, cadence, branch scope and eligible recipients. Record configuration changes and provide an authorized preview/test action.</li>
-<li>Generation runs asynchronously and must not block workshop requests. Define load-test volume and acceptable delivery delay before release; do not promise exact-to-the-second delivery.</li>
-<li>Persist one consistent snapshot per scheduled occurrence and scope. Record scheduled time and actual cutoff separately. If late, label it late; do not present a current-state calculation as historical as-of data.</li>
-<li>Proposed recovery: generate one late report for the most recent missed eligible occurrence and audit older missed occurrences without flooding recipients. Business approval is required.</li>
-<li>Use stable occurrence/snapshot and recipient identities for duplicate prevention. Retries reuse the saved report, not recalculated totals. Ambiguous provider outcomes require reconciliation rather than blind duplicate sending.</li>
-<li>Use only the dealership's configured email sender. Never fall back to a different dealership or global sender. Apply current permissions again at dispatch.</li>
-<li>Record queued, provider-accepted, failed and cancelled states honestly. Provider acceptance does not prove inbox delivery. Surface permanent failures to authorized administrators.</li>
-<li>If the authorized population and exceptions are empty, send <strong>“No Uninvoiced Work Outstanding”</strong> with zero-count attachments. Missing branch assignments or unvalued records must not produce this clean empty state.</li>
-</ul>
+      <h2>8. Scheduling and delivery</h2>
+      <p>
+        <strong>Proposed default:</strong> report disabled until configured;
+        after opt-in, daily at 18:00 in the dealership's configured timezone,
+        including weekends. A 07:00 next-business-morning option requires an
+        approved working-day/holiday calendar and clear prior-day reporting
+        semantics.
+      </p>
+      <ul>
+        <li>
+          Administrators configure enabled state, local dispatch time, cadence,
+          branch scope and eligible recipients. Record configuration changes and
+          provide an authorized preview/test action.
+        </li>
+        <li>
+          Generation runs asynchronously and must not block workshop requests.
+          Define load-test volume and acceptable delivery delay before release;
+          do not promise exact-to-the-second delivery.
+        </li>
+        <li>
+          Persist one consistent snapshot per scheduled occurrence and scope.
+          Record scheduled time and actual cutoff separately. If late, label it
+          late; do not present a current-state calculation as historical as-of
+          data.
+        </li>
+        <li>
+          Proposed recovery: generate one late report for the most recent missed
+          eligible occurrence and audit older missed occurrences without
+          flooding recipients. Business approval is required.
+        </li>
+        <li>
+          Use stable occurrence/snapshot and recipient identities for duplicate
+          prevention. Retries reuse the saved report, not recalculated totals.
+          Ambiguous provider outcomes require reconciliation rather than blind
+          duplicate sending.
+        </li>
+        <li>
+          Use only the dealership's configured email sender. Never fall back to
+          a different dealership or global sender. Apply current permissions
+          again at dispatch.
+        </li>
+        <li>
+          Record queued, provider-accepted, failed and cancelled states
+          honestly. Provider acceptance does not prove inbox delivery. Surface
+          permanent failures to authorized administrators.
+        </li>
+        <li>
+          If the authorized population and exceptions are empty, send
+          <strong>“No Uninvoiced Work Outstanding”</strong> with zero-count
+          attachments. Missing branch assignments or unvalued records must not
+          produce this clean empty state.
+        </li>
+      </ul>
 
-<h2>9. Access, privacy and branch prerequisites</h2>
-<p>Every read, saved snapshot, attachment and drill-down must be dealership-scoped. Branch-only delivery additionally requires explicit job-to-branch assignment and user-to-branch grants. Department/role routing is a selection mechanism, not a replacement for these authorization checks.</p>
-<p>Unknown-branch records are visible only in an authorized multi-site exception report. Branch-restricted users must not receive them or other branches' aggregates. Missing branch infrastructure blocks branch reporting; a dealership-wide interim release requires explicit scope approval.</p>
-<p>Respect financial field restrictions in HTML, PDF, XLSX/CSV and drill-down, including derived totals. A hidden component must not be recoverable by subtracting visible components from an unrestricted total. Proposed recipient policy: active internal AURA users with explicit report and relevant financial access; external recipients remain disabled unless a separately approved policy is implemented.</p>
-<p>Require TLS/SSL or enforced STARTTLS with certificate verification for sending and HTTPS for downloads. Block non-encrypted sender configurations for this report. TLS is transport protection, not protection against forwarding. Keep exports private; do not expose customer information through public or long-lived unprotected links.</p>
-<p>Retention duration and deletion policy require approval before launch. Log access and delivery metadata without duplicating full customer/report contents in application logs. Email attachments cannot be revoked after delivery; downloaded copies are outside application access control.</p>
+      <h2>9. Access, privacy and branch prerequisites</h2>
+      <p>
+        Every read, saved snapshot, attachment and drill-down must be
+        dealership-scoped. Branch-only delivery additionally requires explicit
+        job-to-branch assignment and user-to-branch grants. Department/role
+        routing is a selection mechanism, not a replacement for these
+        authorization checks.
+      </p>
+      <p>
+        Unknown-branch records are visible only in an authorized multi-site
+        exception report. Branch-restricted users must not receive them or other
+        branches' aggregates. Missing branch infrastructure blocks branch
+        reporting; a dealership-wide interim release requires explicit scope
+        approval.
+      </p>
+      <p>
+        Respect financial field restrictions in HTML, PDF, XLSX/CSV and
+        drill-down, including derived totals. A hidden component must not be
+        recoverable by subtracting visible components from an unrestricted
+        total. Proposed recipient policy: active internal AURA users with
+        explicit report and relevant financial access; external recipients
+        remain disabled unless a separately approved policy is implemented.
+      </p>
+      <p>
+        Require TLS/SSL or enforced STARTTLS with certificate verification for
+        sending and HTTPS for downloads. Block non-encrypted sender
+        configurations for this report. TLS is transport protection, not
+        protection against forwarding. Keep exports private; do not expose
+        customer information through public or long-lived unprotected links.
+      </p>
+      <p>
+        Retention duration and deletion policy require approval before launch.
+        Log access and delivery metadata without duplicating full
+        customer/report contents in application logs. Email attachments cannot
+        be revoked after delivery; downloaded copies are outside application
+        access control.
+      </p>
 
-<h2>10. Accounting reconciliation</h2>
-<p><strong>Mandatory AURA reconciliation:</strong> for the same snapshot, population and permissions, report component totals must reconcile exactly to the canonical service-pricing result, within its defined monetary precision. Any missing inputs must be visible.</p>
-<p><strong>Original GL requirement retained as a dependency:</strong> Finance must specify accounting system/company, accounts, recognition policy, cost versus selling-value basis, tax treatment, cutoffs, currency, mapping keys and tolerances. Unbilled retail estimates cannot be assumed equal to posted WIP cost or GL pending entries.</p>
-<p>ERPNext synchronization is asynchronous. The report must distinguish <strong>Reconciled</strong>, <strong>Pending sync</strong>, <strong>Variance</strong>, <strong>Not applicable</strong> and <strong>Not configured</strong>, with an as-of timestamp. Do not label the report “100% GL reconciled” unless the mapped comparison has actually passed. Reporting must not post balancing entries or hide differences.</p>
-<p>A release without GL reconciliation is a reduced-scope operational report and requires explicit approval; it does not satisfy the original GL acceptance requirement.</p>
+      <h2>10. Accounting reconciliation</h2>
+      <p>
+        <strong>Mandatory AURA reconciliation:</strong> for the same snapshot,
+        population and permissions, report component totals must reconcile
+        exactly to the canonical service-pricing result, within its defined
+        monetary precision. Any missing inputs must be visible.
+      </p>
+      <p>
+        <strong>Original GL requirement retained as a dependency:</strong>
+        Finance must specify accounting system/company, accounts, recognition
+        policy, cost versus selling-value basis, tax treatment, cutoffs,
+        currency, mapping keys and tolerances. Unbilled retail estimates cannot
+        be assumed equal to posted WIP cost or GL pending entries.
+      </p>
+      <p>
+        ERPNext synchronization is asynchronous. The report must distinguish
+        <strong>Reconciled</strong>, <strong>Pending sync</strong>,
+        <strong>Variance</strong>, <strong>Not applicable</strong> and
+        <strong>Not configured</strong>, with an as-of timestamp. Do not label
+        the report “100% GL reconciled” unless the mapped comparison has
+        actually passed. Reporting must not post balancing entries or hide
+        differences.
+      </p>
+      <p>
+        A release without GL reconciliation is a reduced-scope operational
+        report and requires explicit approval; it does not satisfy the original
+        GL acceptance requirement.
+      </p>
 
-<h2>11. Acceptance criteria</h2>
-<table><thead><tr><th>ID</th><th>Testable result</th></tr></thead><tbody>
-<tr><td>AC-01 Population</td><td>A fixture containing future bookings, received-only, started, on-hold, completed, closed-without-invoice, cancelled and invoiced jobs puts each eligible unit in exactly one defined category. Paid/unpaid status does not turn issued invoices back into uninvoiced work.</td></tr>
-<tr><td>AC-02 Billing boundaries</td><td>Previously separately billed parts and net returns are not charged twice. Reservation-only value is separately disclosed. Quantity counts do not include oil litres.</td></tr>
-<tr><td>AC-03 Labour</td><td>Changing timer hours alone does not change sold hours or labour revenue. A valid quoted-hours change follows the same calculation and approval rules as service pricing.</td></tr>
-<tr><td>AC-04 Valuation</td><td>For fixed fixtures, report component totals match canonical service-pricing totals. A missing price yields an incomplete-value warning, not a misleading fully valued zero.</td></tr>
-<tr><td>AC-05 Pay types</td><td>Customer-pay, warranty, internal and goodwill cases remain separately identifiable; customer-collectible totals do not silently include non-customer-pay estimates.</td></tr>
-<tr><td>AC-06 Warnings</td><td>A completed job with an unpriced chargeable part is flagged. Labour-only and parts-only fixtures receive appropriate review treatment rather than an unexplained error. Approved exceptions remain auditable.</td></tr>
-<tr><td>AC-07 Aging</td><td>Completion ages of 23:59, 24:00 and 24:01 produce non-urgent, non-urgent and urgent results. Local-midnight and daylight-saving fixtures preserve elapsed-hour correctness and local workshop-day aging.</td></tr>
-<tr><td>AC-08 Reopening/history</td><td>Reopening removes the job from completed-uninvoiced urgency; recompletion uses the new completion event. Missing historical timestamps display Unknown rather than an invented age.</td></tr>
-<tr><td>AC-09 Snapshot parity</td><td>HTML, PDF and XLSX/CSV totals and rows match a single report ID. An invoice created after the cutoff does not alter that saved report but is reflected in the next report and live drill-down.</td></tr>
-<tr><td>AC-10 Scheduling</td><td>Configured dispatch follows dealership local time. Restart/retry does not create another logical delivery for the same occurrence and recipient. Late recovery is labelled and follows the approved policy.</td></tr>
-<tr><td>AC-11 Empty state</td><td>A genuinely empty authorized scope receives the required no-outstanding-work message and empty exports. Unassigned-branch or unvalued exceptions prevent a false clean result.</td></tr>
-<tr><td>AC-12 Isolation</td><td>Dealer A cannot view or receive Dealer B data. A branch-only user sees only assigned branches in every format; multi-site access requires an explicit grant. Unknown branches fail closed.</td></tr>
-<tr><td>AC-13 Permission changes</td><td>Removing a recipient or financial permission before dispatch prevents the previously queued unauthorized attachment from being sent. Restricted money cannot be inferred from totals or exports.</td></tr>
-<tr><td>AC-14 Delivery safety</td><td>Missing/disabled SMTP or non-encrypted transport blocks sending and produces an actionable status. No sender fallback occurs. Failed delivery is never reported as delivered.</td></tr>
-<tr><td>AC-15 GL states</td><td>Matched, pending-sync, unmapped and mismatched fixtures produce their correct reconciliation states. A GL variance cannot be marked reconciled or silently adjusted away.</td></tr>
-<tr><td>AC-16 Usability/security</td><td>Oldest jobs appear first; all PDF rows are readable; spreadsheet formula-like text is safe; drill-down rechecks access; revoked/private links do not disclose report data.</td></tr>
-<tr><td>AC-17 No side effects</td><td>Running or retrying the report creates only reporting/delivery/audit records. It does not create customer invoices, change stock, approve prices, initialize tax rules or post GL adjustments.</td></tr>
-<tr><td>AC-18 Performance</td><td>On an agreed representative dataset, background generation meets approved generation/delivery and workshop-response budgets, with bounded query batching and visible failure handling. Numeric budgets must be set before release testing.</td></tr>
-</tbody></table>
+      <h2>11. Acceptance criteria</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Testable result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>AC-01 Population</td>
+            <td>
+              A fixture containing future bookings, received-only, started,
+              on-hold, completed, closed-without-invoice, cancelled and invoiced
+              jobs puts each eligible unit in exactly one defined category.
+              Paid/unpaid status does not turn issued invoices back into
+              uninvoiced work.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-02 Billing boundaries</td>
+            <td>
+              Previously separately billed parts and net returns are not charged
+              twice. Reservation-only value is separately disclosed. Quantity
+              counts do not include oil litres.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-03 Labour</td>
+            <td>
+              Changing timer hours alone does not change sold hours or labour
+              revenue. A valid quoted-hours change follows the same calculation
+              and approval rules as service pricing.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-04 Valuation</td>
+            <td>
+              For fixed fixtures, report component totals match canonical
+              service-pricing totals. A missing price yields an incomplete-value
+              warning, not a misleading fully valued zero.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-05 Pay types</td>
+            <td>
+              Customer-pay, warranty, internal and goodwill cases remain
+              separately identifiable; customer-collectible totals do not
+              silently include non-customer-pay estimates.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-06 Warnings</td>
+            <td>
+              A completed job with an unpriced chargeable part is flagged.
+              Labour-only and parts-only fixtures receive appropriate review
+              treatment rather than an unexplained error. Approved exceptions
+              remain auditable.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-07 Aging</td>
+            <td>
+              Completion ages of 23:59, 24:00 and 24:01 produce non-urgent,
+              non-urgent and urgent results. Local-midnight and daylight-saving
+              fixtures preserve elapsed-hour correctness and local workshop-day
+              aging.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-08 Reopening/history</td>
+            <td>
+              Reopening removes the job from completed-uninvoiced urgency;
+              recompletion uses the new completion event. Missing historical
+              timestamps display Unknown rather than an invented age.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-09 Snapshot parity</td>
+            <td>
+              HTML, PDF and XLSX/CSV totals and rows match a single report ID.
+              An invoice created after the cutoff does not alter that saved
+              report but is reflected in the next report and live drill-down.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-10 Scheduling</td>
+            <td>
+              Configured dispatch follows dealership local time. Restart/retry
+              does not create another logical delivery for the same occurrence
+              and recipient. Late recovery is labelled and follows the approved
+              policy.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-11 Empty state</td>
+            <td>
+              A genuinely empty authorized scope receives the required
+              no-outstanding-work message and empty exports. Unassigned-branch
+              or unvalued exceptions prevent a false clean result.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-12 Isolation</td>
+            <td>
+              Dealer A cannot view or receive Dealer B data. A branch-only user
+              sees only assigned branches in every format; multi-site access
+              requires an explicit grant. Unknown branches fail closed.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-13 Permission changes</td>
+            <td>
+              Removing a recipient or financial permission before dispatch
+              prevents the previously queued unauthorized attachment from being
+              sent. Restricted money cannot be inferred from totals or exports.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-14 Delivery safety</td>
+            <td>
+              Missing/disabled SMTP or non-encrypted transport blocks sending
+              and produces an actionable status. No sender fallback occurs.
+              Failed delivery is never reported as delivered.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-15 GL states</td>
+            <td>
+              Matched, pending-sync, unmapped and mismatched fixtures produce
+              their correct reconciliation states. A GL variance cannot be
+              marked reconciled or silently adjusted away.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-16 Usability/security</td>
+            <td>
+              Oldest jobs appear first; all PDF rows are readable; spreadsheet
+              formula-like text is safe; drill-down rechecks access;
+              revoked/private links do not disclose report data.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-17 No side effects</td>
+            <td>
+              Running or retrying the report creates only
+              reporting/delivery/audit records. It does not create customer
+              invoices, change stock, approve prices, initialize tax rules or
+              post GL adjustments.
+            </td>
+          </tr>
+          <tr>
+            <td>AC-18 Performance</td>
+            <td>
+              On an agreed representative dataset, background generation meets
+              approved generation/delivery and workshop-response budgets, with
+              bounded query batching and visible failure handling. Numeric
+              budgets must be set before release testing.
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-<h2>12. Decisions required before implementation approval</h2>
-<table><thead><tr><th>Decision</th><th>Recommended position / unresolved item</th><th>Review owner</th></tr></thead><tbody>
-<tr><td>Schedule</td><td>Opt-in; daily 18:00 dealership local time. Confirm weekends, late recovery and whether a business-morning option is needed.</td><td>Service Operations</td></tr>
-<tr><td>Population and valuation</td><td>Adopt the separate categories and canonical pricing basis above. Confirm treatment of voided invoices and non-customer-pay work.</td><td>Finance + Workshop</td></tr>
-<tr><td>Branch authorization</td><td>Build explicit branch assignments/grants, or formally approve a dealership-wide interim report. No implicit branch filtering.</td><td>Sponsor + Security</td></tr>
-<tr><td>Advisor attribution</td><td>Confirm authoritative assignment source; otherwise add one and leave historical unknowns unassigned.</td><td>Service Operations</td></tr>
-<tr><td>Sublet</td><td>Confirm whether true outsourced services are required immediately. If yes, establish supplier-cost and customer-selling-price records before claiming coverage.</td><td>Finance</td></tr>
-<tr><td>GL reconciliation</td><td>Approve mapping, valuation basis and sync cutoff. Any operational-only release requires an explicit waiver of the original GL requirement.</td><td>Finance + Sponsor</td></tr>
-<tr><td>Recipients and retention</td><td>Internal authorized users by default. Set retention, deletion, attachment-size limits and oversized-report delivery policy.</td><td>Security + Sponsor</td></tr>
-<tr><td>Warning exceptions</td><td>Agree who may acknowledge legitimate zero-value work and what evidence/reason is required.</td><td>Workshop + Finance</td></tr>
-<tr><td>Performance and outcomes</td><td>Approve test volume, timing budgets, baseline metrics and business improvement targets.</td><td>Engineering + Sponsor</td></tr>
-</tbody></table>
+      <h2>12. Decisions required before implementation approval</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Decision</th>
+            <th>Recommended position / unresolved item</th>
+            <th>Review owner</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Schedule</td>
+            <td>
+              Opt-in; daily 18:00 dealership local time. Confirm weekends, late
+              recovery and whether a business-morning option is needed.
+            </td>
+            <td>Service Operations</td>
+          </tr>
+          <tr>
+            <td>Population and valuation</td>
+            <td>
+              Adopt the separate categories and canonical pricing basis above.
+              Confirm treatment of voided invoices and non-customer-pay work.
+            </td>
+            <td>Finance + Workshop</td>
+          </tr>
+          <tr>
+            <td>Branch authorization</td>
+            <td>
+              Build explicit branch assignments/grants, or formally approve a
+              dealership-wide interim report. No implicit branch filtering.
+            </td>
+            <td>Sponsor + Security</td>
+          </tr>
+          <tr>
+            <td>Advisor attribution</td>
+            <td>
+              Confirm authoritative assignment source; otherwise add one and
+              leave historical unknowns unassigned.
+            </td>
+            <td>Service Operations</td>
+          </tr>
+          <tr>
+            <td>Sublet</td>
+            <td>
+              Confirm whether true outsourced services are required immediately.
+              If yes, establish supplier-cost and customer-selling-price records
+              before claiming coverage.
+            </td>
+            <td>Finance</td>
+          </tr>
+          <tr>
+            <td>GL reconciliation</td>
+            <td>
+              Approve mapping, valuation basis and sync cutoff. Any
+              operational-only release requires an explicit waiver of the
+              original GL requirement.
+            </td>
+            <td>Finance + Sponsor</td>
+          </tr>
+          <tr>
+            <td>Recipients and retention</td>
+            <td>
+              Internal authorized users by default. Set retention, deletion,
+              attachment-size limits and oversized-report delivery policy.
+            </td>
+            <td>Security + Sponsor</td>
+          </tr>
+          <tr>
+            <td>Warning exceptions</td>
+            <td>
+              Agree who may acknowledge legitimate zero-value work and what
+              evidence/reason is required.
+            </td>
+            <td>Workshop + Finance</td>
+          </tr>
+          <tr>
+            <td>Performance and outcomes</td>
+            <td>
+              Approve test volume, timing budgets, baseline metrics and business
+              improvement targets.
+            </td>
+            <td>Engineering + Sponsor</td>
+          </tr>
+        </tbody>
+      </table>
 
-<h2>13. Suggested implementation sequence — not a commitment</h2>
-<ol>
-<li><strong>Confirm semantics and prerequisites:</strong> approve Section 12; verify real status, invoice, branch, advisor and sublet mappings; assess historical data quality.</li>
-<li><strong>Build the read-only calculation and saved snapshot:</strong> verify counts, tax/charge parity, aging and exception handling with fixed fixtures.</li>
-<li><strong>Add authorized report views and exports:</strong> enforce tenant, branch, recipient and financial rules on every output.</li>
-<li><strong>Add scheduling and delivery:</strong> configure opt-in timing, shared snapshots, retries, auditing, recipient rechecks and failure alerts.</li>
-<li><strong>Validate accounting and pilot:</strong> run approved GL comparisons and no-send tests; review pilot results before enabling live dispatch.</li>
-</ol>
-<p>No project tasks, application changes or production sends are authorized by this draft alone. Implementation starts only after scope approval.</p>
+      <h2>13. Suggested implementation sequence — not a commitment</h2>
+      <ol>
+        <li>
+          <strong>Confirm semantics and prerequisites:</strong> approve Section
+          12; verify real status, invoice, branch, advisor and sublet mappings;
+          assess historical data quality.
+        </li>
+        <li>
+          <strong>Build the read-only calculation and saved snapshot:</strong>
+          verify counts, tax/charge parity, aging and exception handling with
+          fixed fixtures.
+        </li>
+        <li>
+          <strong>Add authorized report views and exports:</strong> enforce
+          tenant, branch, recipient and financial rules on every output.
+        </li>
+        <li>
+          <strong>Add scheduling and delivery:</strong> configure opt-in timing,
+          shared snapshots, retries, auditing, recipient rechecks and failure
+          alerts.
+        </li>
+        <li>
+          <strong>Validate accounting and pilot:</strong> run approved GL
+          comparisons and no-send tests; review pilot results before enabling
+          live dispatch.
+        </li>
+      </ol>
+      <p>
+        The requirements baseline is approved. This document does not record
+        completed implementation or authorize live report dispatch. Confirm
+        unresolved prerequisites before claiming full compliance; any reduced-scope
+        release still requires explicit approval.
+      </p>
 
-<h2>14. Revision record</h2>
-<p><strong>v1.1:</strong> Clarifies WIP versus received-only jobs; distinguishes uninvoiced from unpaid; aligns valuation with canonical service pricing; separates parts, oil, sublet and supplier cost; introduces snapshot parity; resolves zero-value-warning ambiguity; adds explicit branch/recipient controls, GL prerequisites, operational defaults and acceptance tests.</p>
-<p class="small">Source: supplied “Automated Daily Workshop WIP &amp; Work Complete Revenue Realization Report” BRD v1.0, dated October 6, 2026, and the preceding AURA source-code review. This document contains no customer records or production financial figures.</p>
-</main></body></html>
+      <h2>14. Revision record</h2>
+      <p>
+        <strong>v1.1:</strong> Clarifies WIP versus received-only jobs;
+        distinguishes uninvoiced from unpaid; aligns valuation with canonical
+        service pricing; separates parts, oil, sublet and supplier cost;
+        introduces snapshot parity; resolves zero-value-warning ambiguity; adds
+        explicit branch/recipient controls, GL prerequisites, operational
+        defaults and acceptance tests.
+      </p>
+      <p class="small">
+        Source: supplied “Automated Daily Workshop WIP &amp; Work Complete
+        Revenue Realization Report” BRD v1.0, dated October 6, 2026, and the
+        preceding AURA source-code review. This document contains no customer
+        records or production financial figures.
+      </p>
+    </main>
+  </body>
+</html>
