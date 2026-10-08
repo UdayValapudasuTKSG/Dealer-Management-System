@@ -83,7 +83,9 @@ export function daySlotTimes(day: Date, tz: string): Date[] {
 export async function vehicleAvailabilityError(
   lead: Lead,
 ): Promise<string | null> {
-  if (!lead.interestedVehicleId) return null;
+  if (!lead.interestedVehicleId) {
+    return "Please contact your advisor to confirm the vehicle model before choosing a test-drive time.";
+  }
   const [v] = await db
     .select()
     .from(vehiclesTable)
@@ -93,7 +95,9 @@ export async function vehicleAvailabilityError(
         eq(vehiclesTable.dealerId, lead.dealerId),
       ),
     );
-  if (!v) return null;
+  if (!v) {
+    return "The vehicle linked to this invitation is unavailable. Please contact your advisor to confirm the vehicle model.";
+  }
   if (["sold", "delivered", "in_transit"].includes(v.status)) {
     return `The ${v.year} ${v.make} ${v.model} is no longer available for a test drive (status: ${v.status.replace(/_/g, " ")}).`;
   }

@@ -124,6 +124,10 @@ async function takenSlotTimes(
 
 async function buildInvite(lead: Lead) {
   const policy = await dealerCustomerPolicy(lead.dealerId);
+  const bookingDisabledReason = policy.testDrivesEnabled
+    ? await vehicleAvailabilityError(lead)
+    : TEST_DRIVES_DISABLED;
+  const canBook = !bookingDisabledReason;
   const tz = await dealerTimezone(lead.dealerId);
   const [v] = lead.interestedVehicleId
     ? await db
@@ -136,15 +140,15 @@ async function buildInvite(lead: Lead) {
           ),
         )
     : [];
-  const taken = policy.testDrivesEnabled
+  const taken = canBook
     ? await takenSlotTimes(lead.dealerId, lead.id, tz)
     : new Set<number>();
   // Advisor/vehicle capacity blocks hide those slots from the customer.
-  const blocked: BlockedDays = policy.testDrivesEnabled
+  const blocked: BlockedDays = canBook
     ? await leadCapacityBlocks(lead)
     : new Map();
 
-  const days = policy.testDrivesEnabled ? windowDays(tz).map((day) => ({
+  const days = canBook ? windowDays(tz).map((day) => ({
     date: zonedDayKey(day, tz),
     label: day.toLocaleDateString("en-US", {
       timeZone: tz,
@@ -161,7 +165,7 @@ async function buildInvite(lead: Lead) {
 
   return {
     testDrivesEnabled: policy.testDrivesEnabled,
-    bookingDisabledReason: policy.testDrivesEnabled ? null : TEST_DRIVES_DISABLED,
+    bookingDisabledReason,
     leadName: lead.name,
     vehicle: v ? `${v.year} ${v.make} ${v.model}` : null,
     vehicleImageUrl: v?.imageUrl ?? null,

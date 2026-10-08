@@ -133,7 +133,7 @@ export default function BookTestDrive({
           </div>
         ) : (
           <div className="space-y-6">
-            {data.testDrivesEnabled === false && (
+            {data.bookingDisabledReason && (
               <div role="status" className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-sm">
                 {data.bookingDisabledReason} New bookings and rescheduling are unavailable. Existing booking details remain below; contact your advisor for help or cancellation.
               </div>
@@ -194,12 +194,12 @@ export default function BookTestDrive({
                       setJustBooked(false);
                       setRescheduling(true);
                     }}
-                    disabled={!data.testDrivesEnabled}
+                    disabled={!data.testDrivesEnabled || !!data.bookingDisabledReason}
                   >
                     Choose a different time
                   </Button>
                 </motion.div>
-              ) : data.testDrivesEnabled ? (
+              ) : data.testDrivesEnabled && !data.bookingDisabledReason ? (
                 <motion.div
                   key="picker"
                   initial={{ opacity: 0, y: 12 }}
@@ -304,7 +304,7 @@ export default function BookTestDrive({
                     <Button
                       className="rounded-full px-8"
                       disabled={
-                        !data.testDrivesEnabled || !selectedSlot || !licence.trim() || !waiver || book.isPending
+                        !data.testDrivesEnabled || !!data.bookingDisabledReason || !selectedSlot || !licence.trim() || !waiver || book.isPending
                       }
                       onClick={confirm}
                     >
