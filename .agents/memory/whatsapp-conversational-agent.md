@@ -17,3 +17,6 @@ description: Non-obvious rules for the LLM tool-loop WhatsApp concierge layered 
 - Service confirmations and service-location answers must use the same configured dealership address as the WhatsApp showroom address, not a separate inferred workshop location.
   **Why:** The user explicitly requested the same configured dealer address in service emails and WhatsApp bot replies.
   **How to apply:** Apply the shared address resolution to email/calendar locations and WhatsApp confirmations; omit missing addresses rather than inventing one.
+- Mutable dealership policy must not be treated as a durable customer fact in conversation summaries.
+  **Why:** Production test-drive refusals persisted in a conversation summary even while that dealership's live test-drive setting was enabled, giving subsequent turns contradictory context.
+  **How to apply:** Treat fresh dealer policy as authoritative in both directions (disabled and re-enabled); inspect assistant history and summaries when replies contradict current settings. Do not assume a cached database flag is the cause.
