@@ -71,6 +71,8 @@ catalogs:
       version: 3.25.76
 
 overrides:
+  '@a2ui/web_core@<0.10.2': 0.10.2
+  proxy-addr@<2.0.8: 2.0.8
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'
@@ -1103,8 +1105,8 @@ packages:
       graphql:
         optional: true
 
-  '@a2ui/web_core@0.9.0':
-    resolution: {integrity: sha512-TsMWuEeuVDsScGIGPy/fWIZu+EOBRfhx6KwjKh3VwY1AwysRenQM8zDr8VrSk14Wck/aBgVxk2zWVrMCK2/s6A==}
+  '@a2ui/web_core@0.10.2':
+    resolution: {integrity: sha512-IfS4K7baTL9P9AzUOzKRWzL9A9/+Z7TCgMY2GPwsZ0H7LgY/9/uJnlbReNhpHsAfN12KZtW9iERWkw5HOf71GA==}
 
   '@ag-ui/a2ui-middleware@0.0.10':
     resolution: {integrity: sha512-2BQFUQ9vJzUAQSR0dNW/ijhyH8KpiRWISSLTP6mIe6ENyQ2cM1/XLG38/Dcb69olcs36gtZADZzAQWcno5H6fA==}
@@ -5643,8 +5645,8 @@ packages:
   property-information@7.2.0:
     resolution: {integrity: sha512-IAtzIB6sUiWaJYrX9smp3V46pBGbBeLFRGdh25kg1334VcBlD8HzhPeNIWQH9zhGmo2itIe25EHt9dQP7G5hmg==}
 
-  proxy-addr@2.0.7:
-    resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
+  proxy-addr@2.0.8:
+    resolution: {integrity: sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==}
     engines: {node: '>= 0.10'}
 
   proxy-from-env@2.1.0:
@@ -6709,7 +6711,7 @@ snapshots:
     optionalDependencies:
       graphql: 16.14.2
 
-  '@a2ui/web_core@0.9.0':
+  '@a2ui/web_core@0.10.2':
     dependencies:
       '@preact/signals-core': 1.14.4
       date-fns: 4.4.0
@@ -7116,7 +7118,7 @@ snapshots:
 
   '@copilotkit/a2ui-renderer@1.62.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
-      '@a2ui/web_core': 0.9.0
+      '@a2ui/web_core': 0.10.2
       clsx: 2.1.1
       lit: 3.3.3
       zod: 3.25.76
@@ -10094,7 +10096,7 @@ snapshots:
       on-finished: 2.4.1
       parseurl: 1.3.3
       path-to-regexp: 0.1.13
-      proxy-addr: 2.0.7
+      proxy-addr: 2.0.8
       qs: 6.16.0
       range-parser: 1.2.1
       safe-buffer: 5.2.1
@@ -10129,7 +10131,7 @@ snapshots:
       on-finished: 2.4.1
       once: 1.4.0
       parseurl: 1.3.3
-      proxy-addr: 2.0.7
+      proxy-addr: 2.0.8
       qs: 6.16.0
       range-parser: 1.3.0
       router: 2.2.0
@@ -12262,7 +12264,7 @@ snapshots:
 
   property-information@7.2.0: {}
 
-  proxy-addr@2.0.7:
+  proxy-addr@2.0.8:
     dependencies:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
