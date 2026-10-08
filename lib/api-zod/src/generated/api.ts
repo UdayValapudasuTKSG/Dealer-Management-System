@@ -2608,6 +2608,9 @@ export const GetTestDriveInviteParams = zod.object({
 })
 
 export const GetTestDriveInviteResponse = zod.object({
+  "dealerName": zod.string(),
+  "showroomAddress": zod.string().nullable(),
+  "brandColor": zod.string(),
   "testDrivesEnabled": zod.boolean(),
   "bookingDisabledReason": zod.string().nullable(),
   "leadName": zod.string(),
@@ -2645,6 +2648,9 @@ export const BookTestDriveSlotBody = zod.object({
 })
 
 export const BookTestDriveSlotResponse = zod.object({
+  "dealerName": zod.string(),
+  "showroomAddress": zod.string().nullable(),
+  "brandColor": zod.string(),
   "testDrivesEnabled": zod.boolean(),
   "bookingDisabledReason": zod.string().nullable(),
   "leadName": zod.string(),

@@ -4106,6 +4106,10 @@ export interface TestDrivePolicy {
 }
 
 export interface TestDriveInvite {
+  dealerName: string;
+  /** @nullable */
+  showroomAddress: string | null;
+  brandColor: string;
   testDrivesEnabled: boolean;
   /** @nullable */
   bookingDisabledReason: string | null;

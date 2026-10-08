@@ -8,6 +8,10 @@
 import type { TestDriveDay } from './testDriveDay';
 
 export interface TestDriveInvite {
+  dealerName: string;
+  /** @nullable */
+  showroomAddress: string | null;
+  brandColor: string;
   testDrivesEnabled: boolean;
   /** @nullable */
   bookingDisabledReason: string | null;

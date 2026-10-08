@@ -13943,8 +13943,11 @@ components:
         bookingDisabledReason: { type: ["string", "null"] }
     TestDriveInvite:
       type: object
-      required: [leadName, vehicle, vehicleImageUrl, branch, bookedAt, bookedLabel, days, testDrivesEnabled, bookingDisabledReason]
+      required: [dealerName, showroomAddress, brandColor, leadName, vehicle, vehicleImageUrl, branch, bookedAt, bookedLabel, days, testDrivesEnabled, bookingDisabledReason]
       properties:
+        dealerName: { type: string }
+        showroomAddress: { type: ["string", "null"] }
+        brandColor: { type: string }
         testDrivesEnabled: { type: boolean }
         bookingDisabledReason: { type: ["string", "null"] }
         leadName: { type: string }

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, eq, gt, gte, isNotNull, lt, lte, ne, sql } from "drizzle-orm";
 import {
   db,
+  dealersTable,
   leadsTable,
   vehiclesTable,
   timelineEventsTable,
@@ -43,6 +44,7 @@ import {
   zonedStartOfDay,
 } from "../lib/timezone";
 import { dealerCustomerPolicy, TEST_DRIVES_DISABLED } from "../lib/dealer-customer-policy";
+import { testDriveBranding } from "../lib/test-drive-branding";
 
 // ---------------------------------------------------------------------------
 // PUBLIC self-service test-drive booking — reached from the unique link
@@ -123,6 +125,14 @@ async function takenSlotTimes(
 }
 
 async function buildInvite(lead: Lead) {
+  const [dealer] = await db.select({
+    name: dealersTable.name,
+    brandName: dealersTable.brandName,
+    themeColor: dealersTable.themeColor,
+    address: dealersTable.address,
+  }).from(dealersTable).where(eq(dealersTable.id, lead.dealerId));
+  if (!dealer) throw new Error("Dealership not found");
+  const branding = testDriveBranding(dealer);
   const policy = await dealerCustomerPolicy(lead.dealerId);
   const bookingDisabledReason = policy.testDrivesEnabled
     ? await vehicleAvailabilityError(lead)
@@ -164,6 +174,7 @@ async function buildInvite(lead: Lead) {
   })) : [];
 
   return {
+    ...branding,
     testDrivesEnabled: policy.testDrivesEnabled,
     bookingDisabledReason,
     leadName: lead.name,

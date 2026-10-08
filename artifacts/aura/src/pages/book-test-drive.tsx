@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,6 +9,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { hexToHslTriplet } from "@/components/dealer-theme";
 import {
   useGetTestDriveInvite,
   useBookTestDriveSlot,
@@ -32,6 +33,14 @@ export default function BookTestDrive({
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useGetTestDriveInvite(token);
   const book = useBookTestDriveSlot();
+  const dealerName = data?.dealerName ?? "Test-drive booking";
+  const accent = hexToHslTriplet(data?.brandColor ?? "#B58A55");
+  const location = data?.showroomAddress ?? data?.branch ?? "Contact your advisor for the location";
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = `${dealerName} — Book a test drive`;
+    return () => { document.title = previousTitle; };
+  }, [dealerName]);
 
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -93,20 +102,23 @@ export default function BookTestDrive({
   const invalidLink = errorStatus(error) === 404;
 
   return (
-    <div className="dark min-h-screen bg-[hsl(0,0%,5%)] text-white relative overflow-hidden">
+    <div
+      className="dark min-h-screen bg-[hsl(0,0%,5%)] text-white relative overflow-hidden"
+      style={{ "--primary": `${accent.h} ${accent.s}% ${accent.l}%` } as CSSProperties}
+    >
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden
         style={{
           background:
-            "radial-gradient(ellipse 80% 50% at 50% -10%, hsla(0,82%,44%,0.18), transparent 70%)",
+            "radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.18), transparent 70%)",
         }}
       />
 
       <header className="relative z-10 flex items-center justify-center py-8">
         <div className="text-center">
           <div className="text-2xl font-light tracking-[0.35em]">
-            AURA<span className="text-primary">.</span>OS
+            {dealerName}
           </div>
           <div className="text-[10px] uppercase tracking-[0.4em] text-white/40 mt-1">
             Private test drive
@@ -128,7 +140,7 @@ export default function BookTestDrive({
             </h1>
             <p className="text-sm text-white/50 max-w-sm mx-auto leading-relaxed">
               The link may have been mistyped or replaced. Please use the most
-              recent invitation email, or contact your AURA advisor.
+              recent invitation email, or contact your dealership advisor.
             </p>
           </div>
         ) : (
@@ -158,7 +170,7 @@ export default function BookTestDrive({
                 </h1>
                 <p className="text-sm text-white/50 flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5" />
-                  {data.branch ?? "Main Showroom"}
+                  {location}
                 </p>
               </div>
             </div>
@@ -183,7 +195,7 @@ export default function BookTestDrive({
                       {data.bookedLabel}
                     </p>
                     <p className="text-xs text-white/40">
-                      {data.branch ?? "Main Showroom"} — the vehicle will be
+                      {location} — the vehicle will be
                       detailed and waiting for you.
                     </p>
                   </div>
@@ -336,7 +348,7 @@ export default function BookTestDrive({
             </AnimatePresence>
 
             <p className="text-center text-[11px] text-white/30 leading-relaxed">
-              AURA Dealership — Premium Automotive Concierge.
+              {dealerName} — Private test drives.
               <br />
               Need help? Reply to your invitation email and an advisor will
               assist you.

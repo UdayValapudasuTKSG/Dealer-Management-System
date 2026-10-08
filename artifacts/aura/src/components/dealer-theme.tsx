@@ -18,7 +18,7 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 const STYLE_ID = "aura-dealer-theme";
 
 /** hex -> "H S% L%" HSL triplet (space-separated, matching index.css tokens) */
-function hexToHslTriplet(hex: string): { h: number; s: number; l: number } {
+export function hexToHslTriplet(hex: string): { h: number; s: number; l: number } {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
