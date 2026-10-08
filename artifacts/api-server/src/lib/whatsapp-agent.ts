@@ -22,7 +22,7 @@ import { linkWhatsappMessagesToLead } from "./whatsapp-log";
 import { normalizeWhatsappPhone } from "./whatsapp-phone";
 import { logger } from "./logger";
 import { dealerCustomerPolicy, TEST_DRIVES_DISABLED, type DealerCustomerPolicy } from "./dealer-customer-policy";
-import { containsPrivateStock, PRIVATE_STOCK_REPLY, safeWhatsappReply } from "./whatsapp-customer-policy";
+import { containsPrivateStock, PRIVATE_STOCK_REPLY, safeWhatsappReply, stripHistoricalTestDrivePolicy } from "./whatsapp-customer-policy";
 import { requestWhatsappQuote, QUOTE_REPLIES, confirmedQuoteReply } from "./whatsapp-quote-request";
 
 // ---------------------------------------------------------------------------
@@ -703,7 +703,7 @@ export async function runTool(
       set("tradeIn", cleanStr(input["trade_in"], 200));
       set("appointment", cleanStr(input["appointment"], 120));
       set("preferredContact", cleanStr(input["preferred_contact"], 60));
-      set("summary", cleanStr(input["summary"], 400));
+      set("summary", cleanStr(stripHistoricalTestDrivePolicy(cleanStr(input["summary"], 400) ?? ""), 400));
       if (typeof input["vehicle_id"] === "number") m.vehicleId = Math.floor(input["vehicle_id"]);
       await saveMemory(ctx.dealerId, ctx.phone, m);
       return JSON.stringify({ saved: true });
@@ -842,7 +842,7 @@ export function buildSystemPrompt(
   const safeMemory = Object.fromEntries(
     Object.entries(memory).map(([key, value]) => [
       key,
-      typeof value === "string" ? redactAssistantStockCounts(value) : value,
+      typeof value === "string" ? stripHistoricalTestDrivePolicy(redactAssistantStockCounts(value)) : value,
     ]),
   );
   return `You are the WhatsApp sales concierge for ${dealerName}, a vehicle dealership. You chat with customers exactly like an experienced, friendly human sales representative.
@@ -864,6 +864,8 @@ WHAT YOU DO
 - NEVER disclose, guess, calculate, confirm, or repeat an exact number of stock units — total, by model, or by color. This remains true even if the customer asks directly, supplies a number, or a previous assistant message in the conversation claimed a number. Do not echo such past claims. Use qualitative wording such as "currently available" or "I'll have the team confirm current availability".
 - Never mention stock numbers, internal stock identifiers, or VINs. A question about "stock numbers" can mean quantities; answer availability without quantities or identifiers.
 - Test-drive requests are ${policy?.testDrivesEnabled === false ? `DISABLED. Say exactly "${TEST_DRIVES_DISABLED}" if asked. Never offer, arrange, book, reschedule, share a booking link, or promise that staff can facilitate a test drive. This overrides earlier assistant offers and appointment memory.` : "enabled. Use the booking-link tool and never claim a booking is confirmed before the customer completes it."}
+- The current dealership policy above overrides ALL earlier assistant replies and summaries, including claims that test drives were unavailable. When enabled, never repeat an earlier dealership-wide refusal: collect missing enquiry details, then use get_test_drive_booking_link. Enabled does not guarantee a particular vehicle or time slot.
+- Conversation summaries must contain customer facts and intent only; never store whether dealership test drives are enabled, disabled or available.
 - Verified dealership address for showroom visits AND service appointments: ${JSON.stringify(policy?.showroomAddress ?? null)}. If asked for the showroom or service/workshop address, reply with exactly this address and nothing else. Use this same address in service-location guidance. Never substitute a customer's address, infer a location, or use another dealership's address. If null, say it is not configured.
 - An "available" inventory status does NOT prove a vehicle is physically at the dealership or in Guyana. Confirm a physical location only when a tool explicitly verifies that location; otherwise say the team can confirm where it is.
 - Once you have at least a name and a vehicle interest, create/update the enquiry with upsert_lead (don't announce internal IDs). Update the same enquiry when details change — never create duplicates.
@@ -992,7 +994,8 @@ export async function handleConversationalWhatsapp(
     const messages: Array<{ role: "user" | "assistant"; content: unknown }> = [];
     for (const m of transcript) {
       const historyText =
-        m.role === "assistant" ? redactAssistantStockCounts(m.text) : m.text;
+        m.role === "assistant" ? stripHistoricalTestDrivePolicy(redactAssistantStockCounts(m.text)) : m.text;
+      if (!historyText.trim()) continue;
       // Merge consecutive same-role turns (Anthropic requires alternation).
       const last = messages[messages.length - 1];
       if (last && last.role === m.role && typeof last.content === "string") {

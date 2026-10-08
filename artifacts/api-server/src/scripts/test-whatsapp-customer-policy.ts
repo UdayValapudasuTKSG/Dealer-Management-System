@@ -8,7 +8,7 @@ import { buildSystemPrompt, runTool, handleConversationalWhatsapp } from "../lib
 import { handleWhatsappMessage, handleWhatsappOneShot } from "../lib/whatsapp-flow";
 import { handleTestDriveIntent } from "../lib/test-drive-intent";
 import { dealerCustomerPolicy, resolveShowroomAddress, TEST_DRIVES_DISABLED } from "../lib/dealer-customer-policy";
-import { customerPolicyReply, customerSafeTransport, safeWhatsappReply, PRIVATE_STOCK_REPLY } from "../lib/whatsapp-customer-policy";
+import { customerPolicyReply, customerSafeTransport, safeWhatsappReply, PRIVATE_STOCK_REPLY, stripHistoricalTestDrivePolicy } from "../lib/whatsapp-customer-policy";
 import { hasPermission } from "../middlewares/rbac";
 import whatsappRouter, { canManageWhatsapp } from "../routes/whatsapp";
 import drivesRouter from "../routes/test-drives";
@@ -19,6 +19,14 @@ import leadsRouter from "../routes/leads";
 // Do not import the application's entry point or start its outbox worker.
 const enabled = { testDrivesEnabled: true, showroomAddress: "220 Camp St, Georgetown" };
 const disabled = { ...enabled, testDrivesEnabled: false };
+const staleSummary = "Customer interested in scheduling a test drive for the BYD Dolphin Mini. Test drives not currently available; confirming name to update enquiry.";
+assert.doesNotMatch(stripHistoricalTestDrivePolicy(staleSummary), /not currently available/);
+assert.match(stripHistoricalTestDrivePolicy(staleSummary), /Dolphin Mini/);
+assert.equal(stripHistoricalTestDrivePolicy("Your test drive is booked for Tuesday."), "Your test drive is booked for Tuesday.");
+assert.doesNotMatch(buildSystemPrompt("Dealer", { summary: staleSummary }, false, enabled), /Test drives not currently available/);
+assert.match(safeWhatsappReply(TEST_DRIVES_DISABLED, enabled), /requests are enabled/);
+assert.equal(safeWhatsappReply("No slots are available for a test drive on Tuesday.", enabled), "No slots are available for a test drive on Tuesday.");
+assert.equal(safeWhatsappReply("Let's book a test drive.", disabled), TEST_DRIVES_DISABLED);
 assert.equal(customerPolicyReply(disabled, "Please book a test drive")?.reply, TEST_DRIVES_DISABLED);
 assert.equal(customerPolicyReply(enabled, "Please book a test drive"), null);
 assert.equal(customerPolicyReply(disabled, "Can I take it for a spin?")?.reply, TEST_DRIVES_DISABLED);

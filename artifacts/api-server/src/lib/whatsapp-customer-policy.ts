@@ -5,6 +5,19 @@ import type { WhatsappTransport } from "./whatsapp";
 export const PRIVATE_STOCK_REPLY =
   "I can help with model availability and pricing, but exact stock quantities and internal vehicle identifiers aren't shared here.";
 
+export function isTestDrivePolicyClaim(text: string): boolean {
+  return isTestDriveRequest(text) &&
+    /\b(?:disabled|enabled|unavailable|not (?:currently )?available|cannot facilitate|can't facilitate|do not (?:offer|facilitate)|don't (?:offer|facilitate))\b/i.test(text);
+}
+
+/** Historical assistant assertions are not authoritative dealership policy.
+ * Preserve customer intent and actual appointment details, not policy claims. */
+export function stripHistoricalTestDrivePolicy(text: string): string {
+  return text.split(/(?<=[.!?;])\s+|\n+/)
+    .filter((sentence) => !isTestDrivePolicyClaim(sentence))
+    .join("\n");
+}
+
 export function isShowroomAddressQuestion(text: string): boolean {
   if (/\b(?:service|workshop|servicing)\b/i.test(text) &&
     /\b(?:address|location|located|where)\b/i.test(text)) return true;
@@ -75,6 +88,9 @@ export function safeWhatsappReply(value: string, policy: DealerCustomerPolicy): 
   if (!policy.testDrivesEnabled &&
       (isTestDriveRequest(value) || /\/(?:book-test-drive|test-drive)\//i.test(value)))
     return TEST_DRIVES_DISABLED;
+  if (policy.testDrivesEnabled && isTestDrivePolicyClaim(value) &&
+      /\b(?:disabled|unavailable|not (?:currently )?available|cannot|can't|do not|don't)\b/i.test(value))
+    return "Test-drive requests are enabled at this dealership. I can help you request a test drive; vehicle and appointment availability still need to be confirmed.";
   return containsPrivateStock(value) ? PRIVATE_STOCK_REPLY : value;
 }
 
