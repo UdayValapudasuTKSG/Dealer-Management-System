@@ -1000,7 +1000,12 @@ export function whatsappTemplateMessagePayload(opts: {
   body?: string;
   bodyParameters?: readonly string[];
 }): Record<string, unknown> {
-  const bodyParameters = opts.bodyParameters ?? [opts.body ?? ""];
+  // Meta forbids newlines, tabs and long space runs inside template variables,
+  // even though fixed template text and ordinary chat messages may use them.
+  // Preserve content (including URLs), normalizing only template parameters.
+  const bodyParameters = (opts.bodyParameters ?? [opts.body ?? ""]).map(
+    (text) => text.replace(/\s+/gu, " ").trim(),
+  );
   if (
     bodyParameters.length === 0 ||
     bodyParameters.some((parameter) => !parameter.trim()) ||

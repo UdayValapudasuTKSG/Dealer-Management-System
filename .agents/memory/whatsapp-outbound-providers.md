@@ -18,3 +18,9 @@ Meta HTTP 404 alone does not identify a sender/endpoint defect. Inspect the sani
 **Why:** Meta can return 404/code 132001 for a missing template translation even while ordinary messages succeed. Later approval does not prove the template existed at the original send time, and matching unique parameter counts does not prove matching copy or repeated placeholders.
 
 **How to apply:** Keep the historical rejection separate from current readiness. Do not substitute a guessed locale or change approved wording to make a diagnostic pass.
+
+Meta template variable values cannot contain line breaks, tabs or more than four consecutive spaces, even when the approved fixed template text contains paragraphs.
+
+**Why:** A valid one-variable template can still reject an ordinary multi-line chatbot reply passed as its variable. Error 132018 indicates component/parameter problems but does not alone identify the offending field.
+
+**How to apply:** Normalize whitespace only at the template parameter boundary, preserving URLs and ordinary chat formatting. Inspect payload structure before asking users to recreate approved templates; do not claim a fix is confirmed by Meta until a real retry is accepted.

@@ -59,6 +59,39 @@ assert.deepEqual(payload, {
 });
 
 const originalFetch = globalThis.fetch;
+const normalizedPayload = whatsappTemplateMessagePayload({
+  name: "aura_service_update",
+  language: "en_US",
+  body: "Hi Alex,\r\n\r\nPlease\tvisit     https://example.com/feedback/sample\nThank you.",
+});
+assert.deepEqual(normalizedPayload, {
+  type: "template",
+  template: {
+    name: "aura_service_update",
+    language: { code: "en_US" },
+    components: [{
+      type: "body",
+      parameters: [{
+        type: "text",
+        text: "Hi Alex, Please visit https://example.com/feedback/sample Thank you.",
+      }],
+    }],
+  },
+});
+const normalizedAppointment = whatsappTemplateMessagePayload({
+  name: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name,
+  language: "en",
+  bodyParameters: bodyParameters.map((text) => `\n${text}\t`),
+});
+assert.deepEqual(normalizedAppointment, payload);
+assert.throws(() => whatsappTemplateMessagePayload({
+  name: "aura_service_update", language: "en_US", body: "\n\t    ",
+}), /invalid/);
+assert.throws(() => whatsappTemplateMessagePayload({
+  name: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name, language: "en",
+  bodyParameters: ["Alex"],
+}), /invalid/);
+
 let requestBody: Record<string, unknown> | null = null;
 globalThis.fetch = async (_input, init) => {
   requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
