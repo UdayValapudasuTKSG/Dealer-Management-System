@@ -80,6 +80,7 @@ export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 
 /** Non-email outbox kinds (channel = "whatsapp"); stored in the same `template` column. */
 export const WHATSAPP_KINDS = [
+  "leads.source.report.daily",
   "whatsapp_message",
   "test_drive_reminder",
   "outreach",

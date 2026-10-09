@@ -589,6 +589,8 @@ export async function sweepLeadSourceReports(
       if (parts.hour * 60 + parts.minute < sendH * 60 + sendM) continue;
 
       let recipients = await generalManagers(dealer.id);
+      const viewers = new Set(await usersWithPermission(dealer.id, "leads"));
+      const whatsappManagerIds = recipients.filter(id => viewers.has(id));
       const reportPolicy = await internalRecipientPolicy(dealer.id, "leads.source.report.daily");
       if (reportPolicy) {
         const [seed] = chooseInternalRecipients(
@@ -597,7 +599,7 @@ export async function sweepLeadSourceReports(
         );
         recipients = seed ? [seed.id] : [];
       }
-      if (recipients.length === 0) continue;
+      if (recipients.length === 0 && whatsappManagerIds.length === 0) continue;
 
       // Yesterday's dealer-local calendar day as UTC bounds.
       const yesterdayKey = zonedAddDays(now, tz, -1);
@@ -812,6 +814,37 @@ export async function sweepLeadSourceReports(
           dedupeKey: `leads:srcreport:${dealer.id}:${yesterdayKey}:u${userId}`,
           data,
         });
+      }
+      if (whatsappManagerIds.length) {
+        const managers = await db.select({ id: usersTable.id, phone: usersTable.phone })
+          .from(usersTable).where(inArray(usersTable.id, whatsappManagerIds));
+        const [identity] = await db.select({ name: dealersTable.name })
+          .from(dealersTable).where(eq(dealersTable.id, dealer.id));
+        const body = [
+          `${identity?.name ?? "Dealership"} — Daily lead report`,
+          dateLabel,
+          `New leads: ${total} (${change} vs previous day)`,
+          `Contacted: ${contacted}; not contacted: ${total - contacted}`,
+          `High priority: ${priorityLeads.length}`,
+          ...sorted.slice(0, 6).map(row => `${labelFor(row.source).slice(0, 50)}: ${row.count}`),
+          ...(sorted.length > 6 ? [`Other sources: ${sorted.slice(6).reduce((n, row) => n + row.count, 0)}`] : []),
+          "See the full breakdown in your daily email report or AURA.",
+        ].join("\n");
+        for (const manager of managers) {
+          if (!manager.phone?.trim()) {
+            logger.warn({ dealerId: dealer.id, userId: manager.id }, "Daily WhatsApp report skipped: manager phone missing");
+            continue;
+          }
+          await enqueueWhatsapp({
+            dealerId: dealer.id,
+            kind: "leads.source.report.daily",
+            to: manager.phone,
+            body,
+            summary: `Daily lead-source report — ${dateLabel}`,
+            context: { reportManagerId: String(manager.id) },
+            dedupeKey: `leads:srcreport:whatsapp:${dealer.id}:${yesterdayKey}:u${manager.id}`,
+          });
+        }
       }
     } catch (err) {
       logger.error(

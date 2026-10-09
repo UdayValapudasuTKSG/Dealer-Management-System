@@ -3303,6 +3303,25 @@ async function processWhatsappQueue(): Promise<void> {
           );
         }
       }
+      if (item.template === "leads.source.report.daily") {
+        const { usersTable } = await import("@workspace/db");
+        const { generalManagers, usersWithPermission } = await import("./notify-matrix");
+        const managerId = Number(item.payload.reportManagerId);
+        const [managers, viewers, current] = await Promise.all([
+          generalManagers(item.dealerId),
+          usersWithPermission(item.dealerId, "leads"),
+          db.select({ phone: usersTable.phone }).from(usersTable)
+            .where(eq(usersTable.id, managerId || -1)),
+        ]);
+        const { getServiceSettings } = await import("./service-settings");
+        const settings = await getServiceSettings(item.dealerId);
+        if (!settings.leadSourceReportEnabled ||
+            !managers.includes(managerId) || !viewers.includes(managerId) ||
+            normalizeWhatsappPhone(current[0]?.phone ?? "") !== normalizeWhatsappPhone(item.recipient)) {
+          await cancelQueuedWhatsapp(item, "Daily report recipient or report settings are no longer eligible.");
+          return;
+        }
+      }
       const insideReplyWindow = await isWhatsappReplyWindowOpen(
         item.dealerId,
         item.recipient,
