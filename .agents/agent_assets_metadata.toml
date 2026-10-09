@@ -363,3 +363,31 @@ mtime_ms = 1791310316858
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/682f4af8-c91d-410f-8c64-0361c65ff114/087cbadf-0d5c-4186-aaab-4d6a9600b30e"
 storage_version_token = "1791310338132600"
 content_type = "text/html"
+
+[[outputs]]
+id = "veROF5LugcrCaakz_gpxj"
+uri = "file://docs/vehicle-shipment-allocation-brd-v1.0.pdf"
+type = "pdf"
+title = "Vehicle Shipment Allocation — Approval BRD v1.0"
+description = "11-page approval draft with scope, workflows, business rules, decision register, 17 UAT scenarios and stakeholder sign-off."
+logical_id = "8dd696a2-5e86-4817-901f-f2e1b72808b1"
+content_hash = "sha256:6cf9aff12672d16f83a7cd1171f06546bcfaf2a12412cd3df86dd6d31f8128d8"
+size = 212451
+mtime_ms = 1791551899690
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/8dd696a2-5e86-4817-901f-f2e1b72808b1/c58d7f31-08f7-4846-97c1-ba0643580056"
+storage_version_token = "1791551922693093"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "IcDiIn8oaNnGXa4FSjDkD"
+uri = "file://docs/vehicle-shipment-allocation-brd-v1.0.html"
+type = "html"
+title = "Shipment Allocation BRD — Browser Version"
+description = "Searchable, printable version of the same approval document."
+logical_id = "290e2cbe-d0b9-49d0-93b8-75dc60c2d980"
+content_hash = "sha256:92342f448b4a128e3f005cd8374cdf624c313bb9bff84c727e543036900a1a0d"
+size = 34054
+mtime_ms = 1791551873178
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/290e2cbe-d0b9-49d0-93b8-75dc60c2d980/8e71c6cd-f1a5-4111-834e-9a0ee0d18618"
+storage_version_token = "1791551923929805"
+content_type = "text/html"

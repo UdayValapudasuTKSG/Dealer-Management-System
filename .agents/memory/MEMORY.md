@@ -87,3 +87,4 @@
 - [Workshop oil boundaries](workshop-oil-boundaries.md) — fractional litres stay distinct from countable parts; issue deducts once, and physical returns do not imply financial credits.
 - [Workshop revenue report approval](workshop-revenue-report-approval.md) — approved BRD baseline; branch isolation and GL reconciliation cannot be silently omitted.
 - [Test-drive customer branding](test-drive-customer-branding.md) — public invitations use GT/CAM identity and user-confirmed showroom locations, not AURA OS.
+- [Shipment allocation approval](shipment-allocation-approval.md) — BRD approval required before implementation; resolve VIN commitment and shortage fairness against existing holds.

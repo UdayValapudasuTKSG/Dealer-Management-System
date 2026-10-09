@@ -1,0 +1,68 @@
+Functional Requirements Document: Vehicle Shipment Allocation & Lead Tracking Flow
+
+Document Overview: This document outlines the functional requirements, workflow logic, state transitions, and automated communications for managing vehicle shipments, allocations, VIN assignments, and lead advancement within the Dealership Management System (DMS).
+1. Executive Summary & Objectives
+The objective of this feature implementation is to enhance the existing Dealership Management System (DMS) by introducing a structured workflow for tracking vehicle shipments and linking customer leads to physical/expected inventory. This flow ensures that a customer lead cannot transition to the "Vehicle Allocated" state without being validly assigned to an active shipment, provides automated email tracking for estimated arrival dates, and enables flexible re-assignment and automated VIN matching.
+2. Process Workflow & Criteria Overview
+Stage / Trigger
+Prerequisites & Criteria
+System Actions
+Automated Notifications
+ 
+Pre-Book State
+Lead advanced to "Pre-Book" status.
+Unlocks eligibility for shipment assignment.
+Standard Pre-Book confirmation (if configured).
+Shipment Assignment
+Valid shipment exists matching model/color preference.
+Associates Lead ID with specified Shipment ID.
+N/A
+Advancement to "Vehicle Allocated"
+1. Lead is in Pre-Book state.
+2. Assigned to an active shipment.
+3. All allocation criteria satisfied.
+Updates lead status to "Vehicle Allocated". Locks baseline allocation data.
+Allocation Email: Notifies customer of allocation and baseline ETA. Includes ETA variance disclaimer.
+Shipment Date Adjustment
+Authorized dealership staff modifies shipment arrival month/year.
+Recalculates delivery schedules for all attached customer leads.
+Date Shift Email: Alerts affected customers of updated ETA and disclaimer.
+VIN Upload & Assignment
+Shipment manifest with VINs uploaded.
+Executes random automated matching algorithm by Model + Color + Specs.
+Updates inventory records and attaches permanent VIN to customer record.
+
+3. Key System Requirements & Capabilities
+3.1 Shipment Creation & Management
+The DMS must support two distinct mechanisms for creating and managing incoming vehicle shipments:
+File Import Method: Support standard file upload (e.g., CSV/Excel) allowing bulk entry of shipment details, vehicle models, trim levels, colors, quantities, and expected delivery dates.
+UI-Focused Interactive View:
+An intuitive interface enabling users to create a new shipment entry.
+Ability to build a shipment by selecting an assortment of vehicle models, variants, and exterior/interior colors.
+Assignment of a target delivery timeline specified by month and year (e.g., November 2026).
+3.2 Lead Lifecycle & Advancement Rules
+Advancement Gate: Moving a customer from the "Pre-Book" status to "Vehicle Allocated" requires a hard validation check verifying that the lead has been assigned to a valid shipment containing matching vehicle specs.
+Re-assignment Flexibility: Dealership staff must be allowed to edit or re-assign a customer's allocated shipment. This accommodates scenarios where customer preferences change (e.g., color/model change) or logistics schedules require shifting leads across different shipment batches.
+3.3 Automated Customer Communications
+The system must automatically trigger transactional notifications based on key workflow events:
+Initial Allocation Email: Triggered immediately upon advancing to "Vehicle Allocated".
+Outlines vehicle allocation details.
+Displays the estimated shipment ETA date.
+Required Legal/Policy Disclaimer: Must explicitly state that the ETA is an estimate and subject to change based on logistics and transit variables.
+ETA Shift / Update Email: Triggered whenever dealership staff edits shipment arrival dates.
+Identifies the revised estimated ETA date.
+Contains clear wording informing the customer of the date shift.
+Includes the required disclaimer highlighting that the updated ETA remains subject to change.
+3.4 VIN Upload & Automated Matching Engine
+When physical VIN numbers become available for a shipment, the system must execute an automated assignment process:
+VIN File Upload: Interface to import VIN lists associated with a specific Shipment ID.
+Randomized Auto-Matching Logic: The system must automatically and randomly match incoming VINs to allocated customers under the following strict rules:
+Exact match on vehicle Model.
+Exact match on vehicle Color and Trim specifications.
+Random distribution among eligible customers to eliminate manual bias.
+Audit & Reporting: Generate an assignment summary log showing successful VIN-to-customer mappings and alerting staff of any unassigned VINs or unmatched customers.
+4. Summary of Functional Rules & Logic
+Rule 1: No lead shall advance to "Vehicle Allocated" without an active shipment reference.
+Rule 2: Any update to a shipment's target date must trigger a batch notification to all assigned customers.
+Rule 3: Re-assignment of shipments must re-validate color and model suitability before confirmation.
+Rule 4: Automated VIN assignment must respect variant and color parity prior to random selection.
