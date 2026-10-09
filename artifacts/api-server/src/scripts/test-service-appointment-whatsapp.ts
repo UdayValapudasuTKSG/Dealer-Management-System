@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { leadReportWhatsappTemplate } from "../lib/lead-report-whatsapp";
 import { renderEmail } from "../lib/email";
 import {
   SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE,
@@ -59,6 +60,24 @@ assert.deepEqual(payload, {
 });
 
 const originalFetch = globalThis.fetch;
+assert.deepEqual(leadReportWhatsappTemplate(1, "leads.source.report.daily"), {
+  name: "daily_lead_source_report", language: "en_US",
+});
+assert.equal(leadReportWhatsappTemplate(99, "leads.source.report.daily"), null);
+assert.equal(leadReportWhatsappTemplate(1, "feedback.survey"), null);
+assert.equal(leadReportWhatsappTemplate(1, "service.appointment.confirmed"), null);
+const reportPayload = whatsappTemplateMessagePayload({
+  ...leadReportWhatsappTemplate(1, "leads.source.report.daily")!,
+  body: "New leads: 24\nContacted: 18",
+});
+assert.deepEqual(reportPayload, {
+  type: "template",
+  template: {
+    name: "daily_lead_source_report",
+    language: { code: "en_US" },
+    components: [{ type: "body", parameters: [{ type: "text", text: "New leads: 24 Contacted: 18" }] }],
+  },
+});
 const normalizedPayload = whatsappTemplateMessagePayload({
   name: "aura_service_update",
   language: "en_US",

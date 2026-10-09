@@ -1,8 +1,8 @@
 ---
+ 
 name: Dealer-scoped WhatsApp outbound
 description: Fail-closed dealer channel resolution, opt-out enforcement, and legacy Twilio boundaries
 ---
-
 Every proactive WhatsApp send must resolve an enabled channel from the message's dealership. A missing or disabled dealer channel is a delivery failure; never fall back to a process-wide sender or another dealer's credentials.
 
 **Why:** A global provider fallback can send one dealership's customer communication from another business number. Direct sends can also bypass dealership-scoped STOP preferences and omit the customer transcript.
@@ -12,6 +12,12 @@ Meta request outcomes must distinguish definite rejection from uncertainty. Retr
 **Why:** A lost HTTP response after Meta accepts can otherwise produce a duplicate customer message. Concurrent failed/delivered receipts can also both pass an application-level precheck and overwrite each other.
 
 **How to apply:** Put customer-facing sends through the dealer-scoped outbox so channel lookup, STOP suppression, request correlation, and transcript recording stay together. Include a stable opaque outbox correlation value in provider requests; terminally fail stale unknown outcomes without automatic resend. Fail closed for Twilio WhatsApp unless the receiving sender number has an explicit dealer mapping.
+
+The user reported the dedicated daily manager-report template qualified after being guided through a GT-branded submission. Do not treat this as approval for CAM.
+
+**Why:** Template approval belongs to the sending account, and this submitted copy explicitly names GT Automotive.
+
+**How to apply:** Keep report routing separate from customer templates; verify account approval and branding before extending dedicated report delivery to another dealership.
 
 Meta HTTP 404 alone does not identify a sender/endpoint defect. Inspect the sanitized provider code and validate the exact template language, header, body and placeholder occurrences against live GET-only metadata before changing configuration.
 

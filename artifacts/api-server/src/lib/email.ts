@@ -1,5 +1,6 @@
 import { and, desc, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { loadServiceInvoicePartsCharges } from "./parts-estimate-charges";
+import { leadReportWhatsappTemplate } from "./lead-report-whatsapp";
 import {
   db,
   pool,
@@ -2612,7 +2613,9 @@ export async function enqueueWhatsapp(
       );
     }
     const channel = await getChannelByDealerId(opts.dealerId);
-    if (!opts.approvedTemplate && !channel?.serviceTemplateName) {
+    if (!opts.approvedTemplate &&
+        !leadReportWhatsappTemplate(opts.dealerId, opts.kind) &&
+        !channel?.serviceTemplateName) {
       return cancelledWhatsappLog(
         queueOpts,
         digits,
@@ -3337,6 +3340,7 @@ async function processWhatsappQueue(): Promise<void> {
       if (
         !insideReplyWindow &&
         !isServiceAppointmentTemplate &&
+        !leadReportWhatsappTemplate(item.dealerId, item.template) &&
         !dealerChannel.serviceTemplateName
       ) {
         await cancelQueuedWhatsapp(
@@ -3438,6 +3442,11 @@ async function processWhatsappQueue(): Promise<void> {
             name: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name,
             language: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.language,
             bodyParameters: approvedBodyParameters!,
+          }, correlationId)
+        : leadReportWhatsappTemplate(item.dealerId, item.template)
+        ? await sendWhatsappTemplate(dealerChannel, item.recipient, {
+            ...leadReportWhatsappTemplate(item.dealerId, item.template)!,
+            body,
           }, correlationId)
         : !insideReplyWindow
         ? await sendWhatsappTemplate(dealerChannel, item.recipient, {
