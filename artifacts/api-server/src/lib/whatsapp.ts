@@ -999,7 +999,6 @@ export function whatsappTemplateMessagePayload(opts: {
   language: string;
   body?: string;
   bodyParameters?: readonly string[];
-  documentHeader?: { mediaId: string; filename: string };
 }): Record<string, unknown> {
   // Meta forbids newlines, tabs and long space runs inside template variables,
   // even though fixed template text and ordinary chat messages may use them.
@@ -1018,22 +1017,12 @@ export function whatsappTemplateMessagePayload(opts: {
       "terminal_rejection",
     );
   }
-  if (opts.documentHeader && (!opts.documentHeader.mediaId.trim() || !opts.documentHeader.filename.trim())) {
-    throw new WhatsappProviderSendError("WhatsApp document header is invalid", "terminal_rejection");
-  }
   return {
     type: "template",
     template: {
       name: opts.name,
       language: { code: opts.language },
       components: [
-        ...(opts.documentHeader ? [{
-          type: "header",
-          parameters: [{
-            type: "document",
-            document: { id: opts.documentHeader.mediaId, filename: opts.documentHeader.filename },
-          }],
-        }] : []),
         {
           type: "body",
           parameters: bodyParameters.map((text) => ({ type: "text", text })),
@@ -1055,7 +1044,6 @@ export async function sendWhatsappTemplate(
     language: string;
     body?: string;
     bodyParameters?: readonly string[];
-    documentHeader?: { mediaId: string; filename: string };
   },
   correlationId?: string,
 ): Promise<WhatsappSendResult> {
