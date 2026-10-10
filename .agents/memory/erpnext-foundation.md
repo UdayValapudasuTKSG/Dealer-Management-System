@@ -16,6 +16,12 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - Remote-create + local-ref is a crash window: persist the ref before submit and reconcile orphans by a deterministic remarks key before creating financial docs, or retries duplicate them.
 
 ## Environment/company mapping
+## Workflow document versus master accounts
+- The supplied GT Transaction Workflows v1.0 references a separate ERP Master Chart of Accounts v1.0; it does not define every model/brand ledger. Treat code ranges and `xx` placeholders as unresolved, not permission to invent accounts.
+  **Why:** A workflow posting guide supplies account purposes and control accounts but lacks the leaf mappings needed for a complete ERPNext chart.
+  **How to apply:** Keep prepared charts explicitly draft until the master list and existing ERPNext account export/template are reconciled. Never replace an existing company chart or load historical balances from narrative examples.
+
+## Confirmed test environment
 - On 2026-10-10, the user explicitly confirmed ERPNext company `GT AUTOMOTIVE` on `https://erpnext-jcy-qlx.m.frappe.cloud` is test-only and authorized using it for AURA's CAM Motors Dummy dealership in production. Its screenshot showed GYD, Guyana and perpetual inventory enabled.
   **Why:** The AURA dealership and ERPNext company intentionally have different names; this particular mapping is approved for dummy testing.
   **How to apply:** Continue test setup for this pairing without repeatedly asking whether that company is live. This does not authorize connecting real GT/CAM dealerships, changing posting rules, or backfilling existing transactions.

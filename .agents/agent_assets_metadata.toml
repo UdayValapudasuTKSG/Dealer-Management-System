@@ -391,3 +391,17 @@ mtime_ms = 1791551873178
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/290e2cbe-d0b9-49d0-93b8-75dc60c2d980/8e71c6cd-f1a5-4111-834e-9a0ee0d18618"
 storage_version_token = "1791551923929805"
 content_type = "text/html"
+
+[[outputs]]
+id = "mrTKfpD2irajRl2zXkukD"
+uri = "file://generated-artifacts/gt-coa/CAM-Motors-Dummy-GT-COA-Review.xlsx"
+type = "table"
+title = "CAM Motors Dummy — Chart of Accounts Review"
+description = "Source-based draft for the GT AUTOMOTIVE ERPNext test company: 53 identifiable accounts, proposed classifications, 19 unresolved account families, AURA mappings, approval questions and PDF evidence. Not yet import-ready."
+logical_id = "8ef221b4-5216-43d0-b7b8-07941915a4ee"
+content_hash = "sha256:b444d68d929953c329c1c6b3956d86c930435f4eafdfc74baff5f868326a1640"
+size = 24711
+mtime_ms = 1791645222064
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/8ef221b4-5216-43d0-b7b8-07941915a4ee/de68e301-39b4-43dc-bae9-8dab825aee88"
+storage_version_token = "1791645252911855"
+content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

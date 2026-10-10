@@ -51,3 +51,4 @@ artifacts/api-server/uploads/
 
 uploads/
 .gate-dist.*
+/generated-artifacts/
