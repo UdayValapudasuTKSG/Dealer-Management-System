@@ -405,3 +405,31 @@ mtime_ms = 1791645222064
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/8ef221b4-5216-43d0-b7b8-07941915a4ee/de68e301-39b4-43dc-bae9-8dab825aee88"
 storage_version_token = "1791645252911855"
 content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+[[outputs]]
+id = "uJVFC3dnck52FwGIAyZDM"
+uri = "file://generated-artifacts/gt-coa/GT-Automotive-Test-Account-Setup.html"
+type = "html"
+title = "ERPNext Test Setup — Verified Results"
+description = "30 accounts created, 10 existing accounts identified for reuse, 13 held, and exact AURA settings still to save. Includes verification results and remaining limitations."
+logical_id = "ee7e7bcc-02ed-4a6f-a572-df74e8bd41eb"
+content_hash = "sha256:0f8cf12d78f5c7bd97edc54f122392c1017384366bcfb79c19d06b3908a0c808"
+size = 11666
+mtime_ms = 1791645889217
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/ee7e7bcc-02ed-4a6f-a572-df74e8bd41eb/4bed9843-0284-49e4-94cf-3be7ec5e70fe"
+storage_version_token = "1791645901622998"
+content_type = "text/html"
+
+[[outputs]]
+id = "Sg0UsNOdZozjRjmGw1HCF"
+uri = "file://generated-artifacts/gt-coa/Verified-ERPNext-Account-Crosswalk.csv"
+type = "table"
+title = "Verified Account Cross-Reference"
+description = "All 53 reviewed accounts with their source codes, exact ERPNext names and setup status."
+logical_id = "d885b568-dfe4-4c2d-83c5-d377d9096579"
+content_hash = "sha256:bf63279e2070239dd03c997f3bc47d5b1be7cce1e0e53151610d3d10b3186965"
+size = 5944
+mtime_ms = 1791645889217
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/d885b568-dfe4-4c2d-83c5-d377d9096579/a13425d8-dad1-4584-964b-498e9bd20150"
+storage_version_token = "1791645902717558"
+content_type = "text/csv"

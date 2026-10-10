@@ -17,6 +17,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 
 ## Environment/company mapping
 ## Workflow document versus master accounts
+- Reuse compatible existing test-company accounts without renumbering them to the workflow's seven-digit codes; retain an explicit source-code-to-ERPNext-account cross-reference.
+  **Why:** The existing ERPNext company uses a four-digit chart and configured defaults. Replacing or renumbering it risks breaking those references; the user approved a limited dummy setup, not a chart replacement.
+  **How to apply:** Resolve by exact ERPNext account document name for AURA settings. Do not assume a workflow code is itself an ERPNext account identifier, or that created accounts implement the related posting flow.
 - The supplied GT Transaction Workflows v1.0 references a separate ERP Master Chart of Accounts v1.0; it does not define every model/brand ledger. Treat code ranges and `xx` placeholders as unresolved, not permission to invent accounts.
   **Why:** A workflow posting guide supplies account purposes and control accounts but lacks the leaf mappings needed for a complete ERPNext chart.
   **How to apply:** Keep prepared charts explicitly draft until the master list and existing ERPNext account export/template are reconciled. Never replace an existing company chart or load historical balances from narrative examples.
