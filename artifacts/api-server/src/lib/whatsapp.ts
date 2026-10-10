@@ -999,6 +999,7 @@ export function whatsappTemplateMessagePayload(opts: {
   language: string;
   body?: string;
   bodyParameters?: readonly string[];
+  document?: { mediaId: string; filename: string };
 }): Record<string, unknown> {
   // Meta forbids newlines, tabs and long space runs inside template variables,
   // even though fixed template text and ordinary chat messages may use them.
@@ -1023,6 +1024,13 @@ export function whatsappTemplateMessagePayload(opts: {
       name: opts.name,
       language: { code: opts.language },
       components: [
+        ...(opts.document ? [{
+          type: "header",
+          parameters: [{
+            type: "document",
+            document: { id: opts.document.mediaId, filename: opts.document.filename },
+          }],
+        }] : []),
         {
           type: "body",
           parameters: bodyParameters.map((text) => ({ type: "text", text })),
@@ -1044,6 +1052,7 @@ export async function sendWhatsappTemplate(
     language: string;
     body?: string;
     bodyParameters?: readonly string[];
+    document?: { mediaId: string; filename: string };
   },
   correlationId?: string,
 ): Promise<WhatsappSendResult> {

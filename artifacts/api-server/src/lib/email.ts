@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { loadServiceInvoicePartsCharges } from "./parts-estimate-charges";
 import { leadReportWhatsappTemplate } from "./lead-report-whatsapp";
+import { quoteDocumentWhatsappTemplate, quoteDocumentTemplateParameters } from "./quote-document-whatsapp";
 import {
   db,
   pool,
@@ -2605,15 +2606,16 @@ export async function enqueueWhatsapp(
 
   const targetTime = opts.sendAt ?? new Date();
   if (!(await isWhatsappReplyWindowOpen(opts.dealerId, digits, targetTime))) {
-    if (opts.document) {
+    if (opts.document && !quoteDocumentWhatsappTemplate(opts.dealerId)) {
       return cancelledWhatsappLog(
         queueOpts,
         digits,
-        "The 24-hour WhatsApp reply window is closed. Meta only allows this quote PDF after the customer sends a new message.",
+        "The 24-hour WhatsApp reply window is closed and this dealership has no approved quote-document template configured. Ask the customer to reply before sending.",
       );
     }
     const channel = await getChannelByDealerId(opts.dealerId);
     if (!opts.approvedTemplate &&
+        !(opts.document && quoteDocumentWhatsappTemplate(opts.dealerId)) &&
         !leadReportWhatsappTemplate(opts.dealerId, opts.kind) &&
         !channel?.serviceTemplateName) {
       return cancelledWhatsappLog(
@@ -3330,7 +3332,8 @@ async function processWhatsappQueue(): Promise<void> {
         item.recipient,
       );
       const isQuoteDocument = item.payload?.documentKind === "quote_pdf";
-      if (!insideReplyWindow && isQuoteDocument) {
+      const quoteTemplate = isQuoteDocument ? quoteDocumentWhatsappTemplate(item.dealerId) : null;
+      if (!insideReplyWindow && isQuoteDocument && !quoteTemplate) {
         await cancelQueuedWhatsapp(
           item,
           "The 24-hour WhatsApp reply window closed before the quote PDF could be delivered. Ask the customer to send a new message, then retry.",
@@ -3340,6 +3343,7 @@ async function processWhatsappQueue(): Promise<void> {
       if (
         !insideReplyWindow &&
         !isServiceAppointmentTemplate &&
+        !quoteTemplate &&
         !leadReportWhatsappTemplate(item.dealerId, item.template) &&
         !dealerChannel.serviceTemplateName
       ) {
@@ -3363,6 +3367,7 @@ async function processWhatsappQueue(): Promise<void> {
       }
       let documentMediaId: string | null = null;
       let documentFileName: string | null = null;
+      let quoteBodyParameters: string[] | undefined;
       if (isQuoteDocument) {
         if (!item.payload?.documentDataJson) {
           throw new WhatsappProviderSendError(
@@ -3378,6 +3383,16 @@ async function processWhatsappQueue(): Promise<void> {
             "Queued WhatsApp quote PDF data is invalid",
             "terminal_rejection",
           );
+        }
+        if (quoteTemplate) {
+          try {
+            quoteBodyParameters = quoteDocumentTemplateParameters(quoteData);
+          } catch {
+            throw new WhatsappProviderSendError(
+              "Queued quote is missing its customer name or estimate reference.",
+              "terminal_rejection",
+            );
+          }
         }
         const branding = await getDealerPdfBranding(item.dealerId);
         const pdf = await buildQuotePdf(
@@ -3400,6 +3415,15 @@ async function processWhatsappQueue(): Promise<void> {
           filename: documentFileName,
           mimeType: "application/pdf",
         });
+      }
+      // PDF preparation may outlast the reply window; decide before claiming
+      // provider handoff so a local policy rejection is not an uncertain send.
+      const documentNeedsTemplate = !!documentMediaId &&
+        !(await isWhatsappReplyWindowOpen(item.dealerId, item.recipient));
+      if (documentNeedsTemplate && !quoteTemplate) {
+        await cancelQueuedWhatsapp(item,
+          "The reply window closed during PDF preparation and no approved document template is configured.");
+        return;
       }
       const [sending] = await db
         .update(emailLogsTable)
@@ -3427,7 +3451,13 @@ async function processWhatsappQueue(): Promise<void> {
       sendStarted = true;
       const correlationId = `aura-outbox:${item.id}`;
       const result = documentMediaId && documentFileName
-        ? await sendWhatsappDocument(
+        ? documentNeedsTemplate
+          ? await sendWhatsappTemplate(dealerChannel, item.recipient, {
+              ...quoteTemplate!,
+              bodyParameters: quoteBodyParameters!,
+              document: { mediaId: documentMediaId, filename: documentFileName },
+            }, correlationId)
+          : await sendWhatsappDocument(
             dealerChannel,
             item.recipient,
             {
@@ -3503,7 +3533,7 @@ async function processWhatsappQueue(): Promise<void> {
           id: item.id,
           kind: item.template,
           mode: documentMediaId
-            ? "document"
+            ? documentNeedsTemplate ? "document_template" : "document"
             : insideReplyWindow
               ? "text"
               : "template",
