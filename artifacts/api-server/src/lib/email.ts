@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { loadServiceInvoicePartsCharges } from "./parts-estimate-charges";
 import { leadReportWhatsappTemplate } from "./lead-report-whatsapp";
+import { quoteDocumentTemplate, quoteDocumentTemplateParameters } from "./quote-document-template";
 import {
   db,
   pool,
@@ -2605,15 +2606,16 @@ export async function enqueueWhatsapp(
 
   const targetTime = opts.sendAt ?? new Date();
   if (!(await isWhatsappReplyWindowOpen(opts.dealerId, digits, targetTime))) {
-    if (opts.document) {
+    if (opts.document && !quoteDocumentTemplate(opts.dealerId)) {
       return cancelledWhatsappLog(
         queueOpts,
         digits,
-        "The 24-hour WhatsApp reply window is closed. Meta only allows this quote PDF after the customer sends a new message.",
+        "The 24-hour WhatsApp reply window is closed and no approved document template is configured for this dealership.",
       );
     }
     const channel = await getChannelByDealerId(opts.dealerId);
     if (!opts.approvedTemplate &&
+        !(opts.document && quoteDocumentTemplate(opts.dealerId)) &&
         !leadReportWhatsappTemplate(opts.dealerId, opts.kind) &&
         !channel?.serviceTemplateName) {
       return cancelledWhatsappLog(
@@ -3330,16 +3332,18 @@ async function processWhatsappQueue(): Promise<void> {
         item.recipient,
       );
       const isQuoteDocument = item.payload?.documentKind === "quote_pdf";
-      if (!insideReplyWindow && isQuoteDocument) {
+      const quoteTemplate = isQuoteDocument ? quoteDocumentTemplate(item.dealerId) : null;
+      if (!insideReplyWindow && isQuoteDocument && !quoteTemplate) {
         await cancelQueuedWhatsapp(
           item,
-          "The 24-hour WhatsApp reply window closed before the quote PDF could be delivered. Ask the customer to send a new message, then retry.",
+          "The 24-hour WhatsApp reply window closed and no approved document template is configured for this dealership. Ask the customer to send a new message, then retry.",
         );
         return;
       }
       if (
         !insideReplyWindow &&
         !isServiceAppointmentTemplate &&
+        !quoteTemplate &&
         !leadReportWhatsappTemplate(item.dealerId, item.template) &&
         !dealerChannel.serviceTemplateName
       ) {
@@ -3363,6 +3367,7 @@ async function processWhatsappQueue(): Promise<void> {
       }
       let documentMediaId: string | null = null;
       let documentFileName: string | null = null;
+      let quoteTemplateParameters: string[] | null = null;
       if (isQuoteDocument) {
         if (!item.payload?.documentDataJson) {
           throw new WhatsappProviderSendError(
@@ -3380,6 +3385,9 @@ async function processWhatsappQueue(): Promise<void> {
           );
         }
         const branding = await getDealerPdfBranding(item.dealerId);
+        if (!insideReplyWindow && quoteTemplate) {
+          quoteTemplateParameters = quoteDocumentTemplateParameters(quoteData);
+        }
         const pdf = await buildQuotePdf(
           quoteData,
           await dealerTimezone(item.dealerId),
@@ -3427,7 +3435,13 @@ async function processWhatsappQueue(): Promise<void> {
       sendStarted = true;
       const correlationId = `aura-outbox:${item.id}`;
       const result = documentMediaId && documentFileName
-        ? await sendWhatsappDocument(
+        ? !insideReplyWindow && quoteTemplate
+          ? await sendWhatsappTemplate(dealerChannel, item.recipient, {
+              ...quoteTemplate,
+              bodyParameters: quoteTemplateParameters!,
+              documentHeader: { mediaId: documentMediaId, filename: documentFileName },
+            }, correlationId)
+          : await sendWhatsappDocument(
             dealerChannel,
             item.recipient,
             {
