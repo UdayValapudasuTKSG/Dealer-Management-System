@@ -4136,6 +4136,8 @@ export interface BookTestDriveInput {
 
 export interface AssignLeadInput {
   userId: number;
+  /** For bulk call-centre reassignment, reject if ownership changed since preview. */
+  expectedCallCentreRepId?: number;
 }
 
 export interface LeadTestDriveInput {

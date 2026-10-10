@@ -36,6 +36,7 @@ export async function reassignCallCentreLead(
   leadId: number,
   userId: number,
   actor: { name: string | null },
+  expectedCallCentreRepId?: number,
 ): Promise<Lead> {
   return db.transaction(async (tx) => {
     await lockAssignmentQueue(tx, dealerId);
@@ -43,6 +44,10 @@ export async function reassignCallCentreLead(
       eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId), isNull(leadsTable.deletedAt),
     )).for("update");
     if (!lead) throw new CallCentreError(404, "Lead not found");
+    if (expectedCallCentreRepId !== undefined &&
+        (lead.callCentreRepId !== expectedCallCentreRepId || lead.ownerUserId !== expectedCallCentreRepId)) {
+      throw new CallCentreError(409, "Lead ownership changed since preview; refresh before retrying");
+    }
     if (!isActiveCallCentreLead(lead) || lead.callCentreTransferredAt ||
         !["new", "contacted"].includes(lead.phase) || ["lost", "converted"].includes(lead.status)) {
       throw new CallCentreError(409, "This lead is no longer awaiting call-centre qualification");

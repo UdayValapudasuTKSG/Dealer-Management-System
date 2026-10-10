@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { BulkCallCentreReassign } from "@/components/bulk-call-centre-reassign";
 import { Link, useLocation, useSearch } from "wouter";
 import {
   useListDeals,
@@ -222,7 +223,7 @@ export default function Leads() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createLead = useCreateLead();
-  const { me } = useAuthz();
+  const { me, can } = useAuthz();
   const { density, setDensity, layout, setLayout } = useViewMode("pipeline");
   const [slaClock, setSlaClock] = useState(() => Date.now());
 
@@ -838,6 +839,7 @@ export default function Leads() {
         action={heroActions}
       />
       <Page className="space-y-3 pt-0">
+        {can("leads", "assign") && <div className="flex justify-end"><BulkCallCentreReassign /></div>}
         <div className="flex flex-col gap-3 mt-2 mb-2">
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1 flex items-center group">

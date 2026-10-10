@@ -13972,6 +13972,9 @@ components:
       required: [userId]
       properties:
         userId: { type: integer }
+        expectedCallCentreRepId:
+          type: integer
+          description: For bulk call-centre reassignment, reject if ownership changed since preview.
     LeadTestDriveInput:
       type: object
       required: [scheduledAt, licenceNumber, waiverAccepted]

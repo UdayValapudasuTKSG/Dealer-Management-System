@@ -2711,7 +2711,8 @@ export const AssignLeadParams = zod.object({
 })
 
 export const AssignLeadBody = zod.object({
-  "userId": zod.number()
+  "userId": zod.number(),
+  "expectedCallCentreRepId": zod.number().optional().describe('For bulk call-centre reassignment, reject if ownership changed since preview.')
 })
 
 

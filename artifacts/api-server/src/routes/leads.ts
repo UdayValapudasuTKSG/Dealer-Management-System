@@ -1991,9 +1991,9 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
-  if (isActiveCallCentreLead(existing)) {
+  if (isActiveCallCentreLead(existing) || parsed.data.expectedCallCentreRepId !== undefined) {
     try {
-      const lead = await reassignCallCentreLead(activeDealerId(res), existing.id, parsed.data.userId, res.locals.user);
+      const lead = await reassignCallCentreLead(activeDealerId(res), existing.id, parsed.data.userId, res.locals.user, parsed.data.expectedCallCentreRepId);
       if (lead.callCentreRepId === parsed.data.userId && (existing.ownerUserId !== lead.ownerUserId || existing.callCentreRepId !== lead.callCentreRepId)) {
         notifyLeadAssigned(lead);
       }
