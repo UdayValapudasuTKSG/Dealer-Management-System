@@ -1,0 +1,72 @@
+Business Requirements Document (BRD) - Version 1.1
+Project: Vehicle Shipment Allocation & Lead Tracking
+System: AURA Dealership Management System (GT Automotive / CAM Motors)
+Date: October 9, 2026
+Document Version: 1.1 (Updated Post Business Review & Decision Sign-off)
+
+Status: Approved Business Scope (Key Decisions D1–D7 Resolved & Multi-User Constraints Formulated)
+1. Executive Summary & Document Revision Purpose
+This updated Business Requirements Document (v1.1) captures the formal resolution of key open decisions (D1–D8) following executive review, along with critical operational controls regarding concurrency and partial data processing. It establishes the baseline functional, data, and communication requirements prior to entering technical engineering design.
+2. Decision Register & Business Approvals (Section 11 Updates)
+The following decisions have been formally resolved and integrated into the system baseline:
+Decision ID
+Topic / Area
+Resolved Business Rule & Decision
+ 
+D1 & D2
+Pre-Book Qualification, VIN Claims & Dummy VIN Evaluation
+Rejected Recommendation (No Dummy VINs): Dummy VINs will NOT be used to bridge demand to shipments. Creating artificial vehicle identities corrupts inventory history, breaches audit trails, and causes financial commitment conflicts with real reservation holds.
+
+Approved Rule: Allocation remains quantity-based at the Vehicle Allocated phase. A physical claim occurs strictly when true factory VIN manifests arrive. Matching proposes claims into the existing claim authority without overwriting existing paid holds.
+D3
+Exact Matching Catalogue & Year Models
+Approved Direction: Confirmation in progress with inventory stakeholders (Sheri) to establish pre-defined year models and catalog specs prior to shipment import or creation. Blank fields will not act as wildcards.
+D4 & D6
+Shortage Allocation Priority & Override Approvals
+Approved Rule: When demand exceeds incoming supply, oldest eligible allocation (by baseline timestamp) takes top priority for entitlement. Physical VIN identities within that group are assigned via randomized exact-matching.
+D7
+Customer Communications Triggering Policy
+Approved Rule: Updates and ETA shift notifications trigger when shipment details change AND the estimated ETA is roughly 1 month away. Distance-out updates (>1 month) are logged internally without sending customer emails to prevent notification fatigue.
+
+3. Key System Controls & Operational Integrity
+3.1 Concurrent Shipment Editing (Pessimistic Locking)
+To prevent race conditions, duplicate allocations, and data corruption when multiple dealership staff access the shipment module simultaneously:
+Single-User Active Edit Lock: Only one user at a time can hold write privileges for a specific shipment section or record.
+Read-Only Access for Concurrent Users: Additional staff opening the same shipment will see a read-only view with a clear active lock notification indicating which user is currently editing.
+Lock Timeout & Release: Automatic session timeouts release locks after inactivity to prevent abandoned records.
+3.2 Import Error Handling & Data Validation Strategy
+Based on operational feedback, the initial "reject-all" strict policy has been relaxed to support operational efficiency:
+Partial Rejection Permitted: During bulk CSV/XLSX imports (shipment lines or VIN manifests), valid rows are accepted and processed while invalid rows are isolated into a downloadable error report.
+Row-Level Error Reporting: The system highlights exact row numbers and validation failure reasons (e.g., duplicate VINs, unknown color variants, non-positive quantities) for quick re-upload.
+Atomic Execution per Valid Row: Partial processing must not create orphan records or duplicate customer claims.
+4. Process Lifecycle & Workflow Summary
+Stage / Trigger
+Prerequisites & Criteria
+System Actions
+Automated Notifications
+ 
+Pre-Book State
+Lead qualified and pre-book record created.
+Unlocks eligibility for shipment capacity assignment.
+Standard Pre-Book confirmation (if configured).
+Shipment Allocation
+Active shipment exists with capacity matching specs.
+Reserves capacity line item; associates Lead ID with Shipment Line.
+N/A
+Advancement to Vehicle Allocated
+Pre-book eligible, active shipment, capacity available.
+Updates lead status to Vehicle Allocated; freezes baseline ETA snapshot.
+Initial Allocation Email sent with baseline arrival date & legal disclaimer.
+Shipment Date / ETA Adjustment
+Authorized edit on shipment ETA.
+Recalculates delivery timelines for all attached customer leads.
+Conditional Email: Sent only if updated ETA is approximately 1 month away.
+VIN Upload & Matching
+Factory VIN manifest imported.
+Randomized exact-match within oldest eligible demand priority group.
+Updates inventory status and attaches permanent VIN to customer record.
+
+5. Acceptance & Next Steps
+Finalize Specification Catalog (D3): Confirm model year structure and template attributes with Sheri.
+Engineering Hand-off: Initiate technical design, database schema updates, lock implementation specs, and API contracts.
+UAT Test Suite Generation: Map acceptance tests (UAT-01 to UAT-17) against the revised rules in v1.1.
