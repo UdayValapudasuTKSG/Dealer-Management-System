@@ -28,6 +28,12 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
   **How to apply:** Keep prepared charts explicitly draft until the master list and existing ERPNext account export/template are reconciled. Never replace an existing company chart or load historical balances from narrative examples.
 
 ## Confirmed test environment
+- The user authorised isolated, clearly labelled sample vehicles and artificial costs for the dummy sales-flow test, separate from existing inventory and transactions.
+  **Why:** No authoritative VIN stock/cost records were initially present in ERPNext; selling prices must never be substituted for landed costs.
+  **How to apply:** Keep test fixtures identifiable and excluded from historical backfills. Direct fixture-script success is not proof that AURA's production handlers implement that flow.
+- The test site's stock and compliance features affect API payloads: serial support must be enabled before serialised Item creation, and its installed HSN validator requires an existing six/eight-digit code even for dummy items.
+  **Why:** Company country/currency alone does not control installed compliance extensions. The site rejected otherwise-valid test Items.
+  **How to apply:** Inspect actual enabled features and metadata; do not disable compliance validation or copy dummy classifications into live items. Customer names must also differ from Customer Group names.
 - On 2026-10-12 the user approved VAT at delivery only for CAM Motors Dummy: hold the full advance as a customer-deposit liability. This is a dummy-test assumption, not approval for live dealerships.
   **Why:** The workflow document leaves advance VAT unresolved; the user explicitly selected this provisional policy when asked.
   **How to apply:** Isolate the policy to the confirmed dummy workflow. Never infer live tax approval from this choice or from the existence of a VAT-on-advances account.

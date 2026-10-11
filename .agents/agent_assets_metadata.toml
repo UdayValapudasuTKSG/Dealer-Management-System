@@ -433,3 +433,17 @@ mtime_ms = 1791645889217
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/d885b568-dfe4-4c2d-83c5-d377d9096579/a13425d8-dad1-4584-964b-498e9bd20150"
 storage_version_token = "1791645902717558"
 content_type = "text/csv"
+
+[[outputs]]
+id = "0NK4Qlw4w4ivfbu97Gjs5"
+uri = "file://generated-artifacts/erpnext-sales-fixture/Isolated-ERPNext-Sales-Test.html"
+type = "html"
+title = "Verified Dummy Vehicle Sale — ERPNext"
+description = "Actual ledger and stock verification for one labelled dummy VIN. Includes the sample invoice and journals, exact amounts, site-setting change, and explicit limitations: AURA production handlers are not yet changed."
+logical_id = "a07584dc-109a-47c3-ac44-8991da5251eb"
+content_hash = "sha256:fd2701f738ca4cef15eb6c0d1ee130040f7a964baa5a6d51ce9c408c6b3ab9c0"
+size = 4683
+mtime_ms = 1791751774512
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/a07584dc-109a-47c3-ac44-8991da5251eb/9b44e358-318f-4840-83bb-b77bdce5e920"
+storage_version_token = "1791751804959785"
+content_type = "text/html"
