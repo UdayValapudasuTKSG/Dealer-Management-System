@@ -24,6 +24,11 @@ import FeedbackForms from "@/pages/feedback-forms";
 import Dashboard from "@/pages/dashboard";
 import Reports from "@/pages/reports";
 import Inventory from "@/pages/inventory";
+import ShipmentsListPage from "@/pages/shipments/list";
+import ShipmentDetailPage from "@/pages/shipments/detail";
+import ShipmentCataloguePage from "@/pages/shipments/catalogue";
+import ShipmentTrackingPage from "@/pages/shipments/tracking";
+import ShipmentExceptionsPage from "@/pages/shipments/exceptions";
 import Leads from "@/pages/leads";
 import Deals from "@/pages/deals";
 import Finance from "@/pages/finance";
@@ -273,6 +278,31 @@ function AppRoutes() {
                 <Route path="/command-center" component={Dashboard} />
                 <Route path="/reports" component={Reports} />
                 <Route path="/inventory" component={Inventory} />
+                <Route path="/shipments">
+                  <RequireModule module="inventory" label="Shipments">
+                    <ShipmentsListPage />
+                  </RequireModule>
+                </Route>
+                <Route path="/shipments/catalogue">
+                  <RequireModule module="inventory" label="Shipments">
+                    <ShipmentCataloguePage />
+                  </RequireModule>
+                </Route>
+                <Route path="/shipments/tracking">
+                  <RequireModule module="inventory" label="Shipments">
+                    <ShipmentTrackingPage />
+                  </RequireModule>
+                </Route>
+                <Route path="/shipments/exceptions">
+                  <RequireModule module="inventory" label="Shipments">
+                    <ShipmentExceptionsPage />
+                  </RequireModule>
+                </Route>
+                <Route path="/shipments/:id">
+                  <RequireModule module="inventory" label="Shipments">
+                    <ShipmentDetailPage />
+                  </RequireModule>
+                </Route>
                 <Route path="/deals" component={Deals} />
                 <Route path="/finance/gl-codes" component={FinanceGlCodes} />
                 <Route path="/finance" component={Finance} />

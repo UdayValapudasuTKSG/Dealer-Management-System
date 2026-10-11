@@ -8,6 +8,8 @@ servers:
   - url: /api
     description: Base API path
 tags:
+  - name: shipments
+    description: Shipment allocation and VIN matching
   - name: health
     description: Health operations
   - name: erpnext
@@ -11582,6 +11584,476 @@ paths:
                   state: { type: string, enum: [submitted] }
                   vehicle: { $ref: "#/components/schemas/GarageVehicle" }
 
+  /shipments/specs:
+    get:
+      operationId: listShipmentSpecs
+      tags: [shipments]
+      summary: Dealer-scoped exact specification catalogue
+      responses:
+        "200":
+          description: Specs
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentSpec" } }
+    post:
+      operationId: createShipmentSpec
+      tags: [shipments]
+      summary: Add a draft catalogue specification (N/A must be explicit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentSpecInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentSpec" }
+  /shipments/specs/{specId}:
+    patch:
+      operationId: updateShipmentSpec
+      tags: [shipments]
+      summary: Edit a draft specification
+      parameters:
+        - { name: specId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentSpecInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentSpec" }
+  /shipments/specs/{specId}/status:
+    post:
+      operationId: setShipmentSpecStatus
+      tags: [shipments]
+      summary: Approve, retire or return a specification to draft (manager approval)
+      parameters:
+        - { name: specId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentSpecStatusInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentSpec" }
+  /shipments:
+    get:
+      operationId: listShipments
+      tags: [shipments]
+      summary: Shipments with capacity summary
+      responses:
+        "200":
+          description: Shipments
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentSummary" } }
+    post:
+      operationId: createShipment
+      tags: [shipments]
+      summary: Create a shipment (baseline ETA frozen)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentCreateInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentSummary" }
+  /shipments/tracking:
+    get:
+      operationId: listShipmentTracking
+      tags: [shipments]
+      summary: Customer allocation tracking across all shipments
+      responses:
+        "200":
+          description: Allocations
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentAllocationView" } }
+  /shipments/exceptions:
+    get:
+      operationId: listShipmentExceptions
+      tags: [shipments]
+      summary: Open shortages, blocked proposals, unmatched VINs and withheld emails
+      responses:
+        "200":
+          description: Exceptions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentException" } }
+  /shipments/eligible-leads:
+    get:
+      operationId: listShipmentEligibleLeads
+      tags: [shipments]
+      summary: Approved Pre-Book leads eligible for shipment allocation
+      responses:
+        "200":
+          description: Leads
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentEligibleLead" } }
+  /shipments/{shipmentId}:
+    get:
+      operationId: getShipment
+      tags: [shipments]
+      summary: Shipment detail with lines, capacity and editor lease
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentDetail" }
+    patch:
+      operationId: updateShipment
+      tags: [shipments]
+      summary: Edit reference, current ETA or notes (requires editor lease)
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentUpdateInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentDetail" }
+  /shipments/{shipmentId}/status:
+    post:
+      operationId: setShipmentStatus
+      tags: [shipments]
+      summary: Move shipment status (guards active allocations)
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentStatusInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentDetail" }
+  /shipments/{shipmentId}/lines:
+    post:
+      operationId: addShipmentLine
+      tags: [shipments]
+      summary: Add an approved-spec line
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentLineInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentDetail" }
+  /shipments/{shipmentId}/lines/{lineId}:
+    patch:
+      operationId: updateShipmentLine
+      tags: [shipments]
+      summary: Change line quantity (never below active allocations)
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+        - { name: lineId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentLineQuantityInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentDetail" }
+    delete:
+      operationId: deleteShipmentLine
+      tags: [shipments]
+      summary: Remove a line with no allocations or manifest VINs
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+        - { name: lineId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentDetail" }
+  /shipments/{shipmentId}/lock:
+    get:
+      operationId: getShipmentLock
+      tags: [shipments]
+      summary: Current editor lease
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Lease
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentLockState" }
+    post:
+      operationId: acquireShipmentLock
+      tags: [shipments]
+      summary: Acquire or renew the single-editor lease
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Lease
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentLockState" }
+    delete:
+      operationId: releaseShipmentLock
+      tags: [shipments]
+      summary: Release own editor lease
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Lease
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentLockState" }
+  /shipments/{shipmentId}/events:
+    get:
+      operationId: listShipmentEvents
+      tags: [shipments]
+      summary: Audit trail for a shipment
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentEvent" } }
+  /shipments/{shipmentId}/allocations:
+    get:
+      operationId: listShipmentAllocations
+      tags: [shipments]
+      summary: Allocations on a shipment
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Allocations
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentAllocationView" } }
+    post:
+      operationId: createShipmentAllocation
+      tags: [shipments]
+      summary: Vehicle Allocated - consume line capacity for an eligible Pre-Book lead
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentAllocationInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentAllocationView" }
+  /shipments/allocations/{allocationId}/release:
+    post:
+      operationId: releaseShipmentAllocation
+      tags: [shipments]
+      summary: Release allocation capacity
+      parameters:
+        - { name: allocationId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentAllocationReleaseInput" }
+      responses:
+        "200":
+          description: Released
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentAllocationView" }
+  /shipments/allocations/{allocationId}/reassign:
+    post:
+      operationId: reassignShipmentAllocation
+      tags: [shipments]
+      summary: Atomically claim target line capacity and release the old one (priority preserved)
+      parameters:
+        - { name: allocationId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentAllocationReassignInput" }
+      responses:
+        "200":
+          description: New allocation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentAllocationView" }
+  /shipments/{shipmentId}/imports/preview:
+    post:
+      operationId: previewShipmentImport
+      tags: [shipments]
+      summary: Validate parsed rows server-side without writing
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentImportInput" }
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentImportPreview" }
+  /shipments/{shipmentId}/imports:
+    get:
+      operationId: listShipmentImports
+      tags: [shipments]
+      summary: Import batches for a shipment
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Batches
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentImportBatch" } }
+    post:
+      operationId: commitShipmentImport
+      tags: [shipments]
+      summary: Accept valid rows, isolate invalid rows (identical retries replay)
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentImportInput" }
+      responses:
+        "200":
+          description: Batch result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentImportBatch" }
+  /shipments/imports/{batchId}/errors:
+    get:
+      operationId: listShipmentImportErrors
+      tags: [shipments]
+      summary: Rejected rows of an import batch
+      parameters:
+        - { name: batchId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Errors
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentImportRowError" } }
+  /shipments/{shipmentId}/manifests:
+    get:
+      operationId: listShipmentManifests
+      tags: [shipments]
+      summary: Factory manifest VINs with inventory and claim state
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: VINs
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ShipmentManifestVin" } }
+  /shipments/{shipmentId}/matching:
+    get:
+      operationId: getShipmentMatching
+      tags: [shipments]
+      summary: Proposals, pending shortages and run history
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Matching
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentMatchingView" }
+    post:
+      operationId: runShipmentMatching
+      tags: [shipments]
+      summary: Propose exact matches (oldest allocation first, random VIN identity)
+      parameters:
+        - { name: shipmentId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Matching
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentMatchingView" }
+  /shipments/proposals/{proposalId}/confirm:
+    post:
+      operationId: confirmShipmentProposal
+      tags: [shipments]
+      summary: Confirm through the existing reservation claim authority, or report why it stays pending
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentProposalConfirmInput" }
+      responses:
+        "200":
+          description: Outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentProposalConfirmResult" }
+  /shipments/proposals/{proposalId}/reject:
+    post:
+      operationId: rejectShipmentProposal
+      tags: [shipments]
+      summary: Reject a pending proposal (VIN returns to unmatched)
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShipmentAllocationReleaseInput" }
+      responses:
+        "200":
+          description: Matching
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShipmentMatchingView" }
 components:
   schemas:
     WorkshopOil:
@@ -18788,3 +19260,332 @@ components:
         deviceHealth: { type: ["string", "null"] }
         lastEventAt: { type: ["string", "null"], format: date-time }
         freshness: { type: string, enum: [live, recent, stale, offline, never] }
+    ShipmentSpecInput:
+      type: object
+      required: [make, model, year, variant, exteriorColor, interiorColor]
+      properties:
+        make: { type: string, minLength: 1, maxLength: 80 }
+        model: { type: string, minLength: 1, maxLength: 80 }
+        year: { type: integer, minimum: 1990, maximum: 2100 }
+        variant: { type: string, minLength: 1, maxLength: 120 }
+        exteriorColor: { type: string, minLength: 1, maxLength: 80 }
+        interiorColor: { type: string, minLength: 1, maxLength: 80 }
+    ShipmentSpecStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [draft, approved, retired] }
+    ShipmentSpec:
+      type: object
+      required: [id, make, model, year, variant, exteriorColor, interiorColor, status, approvedBy, approvedAt, createdAt, inUse]
+      properties:
+        id: { type: integer }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        variant: { type: string }
+        exteriorColor: { type: string }
+        interiorColor: { type: string }
+        status: { type: string, enum: [draft, approved, retired] }
+        approvedBy: { type: ["string", "null"] }
+        approvedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        inUse: { type: boolean }
+    ShipmentCreateInput:
+      type: object
+      required: [reference, etaMonth]
+      properties:
+        reference: { type: string, minLength: 1, maxLength: 80 }
+        etaMonth: { type: string, pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" }
+        notes: { type: ["string", "null"], maxLength: 2000 }
+    ShipmentUpdateInput:
+      type: object
+      properties:
+        reference: { type: string, minLength: 1, maxLength: 80 }
+        currentEtaMonth: { type: string, pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" }
+        notes: { type: ["string", "null"], maxLength: 2000 }
+    ShipmentStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [open, in_transit, arrived, closed, cancelled] }
+    ShipmentSummary:
+      type: object
+      required: [id, reference, status, baselineEtaMonth, currentEtaMonth, notes, totalUnits, allocatedUnits, manifestVins, confirmedVins, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        reference: { type: string }
+        status: { type: string, enum: [open, in_transit, arrived, closed, cancelled] }
+        baselineEtaMonth: { type: string }
+        currentEtaMonth: { type: string }
+        notes: { type: ["string", "null"] }
+        totalUnits: { type: integer }
+        allocatedUnits: { type: integer }
+        manifestVins: { type: integer }
+        confirmedVins: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ShipmentLineView:
+      type: object
+      required: [id, specId, spec, quantity, allocatedUnits, remainingUnits, manifestVins]
+      properties:
+        id: { type: integer }
+        specId: { type: integer }
+        spec: { $ref: "#/components/schemas/ShipmentSpec" }
+        quantity: { type: integer }
+        allocatedUnits: { type: integer }
+        remainingUnits: { type: integer }
+        manifestVins: { type: integer }
+    ShipmentLockState:
+      type: object
+      required: [held, holderName, expiresAt, viewerHolds]
+      properties:
+        held: { type: boolean }
+        holderName: { type: ["string", "null"] }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        viewerHolds: { type: boolean }
+    ShipmentDetail:
+      type: object
+      required: [shipment, lines, lock, etaEmailRule]
+      properties:
+        shipment: { $ref: "#/components/schemas/ShipmentSummary" }
+        lines: { type: array, items: { $ref: "#/components/schemas/ShipmentLineView" } }
+        lock: { $ref: "#/components/schemas/ShipmentLockState" }
+        etaEmailRule: { type: string }
+    ShipmentLineInput:
+      type: object
+      required: [specId, quantity]
+      properties:
+        specId: { type: integer }
+        quantity: { type: integer, minimum: 1, maximum: 10000 }
+    ShipmentLineQuantityInput:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: { type: integer, minimum: 1, maximum: 10000 }
+    ShipmentEvent:
+      type: object
+      required: [id, shipmentId, allocationId, kind, detail, actor, createdAt]
+      properties:
+        id: { type: integer }
+        shipmentId: { type: ["integer", "null"] }
+        allocationId: { type: ["integer", "null"] }
+        kind: { type: string }
+        detail: { type: string }
+        actor: { type: string }
+        createdAt: { type: string, format: date-time }
+    ShipmentEmailJob:
+      type: object
+      required: [id, kind, etaMonth, status, reason, createdAt]
+      properties:
+        id: { type: integer }
+        kind: { type: string, enum: [initial, eta_change] }
+        etaMonth: { type: string }
+        status: { type: string, enum: [queued, withheld, suppressed, superseded, sent, failed] }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
+    ShipmentAllocationView:
+      type: object
+      required: [id, shipmentId, shipmentReference, shipmentStatus, currentEtaMonth, baselineEtaMonth, lineId, spec, leadId, leadName, dealId, requestedQuantity, quantity, partialConsent, status, baselineAt, specsConfirmedBy, matchedUnits, confirmedUnits, holdLapsedUnits, reassignedFromId, releasedReason, emails, createdAt]
+      properties:
+        id: { type: integer }
+        shipmentId: { type: integer }
+        shipmentReference: { type: string }
+        shipmentStatus: { type: string }
+        currentEtaMonth: { type: string }
+        baselineEtaMonth: { type: string }
+        lineId: { type: integer }
+        spec: { $ref: "#/components/schemas/ShipmentSpec" }
+        leadId: { type: integer }
+        leadName: { type: string }
+        dealId: { type: ["integer", "null"] }
+        requestedQuantity: { type: integer }
+        quantity: { type: integer }
+        partialConsent: { type: boolean }
+        status: { type: string, enum: [active, fulfilled, released, reassigned] }
+        baselineAt: { type: string, format: date-time }
+        specsConfirmedBy: { type: string }
+        matchedUnits: { type: integer }
+        confirmedUnits: { type: integer }
+        holdLapsedUnits: { type: integer, description: "Confirmed VINs whose reservation hold has since been released or expired" }
+        reassignedFromId: { type: ["integer", "null"] }
+        releasedReason: { type: ["string", "null"] }
+        emails: { type: array, items: { $ref: "#/components/schemas/ShipmentEmailJob" } }
+        createdAt: { type: string, format: date-time }
+    ShipmentAllocationInput:
+      type: object
+      required: [lineId, leadId, requestedQuantity, partialConsent, specsConfirmed]
+      properties:
+        lineId: { type: integer }
+        leadId: { type: integer }
+        dealId: { type: ["integer", "null"] }
+        requestedQuantity: { type: integer, minimum: 1, maximum: 500 }
+        partialConsent: { type: boolean }
+        specsConfirmed: { type: boolean }
+    ShipmentAllocationReleaseInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    ShipmentAllocationReassignInput:
+      type: object
+      required: [targetLineId]
+      properties:
+        targetLineId: { type: integer }
+    ShipmentEligibleLead:
+      type: object
+      required: [id, name, email, status, deals]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: ["string", "null"] }
+        status: { type: string }
+        deals:
+          type: array
+          items:
+            type: object
+            required: [id, stage]
+            properties:
+              id: { type: integer }
+              stage: { type: string }
+    ShipmentImportRow:
+      type: object
+      required: [rowNumber]
+      properties:
+        rowNumber: { type: integer, minimum: 1 }
+        vin: { type: ["string", "null"], maxLength: 64 }
+        make: { type: ["string", "null"], maxLength: 120 }
+        model: { type: ["string", "null"], maxLength: 120 }
+        year: { type: ["string", "null"], maxLength: 16 }
+        variant: { type: ["string", "null"], maxLength: 160 }
+        exteriorColor: { type: ["string", "null"], maxLength: 120 }
+        interiorColor: { type: ["string", "null"], maxLength: 120 }
+        quantity: { type: ["string", "null"], maxLength: 16 }
+    ShipmentImportInput:
+      type: object
+      required: [kind, fileName, fileHash, rows]
+      properties:
+        kind: { type: string, enum: [lines, manifest] }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+        fileHash: { type: string, pattern: "^[a-f0-9]{64}$" }
+        rows: { type: array, maxItems: 5000, items: { $ref: "#/components/schemas/ShipmentImportRow" } }
+    ShipmentImportRowResult:
+      type: object
+      required: [rowNumber, ok, message]
+      properties:
+        rowNumber: { type: integer }
+        ok: { type: boolean }
+        message: { type: string }
+    ShipmentImportPreview:
+      type: object
+      required: [validRows, invalidRows, rows]
+      properties:
+        validRows: { type: integer }
+        invalidRows: { type: integer }
+        rows: { type: array, items: { $ref: "#/components/schemas/ShipmentImportRowResult" } }
+    ShipmentImportBatch:
+      type: object
+      required: [id, kind, fileName, totalRows, acceptedRows, rejectedRows, createdBy, createdAt, replayed]
+      properties:
+        id: { type: integer }
+        kind: { type: string, enum: [lines, manifest] }
+        fileName: { type: string }
+        totalRows: { type: integer }
+        acceptedRows: { type: integer }
+        rejectedRows: { type: integer }
+        createdBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        replayed: { type: boolean }
+    ShipmentImportRowError:
+      type: object
+      required: [rowNumber, message, rawRow]
+      properties:
+        rowNumber: { type: integer }
+        message: { type: string }
+        rawRow: { type: string }
+    ShipmentManifestVin:
+      type: object
+      required: [id, vin, specId, spec, status, inventoryVehicleId, inventoryStatus, proposalId, proposalStatus, allocationId, leadName, createdAt]
+      properties:
+        id: { type: integer }
+        vin: { type: string }
+        specId: { type: integer }
+        spec: { $ref: "#/components/schemas/ShipmentSpec" }
+        status: { type: string, enum: [unmatched, proposed, confirmed] }
+        inventoryVehicleId: { type: ["integer", "null"] }
+        inventoryStatus: { type: ["string", "null"] }
+        proposalId: { type: ["integer", "null"] }
+        proposalStatus: { type: ["string", "null"] }
+        allocationId: { type: ["integer", "null"] }
+        leadName: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    ShipmentProposalView:
+      type: object
+      required: [id, runId, vin, manifestId, allocationId, leadId, leadName, dealId, spec, baselineAt, status, lastBlockedReason, holdStatus, decidedBy, decidedAt, createdAt]
+      properties:
+        id: { type: integer }
+        runId: { type: integer }
+        vin: { type: string }
+        manifestId: { type: integer }
+        allocationId: { type: integer }
+        leadId: { type: integer }
+        leadName: { type: string }
+        dealId: { type: ["integer", "null"] }
+        spec: { $ref: "#/components/schemas/ShipmentSpec" }
+        baselineAt: { type: string, format: date-time }
+        status: { type: string, enum: [pending, confirmed, superseded, rejected] }
+        lastBlockedReason: { type: ["string", "null"] }
+        holdStatus: { type: ["string", "null"], description: "Live reservation ledger status for confirmed proposals (active, finalized, released)" }
+        decidedBy: { type: ["string", "null"] }
+        decidedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    ShipmentShortage:
+      type: object
+      required: [allocationId, leadName, spec, baselineAt, unitsShort, reason]
+      properties:
+        allocationId: { type: integer }
+        leadName: { type: string }
+        spec: { $ref: "#/components/schemas/ShipmentSpec" }
+        baselineAt: { type: string, format: date-time }
+        unitsShort: { type: integer }
+        reason: { type: string }
+    ShipmentMatchRun:
+      type: object
+      required: [id, proposedCount, shortageUnits, unmatchedVins, createdBy, createdAt]
+      properties:
+        id: { type: integer }
+        proposedCount: { type: integer }
+        shortageUnits: { type: integer }
+        unmatchedVins: { type: integer }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    ShipmentMatchingView:
+      type: object
+      required: [proposals, shortages, runs]
+      properties:
+        proposals: { type: array, items: { $ref: "#/components/schemas/ShipmentProposalView" } }
+        shortages: { type: array, items: { $ref: "#/components/schemas/ShipmentShortage" } }
+        runs: { type: array, items: { $ref: "#/components/schemas/ShipmentMatchRun" } }
+    ShipmentProposalConfirmInput:
+      type: object
+      required: [interiorVerified]
+      properties:
+        interiorVerified: { type: boolean }
+    ShipmentProposalConfirmResult:
+      type: object
+      required: [outcome, reason, confirmedProposalIds, handoff]
+      properties:
+        outcome: { type: string, enum: [confirmed, blocked] }
+        reason: { type: ["string", "null"] }
+        confirmedProposalIds: { type: array, items: { type: integer } }
+        handoff: { type: ["string", "null"], enum: [inventory_onboarding, reservation_payment, deal_link, null] }
+    ShipmentException:
+      type: object
+      required: [kind, shipmentId, shipmentReference, title, detail, refId]
+      properties:
+        kind: { type: string, enum: [shortage, blocked_proposal, unmatched_vin, withheld_email, line_unallocated, hold_lapsed] }
+        shipmentId: { type: integer }
+        shipmentReference: { type: string }
+        title: { type: string }
+        detail: { type: string }
+        refId: { type: integer }

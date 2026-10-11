@@ -78,3 +78,7 @@ export * from "./vehicleOnboarding";
 export * from "./serviceTimesheets";
 export * from "./technicianWorkSegments";
 export * from "./supplier-invoices";
+export * from "./shipmentSpecs";
+export * from "./shipments";
+export * from "./shipmentAllocations";
+export * from "./shipmentManifests";

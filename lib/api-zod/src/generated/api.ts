@@ -20017,3 +20017,1379 @@ export const SubmitVehicleOnboardingResponse = zod.object({
 })
 
 
+/**
+ * @summary Dealer-scoped exact specification catalogue
+ */
+export const ListShipmentSpecsResponseItem = zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+})
+export const ListShipmentSpecsResponse = zod.array(ListShipmentSpecsResponseItem)
+
+
+/**
+ * @summary Add a draft catalogue specification (N/A must be explicit)
+ */
+export const createShipmentSpecBodyMakeMax = 80;
+
+export const createShipmentSpecBodyModelMax = 80;
+
+export const createShipmentSpecBodyYearMin = 1990;
+export const createShipmentSpecBodyYearMax = 2100;
+
+export const createShipmentSpecBodyVariantMax = 120;
+
+export const createShipmentSpecBodyExteriorColorMax = 80;
+
+export const createShipmentSpecBodyInteriorColorMax = 80;
+
+
+
+export const CreateShipmentSpecBody = zod.object({
+  "make": zod.string().min(1).max(createShipmentSpecBodyMakeMax),
+  "model": zod.string().min(1).max(createShipmentSpecBodyModelMax),
+  "year": zod.number().min(createShipmentSpecBodyYearMin).max(createShipmentSpecBodyYearMax),
+  "variant": zod.string().min(1).max(createShipmentSpecBodyVariantMax),
+  "exteriorColor": zod.string().min(1).max(createShipmentSpecBodyExteriorColorMax),
+  "interiorColor": zod.string().min(1).max(createShipmentSpecBodyInteriorColorMax)
+})
+
+export const CreateShipmentSpecResponse = zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+})
+
+
+/**
+ * @summary Edit a draft specification
+ */
+export const UpdateShipmentSpecParams = zod.object({
+  "specId": zod.coerce.number()
+})
+
+export const updateShipmentSpecBodyMakeMax = 80;
+
+export const updateShipmentSpecBodyModelMax = 80;
+
+export const updateShipmentSpecBodyYearMin = 1990;
+export const updateShipmentSpecBodyYearMax = 2100;
+
+export const updateShipmentSpecBodyVariantMax = 120;
+
+export const updateShipmentSpecBodyExteriorColorMax = 80;
+
+export const updateShipmentSpecBodyInteriorColorMax = 80;
+
+
+
+export const UpdateShipmentSpecBody = zod.object({
+  "make": zod.string().min(1).max(updateShipmentSpecBodyMakeMax),
+  "model": zod.string().min(1).max(updateShipmentSpecBodyModelMax),
+  "year": zod.number().min(updateShipmentSpecBodyYearMin).max(updateShipmentSpecBodyYearMax),
+  "variant": zod.string().min(1).max(updateShipmentSpecBodyVariantMax),
+  "exteriorColor": zod.string().min(1).max(updateShipmentSpecBodyExteriorColorMax),
+  "interiorColor": zod.string().min(1).max(updateShipmentSpecBodyInteriorColorMax)
+})
+
+export const UpdateShipmentSpecResponse = zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+})
+
+
+/**
+ * @summary Approve, retire or return a specification to draft (manager approval)
+ */
+export const SetShipmentSpecStatusParams = zod.object({
+  "specId": zod.coerce.number()
+})
+
+export const SetShipmentSpecStatusBody = zod.object({
+  "status": zod.enum(['draft', 'approved', 'retired'])
+})
+
+export const SetShipmentSpecStatusResponse = zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+})
+
+
+/**
+ * @summary Shipments with capacity summary
+ */
+export const ListShipmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled']),
+  "baselineEtaMonth": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "notes": zod.string().nullable(),
+  "totalUnits": zod.number(),
+  "allocatedUnits": zod.number(),
+  "manifestVins": zod.number(),
+  "confirmedVins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListShipmentsResponse = zod.array(ListShipmentsResponseItem)
+
+
+/**
+ * @summary Create a shipment (baseline ETA frozen)
+ */
+export const createShipmentBodyReferenceMax = 80;
+
+export const createShipmentBodyEtaMonthRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])$');
+export const createShipmentBodyNotesMax = 2000;
+
+
+
+export const CreateShipmentBody = zod.object({
+  "reference": zod.string().min(1).max(createShipmentBodyReferenceMax),
+  "etaMonth": zod.string().regex(createShipmentBodyEtaMonthRegExp),
+  "notes": zod.string().max(createShipmentBodyNotesMax).nullish()
+})
+
+export const CreateShipmentResponse = zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled']),
+  "baselineEtaMonth": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "notes": zod.string().nullable(),
+  "totalUnits": zod.number(),
+  "allocatedUnits": zod.number(),
+  "manifestVins": zod.number(),
+  "confirmedVins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Customer allocation tracking across all shipments
+ */
+export const ListShipmentTrackingResponseItem = zod.object({
+  "id": zod.number(),
+  "shipmentId": zod.number(),
+  "shipmentReference": zod.string(),
+  "shipmentStatus": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "baselineEtaMonth": zod.string(),
+  "lineId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "leadId": zod.number(),
+  "leadName": zod.string(),
+  "dealId": zod.number().nullable(),
+  "requestedQuantity": zod.number(),
+  "quantity": zod.number(),
+  "partialConsent": zod.boolean(),
+  "status": zod.enum(['active', 'fulfilled', 'released', 'reassigned']),
+  "baselineAt": zod.coerce.date(),
+  "specsConfirmedBy": zod.string(),
+  "matchedUnits": zod.number(),
+  "confirmedUnits": zod.number(),
+  "holdLapsedUnits": zod.number().describe('Confirmed VINs whose reservation hold has since been released or expired'),
+  "reassignedFromId": zod.number().nullable(),
+  "releasedReason": zod.string().nullable(),
+  "emails": zod.array(zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['initial', 'eta_change']),
+  "etaMonth": zod.string(),
+  "status": zod.enum(['queued', 'withheld', 'suppressed', 'superseded', 'sent', 'failed']),
+  "reason": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+export const ListShipmentTrackingResponse = zod.array(ListShipmentTrackingResponseItem)
+
+
+/**
+ * @summary Open shortages, blocked proposals, unmatched VINs and withheld emails
+ */
+export const ListShipmentExceptionsResponseItem = zod.object({
+  "kind": zod.enum(['shortage', 'blocked_proposal', 'unmatched_vin', 'withheld_email', 'line_unallocated', 'hold_lapsed']),
+  "shipmentId": zod.number(),
+  "shipmentReference": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string(),
+  "refId": zod.number()
+})
+export const ListShipmentExceptionsResponse = zod.array(ListShipmentExceptionsResponseItem)
+
+
+/**
+ * @summary Approved Pre-Book leads eligible for shipment allocation
+ */
+export const ListShipmentEligibleLeadsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullable(),
+  "status": zod.string(),
+  "deals": zod.array(zod.object({
+  "id": zod.number(),
+  "stage": zod.string()
+}))
+})
+export const ListShipmentEligibleLeadsResponse = zod.array(ListShipmentEligibleLeadsResponseItem)
+
+
+/**
+ * @summary Shipment detail with lines, capacity and editor lease
+ */
+export const GetShipmentParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const GetShipmentResponse = zod.object({
+  "shipment": zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled']),
+  "baselineEtaMonth": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "notes": zod.string().nullable(),
+  "totalUnits": zod.number(),
+  "allocatedUnits": zod.number(),
+  "manifestVins": zod.number(),
+  "confirmedVins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "specId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "quantity": zod.number(),
+  "allocatedUnits": zod.number(),
+  "remainingUnits": zod.number(),
+  "manifestVins": zod.number()
+})),
+  "lock": zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+}),
+  "etaEmailRule": zod.string()
+})
+
+
+/**
+ * @summary Edit reference, current ETA or notes (requires editor lease)
+ */
+export const UpdateShipmentParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const updateShipmentBodyReferenceMax = 80;
+
+export const updateShipmentBodyCurrentEtaMonthRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])$');
+export const updateShipmentBodyNotesMax = 2000;
+
+
+
+export const UpdateShipmentBody = zod.object({
+  "reference": zod.string().min(1).max(updateShipmentBodyReferenceMax).optional(),
+  "currentEtaMonth": zod.string().regex(updateShipmentBodyCurrentEtaMonthRegExp).optional(),
+  "notes": zod.string().max(updateShipmentBodyNotesMax).nullish()
+})
+
+export const UpdateShipmentResponse = zod.object({
+  "shipment": zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled']),
+  "baselineEtaMonth": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "notes": zod.string().nullable(),
+  "totalUnits": zod.number(),
+  "allocatedUnits": zod.number(),
+  "manifestVins": zod.number(),
+  "confirmedVins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "specId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "quantity": zod.number(),
+  "allocatedUnits": zod.number(),
+  "remainingUnits": zod.number(),
+  "manifestVins": zod.number()
+})),
+  "lock": zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+}),
+  "etaEmailRule": zod.string()
+})
+
+
+/**
+ * @summary Move shipment status (guards active allocations)
+ */
+export const SetShipmentStatusParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const SetShipmentStatusBody = zod.object({
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled'])
+})
+
+export const SetShipmentStatusResponse = zod.object({
+  "shipment": zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled']),
+  "baselineEtaMonth": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "notes": zod.string().nullable(),
+  "totalUnits": zod.number(),
+  "allocatedUnits": zod.number(),
+  "manifestVins": zod.number(),
+  "confirmedVins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "specId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "quantity": zod.number(),
+  "allocatedUnits": zod.number(),
+  "remainingUnits": zod.number(),
+  "manifestVins": zod.number()
+})),
+  "lock": zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+}),
+  "etaEmailRule": zod.string()
+})
+
+
+/**
+ * @summary Add an approved-spec line
+ */
+export const AddShipmentLineParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const addShipmentLineBodyQuantityMax = 10000;
+
+
+
+export const AddShipmentLineBody = zod.object({
+  "specId": zod.number(),
+  "quantity": zod.number().min(1).max(addShipmentLineBodyQuantityMax)
+})
+
+export const AddShipmentLineResponse = zod.object({
+  "shipment": zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled']),
+  "baselineEtaMonth": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "notes": zod.string().nullable(),
+  "totalUnits": zod.number(),
+  "allocatedUnits": zod.number(),
+  "manifestVins": zod.number(),
+  "confirmedVins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "specId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "quantity": zod.number(),
+  "allocatedUnits": zod.number(),
+  "remainingUnits": zod.number(),
+  "manifestVins": zod.number()
+})),
+  "lock": zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+}),
+  "etaEmailRule": zod.string()
+})
+
+
+/**
+ * @summary Change line quantity (never below active allocations)
+ */
+export const UpdateShipmentLineParams = zod.object({
+  "shipmentId": zod.coerce.number(),
+  "lineId": zod.coerce.number()
+})
+
+export const updateShipmentLineBodyQuantityMax = 10000;
+
+
+
+export const UpdateShipmentLineBody = zod.object({
+  "quantity": zod.number().min(1).max(updateShipmentLineBodyQuantityMax)
+})
+
+export const UpdateShipmentLineResponse = zod.object({
+  "shipment": zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled']),
+  "baselineEtaMonth": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "notes": zod.string().nullable(),
+  "totalUnits": zod.number(),
+  "allocatedUnits": zod.number(),
+  "manifestVins": zod.number(),
+  "confirmedVins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "specId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "quantity": zod.number(),
+  "allocatedUnits": zod.number(),
+  "remainingUnits": zod.number(),
+  "manifestVins": zod.number()
+})),
+  "lock": zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+}),
+  "etaEmailRule": zod.string()
+})
+
+
+/**
+ * @summary Remove a line with no allocations or manifest VINs
+ */
+export const DeleteShipmentLineParams = zod.object({
+  "shipmentId": zod.coerce.number(),
+  "lineId": zod.coerce.number()
+})
+
+export const DeleteShipmentLineResponse = zod.object({
+  "shipment": zod.object({
+  "id": zod.number(),
+  "reference": zod.string(),
+  "status": zod.enum(['open', 'in_transit', 'arrived', 'closed', 'cancelled']),
+  "baselineEtaMonth": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "notes": zod.string().nullable(),
+  "totalUnits": zod.number(),
+  "allocatedUnits": zod.number(),
+  "manifestVins": zod.number(),
+  "confirmedVins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "specId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "quantity": zod.number(),
+  "allocatedUnits": zod.number(),
+  "remainingUnits": zod.number(),
+  "manifestVins": zod.number()
+})),
+  "lock": zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+}),
+  "etaEmailRule": zod.string()
+})
+
+
+/**
+ * @summary Current editor lease
+ */
+export const GetShipmentLockParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const GetShipmentLockResponse = zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+})
+
+
+/**
+ * @summary Acquire or renew the single-editor lease
+ */
+export const AcquireShipmentLockParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const AcquireShipmentLockResponse = zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+})
+
+
+/**
+ * @summary Release own editor lease
+ */
+export const ReleaseShipmentLockParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const ReleaseShipmentLockResponse = zod.object({
+  "held": zod.boolean(),
+  "holderName": zod.string().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "viewerHolds": zod.boolean()
+})
+
+
+/**
+ * @summary Audit trail for a shipment
+ */
+export const ListShipmentEventsParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const ListShipmentEventsResponseItem = zod.object({
+  "id": zod.number(),
+  "shipmentId": zod.number().nullable(),
+  "allocationId": zod.number().nullable(),
+  "kind": zod.string(),
+  "detail": zod.string(),
+  "actor": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListShipmentEventsResponse = zod.array(ListShipmentEventsResponseItem)
+
+
+/**
+ * @summary Allocations on a shipment
+ */
+export const ListShipmentAllocationsParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const ListShipmentAllocationsResponseItem = zod.object({
+  "id": zod.number(),
+  "shipmentId": zod.number(),
+  "shipmentReference": zod.string(),
+  "shipmentStatus": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "baselineEtaMonth": zod.string(),
+  "lineId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "leadId": zod.number(),
+  "leadName": zod.string(),
+  "dealId": zod.number().nullable(),
+  "requestedQuantity": zod.number(),
+  "quantity": zod.number(),
+  "partialConsent": zod.boolean(),
+  "status": zod.enum(['active', 'fulfilled', 'released', 'reassigned']),
+  "baselineAt": zod.coerce.date(),
+  "specsConfirmedBy": zod.string(),
+  "matchedUnits": zod.number(),
+  "confirmedUnits": zod.number(),
+  "holdLapsedUnits": zod.number().describe('Confirmed VINs whose reservation hold has since been released or expired'),
+  "reassignedFromId": zod.number().nullable(),
+  "releasedReason": zod.string().nullable(),
+  "emails": zod.array(zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['initial', 'eta_change']),
+  "etaMonth": zod.string(),
+  "status": zod.enum(['queued', 'withheld', 'suppressed', 'superseded', 'sent', 'failed']),
+  "reason": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+export const ListShipmentAllocationsResponse = zod.array(ListShipmentAllocationsResponseItem)
+
+
+/**
+ * @summary Vehicle Allocated - consume line capacity for an eligible Pre-Book lead
+ */
+export const CreateShipmentAllocationParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const createShipmentAllocationBodyRequestedQuantityMax = 500;
+
+
+
+export const CreateShipmentAllocationBody = zod.object({
+  "lineId": zod.number(),
+  "leadId": zod.number(),
+  "dealId": zod.number().nullish(),
+  "requestedQuantity": zod.number().min(1).max(createShipmentAllocationBodyRequestedQuantityMax),
+  "partialConsent": zod.boolean(),
+  "specsConfirmed": zod.boolean()
+})
+
+export const CreateShipmentAllocationResponse = zod.object({
+  "id": zod.number(),
+  "shipmentId": zod.number(),
+  "shipmentReference": zod.string(),
+  "shipmentStatus": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "baselineEtaMonth": zod.string(),
+  "lineId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "leadId": zod.number(),
+  "leadName": zod.string(),
+  "dealId": zod.number().nullable(),
+  "requestedQuantity": zod.number(),
+  "quantity": zod.number(),
+  "partialConsent": zod.boolean(),
+  "status": zod.enum(['active', 'fulfilled', 'released', 'reassigned']),
+  "baselineAt": zod.coerce.date(),
+  "specsConfirmedBy": zod.string(),
+  "matchedUnits": zod.number(),
+  "confirmedUnits": zod.number(),
+  "holdLapsedUnits": zod.number().describe('Confirmed VINs whose reservation hold has since been released or expired'),
+  "reassignedFromId": zod.number().nullable(),
+  "releasedReason": zod.string().nullable(),
+  "emails": zod.array(zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['initial', 'eta_change']),
+  "etaMonth": zod.string(),
+  "status": zod.enum(['queued', 'withheld', 'suppressed', 'superseded', 'sent', 'failed']),
+  "reason": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Release allocation capacity
+ */
+export const ReleaseShipmentAllocationParams = zod.object({
+  "allocationId": zod.coerce.number()
+})
+
+export const releaseShipmentAllocationBodyReasonMin = 3;
+export const releaseShipmentAllocationBodyReasonMax = 500;
+
+
+
+export const ReleaseShipmentAllocationBody = zod.object({
+  "reason": zod.string().min(releaseShipmentAllocationBodyReasonMin).max(releaseShipmentAllocationBodyReasonMax)
+})
+
+export const ReleaseShipmentAllocationResponse = zod.object({
+  "id": zod.number(),
+  "shipmentId": zod.number(),
+  "shipmentReference": zod.string(),
+  "shipmentStatus": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "baselineEtaMonth": zod.string(),
+  "lineId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "leadId": zod.number(),
+  "leadName": zod.string(),
+  "dealId": zod.number().nullable(),
+  "requestedQuantity": zod.number(),
+  "quantity": zod.number(),
+  "partialConsent": zod.boolean(),
+  "status": zod.enum(['active', 'fulfilled', 'released', 'reassigned']),
+  "baselineAt": zod.coerce.date(),
+  "specsConfirmedBy": zod.string(),
+  "matchedUnits": zod.number(),
+  "confirmedUnits": zod.number(),
+  "holdLapsedUnits": zod.number().describe('Confirmed VINs whose reservation hold has since been released or expired'),
+  "reassignedFromId": zod.number().nullable(),
+  "releasedReason": zod.string().nullable(),
+  "emails": zod.array(zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['initial', 'eta_change']),
+  "etaMonth": zod.string(),
+  "status": zod.enum(['queued', 'withheld', 'suppressed', 'superseded', 'sent', 'failed']),
+  "reason": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Atomically claim target line capacity and release the old one (priority preserved)
+ */
+export const ReassignShipmentAllocationParams = zod.object({
+  "allocationId": zod.coerce.number()
+})
+
+export const ReassignShipmentAllocationBody = zod.object({
+  "targetLineId": zod.number()
+})
+
+export const ReassignShipmentAllocationResponse = zod.object({
+  "id": zod.number(),
+  "shipmentId": zod.number(),
+  "shipmentReference": zod.string(),
+  "shipmentStatus": zod.string(),
+  "currentEtaMonth": zod.string(),
+  "baselineEtaMonth": zod.string(),
+  "lineId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "leadId": zod.number(),
+  "leadName": zod.string(),
+  "dealId": zod.number().nullable(),
+  "requestedQuantity": zod.number(),
+  "quantity": zod.number(),
+  "partialConsent": zod.boolean(),
+  "status": zod.enum(['active', 'fulfilled', 'released', 'reassigned']),
+  "baselineAt": zod.coerce.date(),
+  "specsConfirmedBy": zod.string(),
+  "matchedUnits": zod.number(),
+  "confirmedUnits": zod.number(),
+  "holdLapsedUnits": zod.number().describe('Confirmed VINs whose reservation hold has since been released or expired'),
+  "reassignedFromId": zod.number().nullable(),
+  "releasedReason": zod.string().nullable(),
+  "emails": zod.array(zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['initial', 'eta_change']),
+  "etaMonth": zod.string(),
+  "status": zod.enum(['queued', 'withheld', 'suppressed', 'superseded', 'sent', 'failed']),
+  "reason": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Validate parsed rows server-side without writing
+ */
+export const PreviewShipmentImportParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const previewShipmentImportBodyFileNameMax = 255;
+
+export const previewShipmentImportBodyFileHashRegExp = new RegExp('^[a-f0-9]{64}$');
+
+export const previewShipmentImportBodyRowsItemVinMax = 64;
+
+export const previewShipmentImportBodyRowsItemMakeMax = 120;
+
+export const previewShipmentImportBodyRowsItemModelMax = 120;
+
+export const previewShipmentImportBodyRowsItemYearMax = 16;
+
+export const previewShipmentImportBodyRowsItemVariantMax = 160;
+
+export const previewShipmentImportBodyRowsItemExteriorColorMax = 120;
+
+export const previewShipmentImportBodyRowsItemInteriorColorMax = 120;
+
+export const previewShipmentImportBodyRowsItemQuantityMax = 16;
+
+export const previewShipmentImportBodyRowsMax = 5000;
+
+
+
+export const PreviewShipmentImportBody = zod.object({
+  "kind": zod.enum(['lines', 'manifest']),
+  "fileName": zod.string().min(1).max(previewShipmentImportBodyFileNameMax),
+  "fileHash": zod.string().regex(previewShipmentImportBodyFileHashRegExp),
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number().min(1),
+  "vin": zod.string().max(previewShipmentImportBodyRowsItemVinMax).nullish(),
+  "make": zod.string().max(previewShipmentImportBodyRowsItemMakeMax).nullish(),
+  "model": zod.string().max(previewShipmentImportBodyRowsItemModelMax).nullish(),
+  "year": zod.string().max(previewShipmentImportBodyRowsItemYearMax).nullish(),
+  "variant": zod.string().max(previewShipmentImportBodyRowsItemVariantMax).nullish(),
+  "exteriorColor": zod.string().max(previewShipmentImportBodyRowsItemExteriorColorMax).nullish(),
+  "interiorColor": zod.string().max(previewShipmentImportBodyRowsItemInteriorColorMax).nullish(),
+  "quantity": zod.string().max(previewShipmentImportBodyRowsItemQuantityMax).nullish()
+})).max(previewShipmentImportBodyRowsMax)
+})
+
+export const PreviewShipmentImportResponse = zod.object({
+  "validRows": zod.number(),
+  "invalidRows": zod.number(),
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number(),
+  "ok": zod.boolean(),
+  "message": zod.string()
+}))
+})
+
+
+/**
+ * @summary Import batches for a shipment
+ */
+export const ListShipmentImportsParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const ListShipmentImportsResponseItem = zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['lines', 'manifest']),
+  "fileName": zod.string(),
+  "totalRows": zod.number(),
+  "acceptedRows": zod.number(),
+  "rejectedRows": zod.number(),
+  "createdBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "replayed": zod.boolean()
+})
+export const ListShipmentImportsResponse = zod.array(ListShipmentImportsResponseItem)
+
+
+/**
+ * @summary Accept valid rows, isolate invalid rows (identical retries replay)
+ */
+export const CommitShipmentImportParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const commitShipmentImportBodyFileNameMax = 255;
+
+export const commitShipmentImportBodyFileHashRegExp = new RegExp('^[a-f0-9]{64}$');
+
+export const commitShipmentImportBodyRowsItemVinMax = 64;
+
+export const commitShipmentImportBodyRowsItemMakeMax = 120;
+
+export const commitShipmentImportBodyRowsItemModelMax = 120;
+
+export const commitShipmentImportBodyRowsItemYearMax = 16;
+
+export const commitShipmentImportBodyRowsItemVariantMax = 160;
+
+export const commitShipmentImportBodyRowsItemExteriorColorMax = 120;
+
+export const commitShipmentImportBodyRowsItemInteriorColorMax = 120;
+
+export const commitShipmentImportBodyRowsItemQuantityMax = 16;
+
+export const commitShipmentImportBodyRowsMax = 5000;
+
+
+
+export const CommitShipmentImportBody = zod.object({
+  "kind": zod.enum(['lines', 'manifest']),
+  "fileName": zod.string().min(1).max(commitShipmentImportBodyFileNameMax),
+  "fileHash": zod.string().regex(commitShipmentImportBodyFileHashRegExp),
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number().min(1),
+  "vin": zod.string().max(commitShipmentImportBodyRowsItemVinMax).nullish(),
+  "make": zod.string().max(commitShipmentImportBodyRowsItemMakeMax).nullish(),
+  "model": zod.string().max(commitShipmentImportBodyRowsItemModelMax).nullish(),
+  "year": zod.string().max(commitShipmentImportBodyRowsItemYearMax).nullish(),
+  "variant": zod.string().max(commitShipmentImportBodyRowsItemVariantMax).nullish(),
+  "exteriorColor": zod.string().max(commitShipmentImportBodyRowsItemExteriorColorMax).nullish(),
+  "interiorColor": zod.string().max(commitShipmentImportBodyRowsItemInteriorColorMax).nullish(),
+  "quantity": zod.string().max(commitShipmentImportBodyRowsItemQuantityMax).nullish()
+})).max(commitShipmentImportBodyRowsMax)
+})
+
+export const CommitShipmentImportResponse = zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['lines', 'manifest']),
+  "fileName": zod.string(),
+  "totalRows": zod.number(),
+  "acceptedRows": zod.number(),
+  "rejectedRows": zod.number(),
+  "createdBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "replayed": zod.boolean()
+})
+
+
+/**
+ * @summary Rejected rows of an import batch
+ */
+export const ListShipmentImportErrorsParams = zod.object({
+  "batchId": zod.coerce.number()
+})
+
+export const ListShipmentImportErrorsResponseItem = zod.object({
+  "rowNumber": zod.number(),
+  "message": zod.string(),
+  "rawRow": zod.string()
+})
+export const ListShipmentImportErrorsResponse = zod.array(ListShipmentImportErrorsResponseItem)
+
+
+/**
+ * @summary Factory manifest VINs with inventory and claim state
+ */
+export const ListShipmentManifestsParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const ListShipmentManifestsResponseItem = zod.object({
+  "id": zod.number(),
+  "vin": zod.string(),
+  "specId": zod.number(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "status": zod.enum(['unmatched', 'proposed', 'confirmed']),
+  "inventoryVehicleId": zod.number().nullable(),
+  "inventoryStatus": zod.string().nullable(),
+  "proposalId": zod.number().nullable(),
+  "proposalStatus": zod.string().nullable(),
+  "allocationId": zod.number().nullable(),
+  "leadName": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListShipmentManifestsResponse = zod.array(ListShipmentManifestsResponseItem)
+
+
+/**
+ * @summary Proposals, pending shortages and run history
+ */
+export const GetShipmentMatchingParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const GetShipmentMatchingResponse = zod.object({
+  "proposals": zod.array(zod.object({
+  "id": zod.number(),
+  "runId": zod.number(),
+  "vin": zod.string(),
+  "manifestId": zod.number(),
+  "allocationId": zod.number(),
+  "leadId": zod.number(),
+  "leadName": zod.string(),
+  "dealId": zod.number().nullable(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "baselineAt": zod.coerce.date(),
+  "status": zod.enum(['pending', 'confirmed', 'superseded', 'rejected']),
+  "lastBlockedReason": zod.string().nullable(),
+  "holdStatus": zod.string().nullable().describe('Live reservation ledger status for confirmed proposals (active, finalized, released)'),
+  "decidedBy": zod.string().nullable(),
+  "decidedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})),
+  "shortages": zod.array(zod.object({
+  "allocationId": zod.number(),
+  "leadName": zod.string(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "baselineAt": zod.coerce.date(),
+  "unitsShort": zod.number(),
+  "reason": zod.string()
+})),
+  "runs": zod.array(zod.object({
+  "id": zod.number(),
+  "proposedCount": zod.number(),
+  "shortageUnits": zod.number(),
+  "unmatchedVins": zod.number(),
+  "createdBy": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Propose exact matches (oldest allocation first, random VIN identity)
+ */
+export const RunShipmentMatchingParams = zod.object({
+  "shipmentId": zod.coerce.number()
+})
+
+export const RunShipmentMatchingResponse = zod.object({
+  "proposals": zod.array(zod.object({
+  "id": zod.number(),
+  "runId": zod.number(),
+  "vin": zod.string(),
+  "manifestId": zod.number(),
+  "allocationId": zod.number(),
+  "leadId": zod.number(),
+  "leadName": zod.string(),
+  "dealId": zod.number().nullable(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "baselineAt": zod.coerce.date(),
+  "status": zod.enum(['pending', 'confirmed', 'superseded', 'rejected']),
+  "lastBlockedReason": zod.string().nullable(),
+  "holdStatus": zod.string().nullable().describe('Live reservation ledger status for confirmed proposals (active, finalized, released)'),
+  "decidedBy": zod.string().nullable(),
+  "decidedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})),
+  "shortages": zod.array(zod.object({
+  "allocationId": zod.number(),
+  "leadName": zod.string(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "baselineAt": zod.coerce.date(),
+  "unitsShort": zod.number(),
+  "reason": zod.string()
+})),
+  "runs": zod.array(zod.object({
+  "id": zod.number(),
+  "proposedCount": zod.number(),
+  "shortageUnits": zod.number(),
+  "unmatchedVins": zod.number(),
+  "createdBy": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Confirm through the existing reservation claim authority, or report why it stays pending
+ */
+export const ConfirmShipmentProposalParams = zod.object({
+  "proposalId": zod.coerce.number()
+})
+
+export const ConfirmShipmentProposalBody = zod.object({
+  "interiorVerified": zod.boolean()
+})
+
+export const ConfirmShipmentProposalResponse = zod.object({
+  "outcome": zod.enum(['confirmed', 'blocked']),
+  "reason": zod.string().nullable(),
+  "confirmedProposalIds": zod.array(zod.number()),
+  "handoff": zod.union([zod.literal('inventory_onboarding'),zod.literal('reservation_payment'),zod.literal('deal_link'),zod.literal(null)]).nullable()
+})
+
+
+/**
+ * @summary Reject a pending proposal (VIN returns to unmatched)
+ */
+export const RejectShipmentProposalParams = zod.object({
+  "proposalId": zod.coerce.number()
+})
+
+export const rejectShipmentProposalBodyReasonMin = 3;
+export const rejectShipmentProposalBodyReasonMax = 500;
+
+
+
+export const RejectShipmentProposalBody = zod.object({
+  "reason": zod.string().min(rejectShipmentProposalBodyReasonMin).max(rejectShipmentProposalBodyReasonMax)
+})
+
+export const RejectShipmentProposalResponse = zod.object({
+  "proposals": zod.array(zod.object({
+  "id": zod.number(),
+  "runId": zod.number(),
+  "vin": zod.string(),
+  "manifestId": zod.number(),
+  "allocationId": zod.number(),
+  "leadId": zod.number(),
+  "leadName": zod.string(),
+  "dealId": zod.number().nullable(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "baselineAt": zod.coerce.date(),
+  "status": zod.enum(['pending', 'confirmed', 'superseded', 'rejected']),
+  "lastBlockedReason": zod.string().nullable(),
+  "holdStatus": zod.string().nullable().describe('Live reservation ledger status for confirmed proposals (active, finalized, released)'),
+  "decidedBy": zod.string().nullable(),
+  "decidedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})),
+  "shortages": zod.array(zod.object({
+  "allocationId": zod.number(),
+  "leadName": zod.string(),
+  "spec": zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "variant": zod.string(),
+  "exteriorColor": zod.string(),
+  "interiorColor": zod.string(),
+  "status": zod.enum(['draft', 'approved', 'retired']),
+  "approvedBy": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "inUse": zod.boolean()
+}),
+  "baselineAt": zod.coerce.date(),
+  "unitsShort": zod.number(),
+  "reason": zod.string()
+})),
+  "runs": zod.array(zod.object({
+  "id": zod.number(),
+  "proposedCount": zod.number(),
+  "shortageUnits": zod.number(),
+  "unmatchedVins": zod.number(),
+  "createdBy": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+

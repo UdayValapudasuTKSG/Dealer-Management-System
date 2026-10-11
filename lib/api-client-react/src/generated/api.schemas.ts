@@ -12037,6 +12037,565 @@ export interface AmberVehicleStatus {
   freshness: AmberVehicleStatusFreshness;
 }
 
+export interface ShipmentSpecInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  make: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  model: string;
+  /**
+     * @minimum 1990
+     * @maximum 2100
+     */
+  year: number;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  variant: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  exteriorColor: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  interiorColor: string;
+}
+
+export type ShipmentSpecStatusInputStatus = typeof ShipmentSpecStatusInputStatus[keyof typeof ShipmentSpecStatusInputStatus];
+
+
+export const ShipmentSpecStatusInputStatus = {
+  draft: 'draft',
+  approved: 'approved',
+  retired: 'retired',
+} as const;
+
+export interface ShipmentSpecStatusInput {
+  status: ShipmentSpecStatusInputStatus;
+}
+
+export type ShipmentSpecStatus = typeof ShipmentSpecStatus[keyof typeof ShipmentSpecStatus];
+
+
+export const ShipmentSpecStatus = {
+  draft: 'draft',
+  approved: 'approved',
+  retired: 'retired',
+} as const;
+
+export interface ShipmentSpec {
+  id: number;
+  make: string;
+  model: string;
+  year: number;
+  variant: string;
+  exteriorColor: string;
+  interiorColor: string;
+  status: ShipmentSpecStatus;
+  /** @nullable */
+  approvedBy: string | null;
+  /** @nullable */
+  approvedAt: string | null;
+  createdAt: string;
+  inUse: boolean;
+}
+
+export interface ShipmentCreateInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  reference: string;
+  /** @pattern ^[0-9]{4}-(0[1-9]|1[0-2])$ */
+  etaMonth: string;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  notes?: string | null;
+}
+
+export interface ShipmentUpdateInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  reference?: string;
+  /** @pattern ^[0-9]{4}-(0[1-9]|1[0-2])$ */
+  currentEtaMonth?: string;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  notes?: string | null;
+}
+
+export type ShipmentStatusInputStatus = typeof ShipmentStatusInputStatus[keyof typeof ShipmentStatusInputStatus];
+
+
+export const ShipmentStatusInputStatus = {
+  open: 'open',
+  in_transit: 'in_transit',
+  arrived: 'arrived',
+  closed: 'closed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface ShipmentStatusInput {
+  status: ShipmentStatusInputStatus;
+}
+
+export type ShipmentSummaryStatus = typeof ShipmentSummaryStatus[keyof typeof ShipmentSummaryStatus];
+
+
+export const ShipmentSummaryStatus = {
+  open: 'open',
+  in_transit: 'in_transit',
+  arrived: 'arrived',
+  closed: 'closed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface ShipmentSummary {
+  id: number;
+  reference: string;
+  status: ShipmentSummaryStatus;
+  baselineEtaMonth: string;
+  currentEtaMonth: string;
+  /** @nullable */
+  notes: string | null;
+  totalUnits: number;
+  allocatedUnits: number;
+  manifestVins: number;
+  confirmedVins: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShipmentLineView {
+  id: number;
+  specId: number;
+  spec: ShipmentSpec;
+  quantity: number;
+  allocatedUnits: number;
+  remainingUnits: number;
+  manifestVins: number;
+}
+
+export interface ShipmentLockState {
+  held: boolean;
+  /** @nullable */
+  holderName: string | null;
+  /** @nullable */
+  expiresAt: string | null;
+  viewerHolds: boolean;
+}
+
+export interface ShipmentDetail {
+  shipment: ShipmentSummary;
+  lines: ShipmentLineView[];
+  lock: ShipmentLockState;
+  etaEmailRule: string;
+}
+
+export interface ShipmentLineInput {
+  specId: number;
+  /**
+     * @minimum 1
+     * @maximum 10000
+     */
+  quantity: number;
+}
+
+export interface ShipmentLineQuantityInput {
+  /**
+     * @minimum 1
+     * @maximum 10000
+     */
+  quantity: number;
+}
+
+export interface ShipmentEvent {
+  id: number;
+  /** @nullable */
+  shipmentId: number | null;
+  /** @nullable */
+  allocationId: number | null;
+  kind: string;
+  detail: string;
+  actor: string;
+  createdAt: string;
+}
+
+export type ShipmentEmailJobKind = typeof ShipmentEmailJobKind[keyof typeof ShipmentEmailJobKind];
+
+
+export const ShipmentEmailJobKind = {
+  initial: 'initial',
+  eta_change: 'eta_change',
+} as const;
+
+export type ShipmentEmailJobStatus = typeof ShipmentEmailJobStatus[keyof typeof ShipmentEmailJobStatus];
+
+
+export const ShipmentEmailJobStatus = {
+  queued: 'queued',
+  withheld: 'withheld',
+  suppressed: 'suppressed',
+  superseded: 'superseded',
+  sent: 'sent',
+  failed: 'failed',
+} as const;
+
+export interface ShipmentEmailJob {
+  id: number;
+  kind: ShipmentEmailJobKind;
+  etaMonth: string;
+  status: ShipmentEmailJobStatus;
+  reason: string;
+  createdAt: string;
+}
+
+export type ShipmentAllocationViewStatus = typeof ShipmentAllocationViewStatus[keyof typeof ShipmentAllocationViewStatus];
+
+
+export const ShipmentAllocationViewStatus = {
+  active: 'active',
+  fulfilled: 'fulfilled',
+  released: 'released',
+  reassigned: 'reassigned',
+} as const;
+
+export interface ShipmentAllocationView {
+  id: number;
+  shipmentId: number;
+  shipmentReference: string;
+  shipmentStatus: string;
+  currentEtaMonth: string;
+  baselineEtaMonth: string;
+  lineId: number;
+  spec: ShipmentSpec;
+  leadId: number;
+  leadName: string;
+  /** @nullable */
+  dealId: number | null;
+  requestedQuantity: number;
+  quantity: number;
+  partialConsent: boolean;
+  status: ShipmentAllocationViewStatus;
+  baselineAt: string;
+  specsConfirmedBy: string;
+  matchedUnits: number;
+  confirmedUnits: number;
+  /** Confirmed VINs whose reservation hold has since been released or expired */
+  holdLapsedUnits: number;
+  /** @nullable */
+  reassignedFromId: number | null;
+  /** @nullable */
+  releasedReason: string | null;
+  emails: ShipmentEmailJob[];
+  createdAt: string;
+}
+
+export interface ShipmentAllocationInput {
+  lineId: number;
+  leadId: number;
+  /** @nullable */
+  dealId?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 500
+     */
+  requestedQuantity: number;
+  partialConsent: boolean;
+  specsConfirmed: boolean;
+}
+
+export interface ShipmentAllocationReleaseInput {
+  /**
+     * @minLength 3
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export interface ShipmentAllocationReassignInput {
+  targetLineId: number;
+}
+
+export type ShipmentEligibleLeadDealsItem = {
+  id: number;
+  stage: string;
+};
+
+export interface ShipmentEligibleLead {
+  id: number;
+  name: string;
+  /** @nullable */
+  email: string | null;
+  status: string;
+  deals: ShipmentEligibleLeadDealsItem[];
+}
+
+export interface ShipmentImportRow {
+  /** @minimum 1 */
+  rowNumber: number;
+  /**
+     * @maxLength 64
+     * @nullable
+     */
+  vin?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  make?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  model?: string | null;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  year?: string | null;
+  /**
+     * @maxLength 160
+     * @nullable
+     */
+  variant?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  exteriorColor?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  interiorColor?: string | null;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  quantity?: string | null;
+}
+
+export type ShipmentImportInputKind = typeof ShipmentImportInputKind[keyof typeof ShipmentImportInputKind];
+
+
+export const ShipmentImportInputKind = {
+  lines: 'lines',
+  manifest: 'manifest',
+} as const;
+
+export interface ShipmentImportInput {
+  kind: ShipmentImportInputKind;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  fileName: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  fileHash: string;
+  /** @maxItems 5000 */
+  rows: ShipmentImportRow[];
+}
+
+export interface ShipmentImportRowResult {
+  rowNumber: number;
+  ok: boolean;
+  message: string;
+}
+
+export interface ShipmentImportPreview {
+  validRows: number;
+  invalidRows: number;
+  rows: ShipmentImportRowResult[];
+}
+
+export type ShipmentImportBatchKind = typeof ShipmentImportBatchKind[keyof typeof ShipmentImportBatchKind];
+
+
+export const ShipmentImportBatchKind = {
+  lines: 'lines',
+  manifest: 'manifest',
+} as const;
+
+export interface ShipmentImportBatch {
+  id: number;
+  kind: ShipmentImportBatchKind;
+  fileName: string;
+  totalRows: number;
+  acceptedRows: number;
+  rejectedRows: number;
+  /** @nullable */
+  createdBy: string | null;
+  createdAt: string;
+  replayed: boolean;
+}
+
+export interface ShipmentImportRowError {
+  rowNumber: number;
+  message: string;
+  rawRow: string;
+}
+
+export type ShipmentManifestVinStatus = typeof ShipmentManifestVinStatus[keyof typeof ShipmentManifestVinStatus];
+
+
+export const ShipmentManifestVinStatus = {
+  unmatched: 'unmatched',
+  proposed: 'proposed',
+  confirmed: 'confirmed',
+} as const;
+
+export interface ShipmentManifestVin {
+  id: number;
+  vin: string;
+  specId: number;
+  spec: ShipmentSpec;
+  status: ShipmentManifestVinStatus;
+  /** @nullable */
+  inventoryVehicleId: number | null;
+  /** @nullable */
+  inventoryStatus: string | null;
+  /** @nullable */
+  proposalId: number | null;
+  /** @nullable */
+  proposalStatus: string | null;
+  /** @nullable */
+  allocationId: number | null;
+  /** @nullable */
+  leadName: string | null;
+  createdAt: string;
+}
+
+export type ShipmentProposalViewStatus = typeof ShipmentProposalViewStatus[keyof typeof ShipmentProposalViewStatus];
+
+
+export const ShipmentProposalViewStatus = {
+  pending: 'pending',
+  confirmed: 'confirmed',
+  superseded: 'superseded',
+  rejected: 'rejected',
+} as const;
+
+export interface ShipmentProposalView {
+  id: number;
+  runId: number;
+  vin: string;
+  manifestId: number;
+  allocationId: number;
+  leadId: number;
+  leadName: string;
+  /** @nullable */
+  dealId: number | null;
+  spec: ShipmentSpec;
+  baselineAt: string;
+  status: ShipmentProposalViewStatus;
+  /** @nullable */
+  lastBlockedReason: string | null;
+  /**
+     * Live reservation ledger status for confirmed proposals (active, finalized, released)
+     * @nullable
+     */
+  holdStatus: string | null;
+  /** @nullable */
+  decidedBy: string | null;
+  /** @nullable */
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface ShipmentShortage {
+  allocationId: number;
+  leadName: string;
+  spec: ShipmentSpec;
+  baselineAt: string;
+  unitsShort: number;
+  reason: string;
+}
+
+export interface ShipmentMatchRun {
+  id: number;
+  proposedCount: number;
+  shortageUnits: number;
+  unmatchedVins: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ShipmentMatchingView {
+  proposals: ShipmentProposalView[];
+  shortages: ShipmentShortage[];
+  runs: ShipmentMatchRun[];
+}
+
+export interface ShipmentProposalConfirmInput {
+  interiorVerified: boolean;
+}
+
+export type ShipmentProposalConfirmResultOutcome = typeof ShipmentProposalConfirmResultOutcome[keyof typeof ShipmentProposalConfirmResultOutcome];
+
+
+export const ShipmentProposalConfirmResultOutcome = {
+  confirmed: 'confirmed',
+  blocked: 'blocked',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ShipmentProposalConfirmResultHandoff = typeof ShipmentProposalConfirmResultHandoff[keyof typeof ShipmentProposalConfirmResultHandoff] | null;
+
+
+export const ShipmentProposalConfirmResultHandoff = {
+  inventory_onboarding: 'inventory_onboarding',
+  reservation_payment: 'reservation_payment',
+  deal_link: 'deal_link',
+} as const;
+
+export interface ShipmentProposalConfirmResult {
+  outcome: ShipmentProposalConfirmResultOutcome;
+  /** @nullable */
+  reason: string | null;
+  confirmedProposalIds: number[];
+  /** @nullable */
+  handoff: ShipmentProposalConfirmResultHandoff;
+}
+
+export type ShipmentExceptionKind = typeof ShipmentExceptionKind[keyof typeof ShipmentExceptionKind];
+
+
+export const ShipmentExceptionKind = {
+  shortage: 'shortage',
+  blocked_proposal: 'blocked_proposal',
+  unmatched_vin: 'unmatched_vin',
+  withheld_email: 'withheld_email',
+  line_unallocated: 'line_unallocated',
+  hold_lapsed: 'hold_lapsed',
+} as const;
+
+export interface ShipmentException {
+  kind: ShipmentExceptionKind;
+  shipmentId: number;
+  shipmentReference: string;
+  title: string;
+  detail: string;
+  refId: number;
+}
+
 export type SupplierInvoiceRecordStatus = typeof SupplierInvoiceRecordStatus[keyof typeof SupplierInvoiceRecordStatus];
 
 

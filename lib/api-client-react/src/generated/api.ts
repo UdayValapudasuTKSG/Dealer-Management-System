@@ -462,6 +462,32 @@ import type {
   ServiceOrderUpdate,
   ServiceSettings,
   ServiceSettingsUpdate,
+  ShipmentAllocationInput,
+  ShipmentAllocationReassignInput,
+  ShipmentAllocationReleaseInput,
+  ShipmentAllocationView,
+  ShipmentCreateInput,
+  ShipmentDetail,
+  ShipmentEligibleLead,
+  ShipmentEvent,
+  ShipmentException,
+  ShipmentImportBatch,
+  ShipmentImportInput,
+  ShipmentImportPreview,
+  ShipmentImportRowError,
+  ShipmentLineInput,
+  ShipmentLineQuantityInput,
+  ShipmentLockState,
+  ShipmentManifestVin,
+  ShipmentMatchingView,
+  ShipmentProposalConfirmInput,
+  ShipmentProposalConfirmResult,
+  ShipmentSpec,
+  ShipmentSpecInput,
+  ShipmentSpecStatusInput,
+  ShipmentStatusInput,
+  ShipmentSummary,
+  ShipmentUpdateInput,
   SmtpConnectionTestResult,
   StageChecklistConfig,
   StageChecklistInput,
@@ -39724,5 +39750,2372 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getSubmitVehicleOnboardingMutationOptions(options));
+    }
+
+export const getListShipmentSpecsUrl = () => {
+
+
+
+
+  return `/api/shipments/specs`
+}
+
+/**
+ * @summary Dealer-scoped exact specification catalogue
+ */
+export const listShipmentSpecs = async ( options?: RequestInit): Promise<ShipmentSpec[]> => {
+
+  return customFetch<ShipmentSpec[]>(getListShipmentSpecsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentSpecsQueryKey = () => {
+    return [
+    `/api/shipments/specs`
+    ] as const;
+    }
+
+
+export const getListShipmentSpecsQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentSpecs>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentSpecs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentSpecsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentSpecs>>> = ({ signal }) => listShipmentSpecs({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentSpecs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentSpecsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentSpecs>>>
+export type ListShipmentSpecsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Dealer-scoped exact specification catalogue
+ */
+
+export function useListShipmentSpecs<TData = Awaited<ReturnType<typeof listShipmentSpecs>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentSpecs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentSpecsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateShipmentSpecUrl = () => {
+
+
+
+
+  return `/api/shipments/specs`
+}
+
+/**
+ * @summary Add a draft catalogue specification (N/A must be explicit)
+ */
+export const createShipmentSpec = async (shipmentSpecInput: ShipmentSpecInput, options?: RequestInit): Promise<ShipmentSpec> => {
+
+  return customFetch<ShipmentSpec>(getCreateShipmentSpecUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentSpecInput)
+  }
+);}
+
+
+
+
+
+export const getCreateShipmentSpecMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShipmentSpec>>, TError,{data: BodyType<ShipmentSpecInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createShipmentSpec>>, TError,{data: BodyType<ShipmentSpecInput>}, TContext> => {
+
+const mutationKey = ['createShipmentSpec'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createShipmentSpec>>, {data: BodyType<ShipmentSpecInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createShipmentSpec(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateShipmentSpecMutationResult = NonNullable<Awaited<ReturnType<typeof createShipmentSpec>>>
+    export type CreateShipmentSpecMutationBody = BodyType<ShipmentSpecInput>
+    export type CreateShipmentSpecMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a draft catalogue specification (N/A must be explicit)
+ */
+export const useCreateShipmentSpec = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShipmentSpec>>, TError,{data: BodyType<ShipmentSpecInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createShipmentSpec>>,
+        TError,
+        {data: BodyType<ShipmentSpecInput>},
+        TContext
+      > => {
+      return useMutation(getCreateShipmentSpecMutationOptions(options));
+    }
+
+export const getUpdateShipmentSpecUrl = (specId: number,) => {
+
+
+
+
+  return `/api/shipments/specs/${specId}`
+}
+
+/**
+ * @summary Edit a draft specification
+ */
+export const updateShipmentSpec = async (specId: number,
+    shipmentSpecInput: ShipmentSpecInput, options?: RequestInit): Promise<ShipmentSpec> => {
+
+  return customFetch<ShipmentSpec>(getUpdateShipmentSpecUrl(specId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentSpecInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateShipmentSpecMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShipmentSpec>>, TError,{specId: number;data: BodyType<ShipmentSpecInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateShipmentSpec>>, TError,{specId: number;data: BodyType<ShipmentSpecInput>}, TContext> => {
+
+const mutationKey = ['updateShipmentSpec'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateShipmentSpec>>, {specId: number;data: BodyType<ShipmentSpecInput>}> = (props) => {
+          const {specId,data} = props ?? {};
+
+          return  updateShipmentSpec(specId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateShipmentSpecMutationResult = NonNullable<Awaited<ReturnType<typeof updateShipmentSpec>>>
+    export type UpdateShipmentSpecMutationBody = BodyType<ShipmentSpecInput>
+    export type UpdateShipmentSpecMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Edit a draft specification
+ */
+export const useUpdateShipmentSpec = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShipmentSpec>>, TError,{specId: number;data: BodyType<ShipmentSpecInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateShipmentSpec>>,
+        TError,
+        {specId: number;data: BodyType<ShipmentSpecInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateShipmentSpecMutationOptions(options));
+    }
+
+export const getSetShipmentSpecStatusUrl = (specId: number,) => {
+
+
+
+
+  return `/api/shipments/specs/${specId}/status`
+}
+
+/**
+ * @summary Approve, retire or return a specification to draft (manager approval)
+ */
+export const setShipmentSpecStatus = async (specId: number,
+    shipmentSpecStatusInput: ShipmentSpecStatusInput, options?: RequestInit): Promise<ShipmentSpec> => {
+
+  return customFetch<ShipmentSpec>(getSetShipmentSpecStatusUrl(specId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentSpecStatusInput)
+  }
+);}
+
+
+
+
+
+export const getSetShipmentSpecStatusMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setShipmentSpecStatus>>, TError,{specId: number;data: BodyType<ShipmentSpecStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setShipmentSpecStatus>>, TError,{specId: number;data: BodyType<ShipmentSpecStatusInput>}, TContext> => {
+
+const mutationKey = ['setShipmentSpecStatus'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setShipmentSpecStatus>>, {specId: number;data: BodyType<ShipmentSpecStatusInput>}> = (props) => {
+          const {specId,data} = props ?? {};
+
+          return  setShipmentSpecStatus(specId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetShipmentSpecStatusMutationResult = NonNullable<Awaited<ReturnType<typeof setShipmentSpecStatus>>>
+    export type SetShipmentSpecStatusMutationBody = BodyType<ShipmentSpecStatusInput>
+    export type SetShipmentSpecStatusMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Approve, retire or return a specification to draft (manager approval)
+ */
+export const useSetShipmentSpecStatus = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setShipmentSpecStatus>>, TError,{specId: number;data: BodyType<ShipmentSpecStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setShipmentSpecStatus>>,
+        TError,
+        {specId: number;data: BodyType<ShipmentSpecStatusInput>},
+        TContext
+      > => {
+      return useMutation(getSetShipmentSpecStatusMutationOptions(options));
+    }
+
+export const getListShipmentsUrl = () => {
+
+
+
+
+  return `/api/shipments`
+}
+
+/**
+ * @summary Shipments with capacity summary
+ */
+export const listShipments = async ( options?: RequestInit): Promise<ShipmentSummary[]> => {
+
+  return customFetch<ShipmentSummary[]>(getListShipmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentsQueryKey = () => {
+    return [
+    `/api/shipments`
+    ] as const;
+    }
+
+
+export const getListShipmentsQueryOptions = <TData = Awaited<ReturnType<typeof listShipments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipments>>> = ({ signal }) => listShipments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipments>>>
+export type ListShipmentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Shipments with capacity summary
+ */
+
+export function useListShipments<TData = Awaited<ReturnType<typeof listShipments>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateShipmentUrl = () => {
+
+
+
+
+  return `/api/shipments`
+}
+
+/**
+ * @summary Create a shipment (baseline ETA frozen)
+ */
+export const createShipment = async (shipmentCreateInput: ShipmentCreateInput, options?: RequestInit): Promise<ShipmentSummary> => {
+
+  return customFetch<ShipmentSummary>(getCreateShipmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentCreateInput)
+  }
+);}
+
+
+
+
+
+export const getCreateShipmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShipment>>, TError,{data: BodyType<ShipmentCreateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createShipment>>, TError,{data: BodyType<ShipmentCreateInput>}, TContext> => {
+
+const mutationKey = ['createShipment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createShipment>>, {data: BodyType<ShipmentCreateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createShipment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateShipmentMutationResult = NonNullable<Awaited<ReturnType<typeof createShipment>>>
+    export type CreateShipmentMutationBody = BodyType<ShipmentCreateInput>
+    export type CreateShipmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a shipment (baseline ETA frozen)
+ */
+export const useCreateShipment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShipment>>, TError,{data: BodyType<ShipmentCreateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createShipment>>,
+        TError,
+        {data: BodyType<ShipmentCreateInput>},
+        TContext
+      > => {
+      return useMutation(getCreateShipmentMutationOptions(options));
+    }
+
+export const getListShipmentTrackingUrl = () => {
+
+
+
+
+  return `/api/shipments/tracking`
+}
+
+/**
+ * @summary Customer allocation tracking across all shipments
+ */
+export const listShipmentTracking = async ( options?: RequestInit): Promise<ShipmentAllocationView[]> => {
+
+  return customFetch<ShipmentAllocationView[]>(getListShipmentTrackingUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentTrackingQueryKey = () => {
+    return [
+    `/api/shipments/tracking`
+    ] as const;
+    }
+
+
+export const getListShipmentTrackingQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentTracking>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentTracking>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentTrackingQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentTracking>>> = ({ signal }) => listShipmentTracking({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentTracking>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentTrackingQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentTracking>>>
+export type ListShipmentTrackingQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Customer allocation tracking across all shipments
+ */
+
+export function useListShipmentTracking<TData = Awaited<ReturnType<typeof listShipmentTracking>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentTracking>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentTrackingQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListShipmentExceptionsUrl = () => {
+
+
+
+
+  return `/api/shipments/exceptions`
+}
+
+/**
+ * @summary Open shortages, blocked proposals, unmatched VINs and withheld emails
+ */
+export const listShipmentExceptions = async ( options?: RequestInit): Promise<ShipmentException[]> => {
+
+  return customFetch<ShipmentException[]>(getListShipmentExceptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentExceptionsQueryKey = () => {
+    return [
+    `/api/shipments/exceptions`
+    ] as const;
+    }
+
+
+export const getListShipmentExceptionsQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentExceptions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentExceptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentExceptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentExceptions>>> = ({ signal }) => listShipmentExceptions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentExceptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentExceptionsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentExceptions>>>
+export type ListShipmentExceptionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Open shortages, blocked proposals, unmatched VINs and withheld emails
+ */
+
+export function useListShipmentExceptions<TData = Awaited<ReturnType<typeof listShipmentExceptions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentExceptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentExceptionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListShipmentEligibleLeadsUrl = () => {
+
+
+
+
+  return `/api/shipments/eligible-leads`
+}
+
+/**
+ * @summary Approved Pre-Book leads eligible for shipment allocation
+ */
+export const listShipmentEligibleLeads = async ( options?: RequestInit): Promise<ShipmentEligibleLead[]> => {
+
+  return customFetch<ShipmentEligibleLead[]>(getListShipmentEligibleLeadsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentEligibleLeadsQueryKey = () => {
+    return [
+    `/api/shipments/eligible-leads`
+    ] as const;
+    }
+
+
+export const getListShipmentEligibleLeadsQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentEligibleLeads>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentEligibleLeads>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentEligibleLeadsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentEligibleLeads>>> = ({ signal }) => listShipmentEligibleLeads({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentEligibleLeads>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentEligibleLeadsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentEligibleLeads>>>
+export type ListShipmentEligibleLeadsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Approved Pre-Book leads eligible for shipment allocation
+ */
+
+export function useListShipmentEligibleLeads<TData = Awaited<ReturnType<typeof listShipmentEligibleLeads>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentEligibleLeads>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentEligibleLeadsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetShipmentUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}`
+}
+
+/**
+ * @summary Shipment detail with lines, capacity and editor lease
+ */
+export const getShipment = async (shipmentId: number, options?: RequestInit): Promise<ShipmentDetail> => {
+
+  return customFetch<ShipmentDetail>(getGetShipmentUrl(shipmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetShipmentQueryKey = (shipmentId: number,) => {
+    return [
+    `/api/shipments/${shipmentId}`
+    ] as const;
+    }
+
+
+export const getGetShipmentQueryOptions = <TData = Awaited<ReturnType<typeof getShipment>>, TError = ErrorType<unknown>>(shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShipment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetShipmentQueryKey(shipmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getShipment>>> = ({ signal }) => getShipment(shipmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: shipmentId !== null && shipmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getShipment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetShipmentQueryResult = NonNullable<Awaited<ReturnType<typeof getShipment>>>
+export type GetShipmentQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Shipment detail with lines, capacity and editor lease
+ */
+
+export function useGetShipment<TData = Awaited<ReturnType<typeof getShipment>>, TError = ErrorType<unknown>>(
+ shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShipment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetShipmentQueryOptions(shipmentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateShipmentUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}`
+}
+
+/**
+ * @summary Edit reference, current ETA or notes (requires editor lease)
+ */
+export const updateShipment = async (shipmentId: number,
+    shipmentUpdateInput: ShipmentUpdateInput, options?: RequestInit): Promise<ShipmentDetail> => {
+
+  return customFetch<ShipmentDetail>(getUpdateShipmentUrl(shipmentId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateShipmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShipment>>, TError,{shipmentId: number;data: BodyType<ShipmentUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateShipment>>, TError,{shipmentId: number;data: BodyType<ShipmentUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateShipment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateShipment>>, {shipmentId: number;data: BodyType<ShipmentUpdateInput>}> = (props) => {
+          const {shipmentId,data} = props ?? {};
+
+          return  updateShipment(shipmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateShipmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateShipment>>>
+    export type UpdateShipmentMutationBody = BodyType<ShipmentUpdateInput>
+    export type UpdateShipmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Edit reference, current ETA or notes (requires editor lease)
+ */
+export const useUpdateShipment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShipment>>, TError,{shipmentId: number;data: BodyType<ShipmentUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateShipment>>,
+        TError,
+        {shipmentId: number;data: BodyType<ShipmentUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateShipmentMutationOptions(options));
+    }
+
+export const getSetShipmentStatusUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/status`
+}
+
+/**
+ * @summary Move shipment status (guards active allocations)
+ */
+export const setShipmentStatus = async (shipmentId: number,
+    shipmentStatusInput: ShipmentStatusInput, options?: RequestInit): Promise<ShipmentDetail> => {
+
+  return customFetch<ShipmentDetail>(getSetShipmentStatusUrl(shipmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentStatusInput)
+  }
+);}
+
+
+
+
+
+export const getSetShipmentStatusMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setShipmentStatus>>, TError,{shipmentId: number;data: BodyType<ShipmentStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setShipmentStatus>>, TError,{shipmentId: number;data: BodyType<ShipmentStatusInput>}, TContext> => {
+
+const mutationKey = ['setShipmentStatus'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setShipmentStatus>>, {shipmentId: number;data: BodyType<ShipmentStatusInput>}> = (props) => {
+          const {shipmentId,data} = props ?? {};
+
+          return  setShipmentStatus(shipmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetShipmentStatusMutationResult = NonNullable<Awaited<ReturnType<typeof setShipmentStatus>>>
+    export type SetShipmentStatusMutationBody = BodyType<ShipmentStatusInput>
+    export type SetShipmentStatusMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Move shipment status (guards active allocations)
+ */
+export const useSetShipmentStatus = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setShipmentStatus>>, TError,{shipmentId: number;data: BodyType<ShipmentStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setShipmentStatus>>,
+        TError,
+        {shipmentId: number;data: BodyType<ShipmentStatusInput>},
+        TContext
+      > => {
+      return useMutation(getSetShipmentStatusMutationOptions(options));
+    }
+
+export const getAddShipmentLineUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/lines`
+}
+
+/**
+ * @summary Add an approved-spec line
+ */
+export const addShipmentLine = async (shipmentId: number,
+    shipmentLineInput: ShipmentLineInput, options?: RequestInit): Promise<ShipmentDetail> => {
+
+  return customFetch<ShipmentDetail>(getAddShipmentLineUrl(shipmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentLineInput)
+  }
+);}
+
+
+
+
+
+export const getAddShipmentLineMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addShipmentLine>>, TError,{shipmentId: number;data: BodyType<ShipmentLineInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addShipmentLine>>, TError,{shipmentId: number;data: BodyType<ShipmentLineInput>}, TContext> => {
+
+const mutationKey = ['addShipmentLine'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addShipmentLine>>, {shipmentId: number;data: BodyType<ShipmentLineInput>}> = (props) => {
+          const {shipmentId,data} = props ?? {};
+
+          return  addShipmentLine(shipmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddShipmentLineMutationResult = NonNullable<Awaited<ReturnType<typeof addShipmentLine>>>
+    export type AddShipmentLineMutationBody = BodyType<ShipmentLineInput>
+    export type AddShipmentLineMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add an approved-spec line
+ */
+export const useAddShipmentLine = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addShipmentLine>>, TError,{shipmentId: number;data: BodyType<ShipmentLineInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addShipmentLine>>,
+        TError,
+        {shipmentId: number;data: BodyType<ShipmentLineInput>},
+        TContext
+      > => {
+      return useMutation(getAddShipmentLineMutationOptions(options));
+    }
+
+export const getUpdateShipmentLineUrl = (shipmentId: number,
+    lineId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/lines/${lineId}`
+}
+
+/**
+ * @summary Change line quantity (never below active allocations)
+ */
+export const updateShipmentLine = async (shipmentId: number,
+    lineId: number,
+    shipmentLineQuantityInput: ShipmentLineQuantityInput, options?: RequestInit): Promise<ShipmentDetail> => {
+
+  return customFetch<ShipmentDetail>(getUpdateShipmentLineUrl(shipmentId,lineId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentLineQuantityInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateShipmentLineMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShipmentLine>>, TError,{shipmentId: number;lineId: number;data: BodyType<ShipmentLineQuantityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateShipmentLine>>, TError,{shipmentId: number;lineId: number;data: BodyType<ShipmentLineQuantityInput>}, TContext> => {
+
+const mutationKey = ['updateShipmentLine'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateShipmentLine>>, {shipmentId: number;lineId: number;data: BodyType<ShipmentLineQuantityInput>}> = (props) => {
+          const {shipmentId,lineId,data} = props ?? {};
+
+          return  updateShipmentLine(shipmentId,lineId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateShipmentLineMutationResult = NonNullable<Awaited<ReturnType<typeof updateShipmentLine>>>
+    export type UpdateShipmentLineMutationBody = BodyType<ShipmentLineQuantityInput>
+    export type UpdateShipmentLineMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Change line quantity (never below active allocations)
+ */
+export const useUpdateShipmentLine = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShipmentLine>>, TError,{shipmentId: number;lineId: number;data: BodyType<ShipmentLineQuantityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateShipmentLine>>,
+        TError,
+        {shipmentId: number;lineId: number;data: BodyType<ShipmentLineQuantityInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateShipmentLineMutationOptions(options));
+    }
+
+export const getDeleteShipmentLineUrl = (shipmentId: number,
+    lineId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/lines/${lineId}`
+}
+
+/**
+ * @summary Remove a line with no allocations or manifest VINs
+ */
+export const deleteShipmentLine = async (shipmentId: number,
+    lineId: number, options?: RequestInit): Promise<ShipmentDetail> => {
+
+  return customFetch<ShipmentDetail>(getDeleteShipmentLineUrl(shipmentId,lineId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteShipmentLineMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteShipmentLine>>, TError,{shipmentId: number;lineId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteShipmentLine>>, TError,{shipmentId: number;lineId: number}, TContext> => {
+
+const mutationKey = ['deleteShipmentLine'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteShipmentLine>>, {shipmentId: number;lineId: number}> = (props) => {
+          const {shipmentId,lineId} = props ?? {};
+
+          return  deleteShipmentLine(shipmentId,lineId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteShipmentLineMutationResult = NonNullable<Awaited<ReturnType<typeof deleteShipmentLine>>>
+
+    export type DeleteShipmentLineMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove a line with no allocations or manifest VINs
+ */
+export const useDeleteShipmentLine = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteShipmentLine>>, TError,{shipmentId: number;lineId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteShipmentLine>>,
+        TError,
+        {shipmentId: number;lineId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteShipmentLineMutationOptions(options));
+    }
+
+export const getGetShipmentLockUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/lock`
+}
+
+/**
+ * @summary Current editor lease
+ */
+export const getShipmentLock = async (shipmentId: number, options?: RequestInit): Promise<ShipmentLockState> => {
+
+  return customFetch<ShipmentLockState>(getGetShipmentLockUrl(shipmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetShipmentLockQueryKey = (shipmentId: number,) => {
+    return [
+    `/api/shipments/${shipmentId}/lock`
+    ] as const;
+    }
+
+
+export const getGetShipmentLockQueryOptions = <TData = Awaited<ReturnType<typeof getShipmentLock>>, TError = ErrorType<unknown>>(shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShipmentLock>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetShipmentLockQueryKey(shipmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getShipmentLock>>> = ({ signal }) => getShipmentLock(shipmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: shipmentId !== null && shipmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getShipmentLock>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetShipmentLockQueryResult = NonNullable<Awaited<ReturnType<typeof getShipmentLock>>>
+export type GetShipmentLockQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Current editor lease
+ */
+
+export function useGetShipmentLock<TData = Awaited<ReturnType<typeof getShipmentLock>>, TError = ErrorType<unknown>>(
+ shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShipmentLock>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetShipmentLockQueryOptions(shipmentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAcquireShipmentLockUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/lock`
+}
+
+/**
+ * @summary Acquire or renew the single-editor lease
+ */
+export const acquireShipmentLock = async (shipmentId: number, options?: RequestInit): Promise<ShipmentLockState> => {
+
+  return customFetch<ShipmentLockState>(getAcquireShipmentLockUrl(shipmentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAcquireShipmentLockMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acquireShipmentLock>>, TError,{shipmentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acquireShipmentLock>>, TError,{shipmentId: number}, TContext> => {
+
+const mutationKey = ['acquireShipmentLock'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acquireShipmentLock>>, {shipmentId: number}> = (props) => {
+          const {shipmentId} = props ?? {};
+
+          return  acquireShipmentLock(shipmentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcquireShipmentLockMutationResult = NonNullable<Awaited<ReturnType<typeof acquireShipmentLock>>>
+
+    export type AcquireShipmentLockMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Acquire or renew the single-editor lease
+ */
+export const useAcquireShipmentLock = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acquireShipmentLock>>, TError,{shipmentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acquireShipmentLock>>,
+        TError,
+        {shipmentId: number},
+        TContext
+      > => {
+      return useMutation(getAcquireShipmentLockMutationOptions(options));
+    }
+
+export const getReleaseShipmentLockUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/lock`
+}
+
+/**
+ * @summary Release own editor lease
+ */
+export const releaseShipmentLock = async (shipmentId: number, options?: RequestInit): Promise<ShipmentLockState> => {
+
+  return customFetch<ShipmentLockState>(getReleaseShipmentLockUrl(shipmentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getReleaseShipmentLockMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof releaseShipmentLock>>, TError,{shipmentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof releaseShipmentLock>>, TError,{shipmentId: number}, TContext> => {
+
+const mutationKey = ['releaseShipmentLock'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof releaseShipmentLock>>, {shipmentId: number}> = (props) => {
+          const {shipmentId} = props ?? {};
+
+          return  releaseShipmentLock(shipmentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReleaseShipmentLockMutationResult = NonNullable<Awaited<ReturnType<typeof releaseShipmentLock>>>
+
+    export type ReleaseShipmentLockMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Release own editor lease
+ */
+export const useReleaseShipmentLock = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof releaseShipmentLock>>, TError,{shipmentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof releaseShipmentLock>>,
+        TError,
+        {shipmentId: number},
+        TContext
+      > => {
+      return useMutation(getReleaseShipmentLockMutationOptions(options));
+    }
+
+export const getListShipmentEventsUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/events`
+}
+
+/**
+ * @summary Audit trail for a shipment
+ */
+export const listShipmentEvents = async (shipmentId: number, options?: RequestInit): Promise<ShipmentEvent[]> => {
+
+  return customFetch<ShipmentEvent[]>(getListShipmentEventsUrl(shipmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentEventsQueryKey = (shipmentId: number,) => {
+    return [
+    `/api/shipments/${shipmentId}/events`
+    ] as const;
+    }
+
+
+export const getListShipmentEventsQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentEvents>>, TError = ErrorType<unknown>>(shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentEventsQueryKey(shipmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentEvents>>> = ({ signal }) => listShipmentEvents(shipmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: shipmentId !== null && shipmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentEvents>>>
+export type ListShipmentEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Audit trail for a shipment
+ */
+
+export function useListShipmentEvents<TData = Awaited<ReturnType<typeof listShipmentEvents>>, TError = ErrorType<unknown>>(
+ shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentEventsQueryOptions(shipmentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListShipmentAllocationsUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/allocations`
+}
+
+/**
+ * @summary Allocations on a shipment
+ */
+export const listShipmentAllocations = async (shipmentId: number, options?: RequestInit): Promise<ShipmentAllocationView[]> => {
+
+  return customFetch<ShipmentAllocationView[]>(getListShipmentAllocationsUrl(shipmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentAllocationsQueryKey = (shipmentId: number,) => {
+    return [
+    `/api/shipments/${shipmentId}/allocations`
+    ] as const;
+    }
+
+
+export const getListShipmentAllocationsQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentAllocations>>, TError = ErrorType<unknown>>(shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentAllocations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentAllocationsQueryKey(shipmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentAllocations>>> = ({ signal }) => listShipmentAllocations(shipmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: shipmentId !== null && shipmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentAllocations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentAllocationsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentAllocations>>>
+export type ListShipmentAllocationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Allocations on a shipment
+ */
+
+export function useListShipmentAllocations<TData = Awaited<ReturnType<typeof listShipmentAllocations>>, TError = ErrorType<unknown>>(
+ shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentAllocations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentAllocationsQueryOptions(shipmentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateShipmentAllocationUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/allocations`
+}
+
+/**
+ * @summary Vehicle Allocated - consume line capacity for an eligible Pre-Book lead
+ */
+export const createShipmentAllocation = async (shipmentId: number,
+    shipmentAllocationInput: ShipmentAllocationInput, options?: RequestInit): Promise<ShipmentAllocationView> => {
+
+  return customFetch<ShipmentAllocationView>(getCreateShipmentAllocationUrl(shipmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentAllocationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateShipmentAllocationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShipmentAllocation>>, TError,{shipmentId: number;data: BodyType<ShipmentAllocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createShipmentAllocation>>, TError,{shipmentId: number;data: BodyType<ShipmentAllocationInput>}, TContext> => {
+
+const mutationKey = ['createShipmentAllocation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createShipmentAllocation>>, {shipmentId: number;data: BodyType<ShipmentAllocationInput>}> = (props) => {
+          const {shipmentId,data} = props ?? {};
+
+          return  createShipmentAllocation(shipmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateShipmentAllocationMutationResult = NonNullable<Awaited<ReturnType<typeof createShipmentAllocation>>>
+    export type CreateShipmentAllocationMutationBody = BodyType<ShipmentAllocationInput>
+    export type CreateShipmentAllocationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Vehicle Allocated - consume line capacity for an eligible Pre-Book lead
+ */
+export const useCreateShipmentAllocation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShipmentAllocation>>, TError,{shipmentId: number;data: BodyType<ShipmentAllocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createShipmentAllocation>>,
+        TError,
+        {shipmentId: number;data: BodyType<ShipmentAllocationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateShipmentAllocationMutationOptions(options));
+    }
+
+export const getReleaseShipmentAllocationUrl = (allocationId: number,) => {
+
+
+
+
+  return `/api/shipments/allocations/${allocationId}/release`
+}
+
+/**
+ * @summary Release allocation capacity
+ */
+export const releaseShipmentAllocation = async (allocationId: number,
+    shipmentAllocationReleaseInput: ShipmentAllocationReleaseInput, options?: RequestInit): Promise<ShipmentAllocationView> => {
+
+  return customFetch<ShipmentAllocationView>(getReleaseShipmentAllocationUrl(allocationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentAllocationReleaseInput)
+  }
+);}
+
+
+
+
+
+export const getReleaseShipmentAllocationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof releaseShipmentAllocation>>, TError,{allocationId: number;data: BodyType<ShipmentAllocationReleaseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof releaseShipmentAllocation>>, TError,{allocationId: number;data: BodyType<ShipmentAllocationReleaseInput>}, TContext> => {
+
+const mutationKey = ['releaseShipmentAllocation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof releaseShipmentAllocation>>, {allocationId: number;data: BodyType<ShipmentAllocationReleaseInput>}> = (props) => {
+          const {allocationId,data} = props ?? {};
+
+          return  releaseShipmentAllocation(allocationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReleaseShipmentAllocationMutationResult = NonNullable<Awaited<ReturnType<typeof releaseShipmentAllocation>>>
+    export type ReleaseShipmentAllocationMutationBody = BodyType<ShipmentAllocationReleaseInput>
+    export type ReleaseShipmentAllocationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Release allocation capacity
+ */
+export const useReleaseShipmentAllocation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof releaseShipmentAllocation>>, TError,{allocationId: number;data: BodyType<ShipmentAllocationReleaseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof releaseShipmentAllocation>>,
+        TError,
+        {allocationId: number;data: BodyType<ShipmentAllocationReleaseInput>},
+        TContext
+      > => {
+      return useMutation(getReleaseShipmentAllocationMutationOptions(options));
+    }
+
+export const getReassignShipmentAllocationUrl = (allocationId: number,) => {
+
+
+
+
+  return `/api/shipments/allocations/${allocationId}/reassign`
+}
+
+/**
+ * @summary Atomically claim target line capacity and release the old one (priority preserved)
+ */
+export const reassignShipmentAllocation = async (allocationId: number,
+    shipmentAllocationReassignInput: ShipmentAllocationReassignInput, options?: RequestInit): Promise<ShipmentAllocationView> => {
+
+  return customFetch<ShipmentAllocationView>(getReassignShipmentAllocationUrl(allocationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentAllocationReassignInput)
+  }
+);}
+
+
+
+
+
+export const getReassignShipmentAllocationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reassignShipmentAllocation>>, TError,{allocationId: number;data: BodyType<ShipmentAllocationReassignInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reassignShipmentAllocation>>, TError,{allocationId: number;data: BodyType<ShipmentAllocationReassignInput>}, TContext> => {
+
+const mutationKey = ['reassignShipmentAllocation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reassignShipmentAllocation>>, {allocationId: number;data: BodyType<ShipmentAllocationReassignInput>}> = (props) => {
+          const {allocationId,data} = props ?? {};
+
+          return  reassignShipmentAllocation(allocationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReassignShipmentAllocationMutationResult = NonNullable<Awaited<ReturnType<typeof reassignShipmentAllocation>>>
+    export type ReassignShipmentAllocationMutationBody = BodyType<ShipmentAllocationReassignInput>
+    export type ReassignShipmentAllocationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Atomically claim target line capacity and release the old one (priority preserved)
+ */
+export const useReassignShipmentAllocation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reassignShipmentAllocation>>, TError,{allocationId: number;data: BodyType<ShipmentAllocationReassignInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reassignShipmentAllocation>>,
+        TError,
+        {allocationId: number;data: BodyType<ShipmentAllocationReassignInput>},
+        TContext
+      > => {
+      return useMutation(getReassignShipmentAllocationMutationOptions(options));
+    }
+
+export const getPreviewShipmentImportUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/imports/preview`
+}
+
+/**
+ * @summary Validate parsed rows server-side without writing
+ */
+export const previewShipmentImport = async (shipmentId: number,
+    shipmentImportInput: ShipmentImportInput, options?: RequestInit): Promise<ShipmentImportPreview> => {
+
+  return customFetch<ShipmentImportPreview>(getPreviewShipmentImportUrl(shipmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentImportInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewShipmentImportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewShipmentImport>>, TError,{shipmentId: number;data: BodyType<ShipmentImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewShipmentImport>>, TError,{shipmentId: number;data: BodyType<ShipmentImportInput>}, TContext> => {
+
+const mutationKey = ['previewShipmentImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewShipmentImport>>, {shipmentId: number;data: BodyType<ShipmentImportInput>}> = (props) => {
+          const {shipmentId,data} = props ?? {};
+
+          return  previewShipmentImport(shipmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewShipmentImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewShipmentImport>>>
+    export type PreviewShipmentImportMutationBody = BodyType<ShipmentImportInput>
+    export type PreviewShipmentImportMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Validate parsed rows server-side without writing
+ */
+export const usePreviewShipmentImport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewShipmentImport>>, TError,{shipmentId: number;data: BodyType<ShipmentImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewShipmentImport>>,
+        TError,
+        {shipmentId: number;data: BodyType<ShipmentImportInput>},
+        TContext
+      > => {
+      return useMutation(getPreviewShipmentImportMutationOptions(options));
+    }
+
+export const getListShipmentImportsUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/imports`
+}
+
+/**
+ * @summary Import batches for a shipment
+ */
+export const listShipmentImports = async (shipmentId: number, options?: RequestInit): Promise<ShipmentImportBatch[]> => {
+
+  return customFetch<ShipmentImportBatch[]>(getListShipmentImportsUrl(shipmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentImportsQueryKey = (shipmentId: number,) => {
+    return [
+    `/api/shipments/${shipmentId}/imports`
+    ] as const;
+    }
+
+
+export const getListShipmentImportsQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentImports>>, TError = ErrorType<unknown>>(shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentImports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentImportsQueryKey(shipmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentImports>>> = ({ signal }) => listShipmentImports(shipmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: shipmentId !== null && shipmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentImports>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentImportsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentImports>>>
+export type ListShipmentImportsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Import batches for a shipment
+ */
+
+export function useListShipmentImports<TData = Awaited<ReturnType<typeof listShipmentImports>>, TError = ErrorType<unknown>>(
+ shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentImports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentImportsQueryOptions(shipmentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCommitShipmentImportUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/imports`
+}
+
+/**
+ * @summary Accept valid rows, isolate invalid rows (identical retries replay)
+ */
+export const commitShipmentImport = async (shipmentId: number,
+    shipmentImportInput: ShipmentImportInput, options?: RequestInit): Promise<ShipmentImportBatch> => {
+
+  return customFetch<ShipmentImportBatch>(getCommitShipmentImportUrl(shipmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentImportInput)
+  }
+);}
+
+
+
+
+
+export const getCommitShipmentImportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitShipmentImport>>, TError,{shipmentId: number;data: BodyType<ShipmentImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof commitShipmentImport>>, TError,{shipmentId: number;data: BodyType<ShipmentImportInput>}, TContext> => {
+
+const mutationKey = ['commitShipmentImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitShipmentImport>>, {shipmentId: number;data: BodyType<ShipmentImportInput>}> = (props) => {
+          const {shipmentId,data} = props ?? {};
+
+          return  commitShipmentImport(shipmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CommitShipmentImportMutationResult = NonNullable<Awaited<ReturnType<typeof commitShipmentImport>>>
+    export type CommitShipmentImportMutationBody = BodyType<ShipmentImportInput>
+    export type CommitShipmentImportMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Accept valid rows, isolate invalid rows (identical retries replay)
+ */
+export const useCommitShipmentImport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitShipmentImport>>, TError,{shipmentId: number;data: BodyType<ShipmentImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof commitShipmentImport>>,
+        TError,
+        {shipmentId: number;data: BodyType<ShipmentImportInput>},
+        TContext
+      > => {
+      return useMutation(getCommitShipmentImportMutationOptions(options));
+    }
+
+export const getListShipmentImportErrorsUrl = (batchId: number,) => {
+
+
+
+
+  return `/api/shipments/imports/${batchId}/errors`
+}
+
+/**
+ * @summary Rejected rows of an import batch
+ */
+export const listShipmentImportErrors = async (batchId: number, options?: RequestInit): Promise<ShipmentImportRowError[]> => {
+
+  return customFetch<ShipmentImportRowError[]>(getListShipmentImportErrorsUrl(batchId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentImportErrorsQueryKey = (batchId: number,) => {
+    return [
+    `/api/shipments/imports/${batchId}/errors`
+    ] as const;
+    }
+
+
+export const getListShipmentImportErrorsQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentImportErrors>>, TError = ErrorType<unknown>>(batchId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentImportErrors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentImportErrorsQueryKey(batchId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentImportErrors>>> = ({ signal }) => listShipmentImportErrors(batchId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: batchId !== null && batchId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentImportErrors>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentImportErrorsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentImportErrors>>>
+export type ListShipmentImportErrorsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Rejected rows of an import batch
+ */
+
+export function useListShipmentImportErrors<TData = Awaited<ReturnType<typeof listShipmentImportErrors>>, TError = ErrorType<unknown>>(
+ batchId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentImportErrors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentImportErrorsQueryOptions(batchId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListShipmentManifestsUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/manifests`
+}
+
+/**
+ * @summary Factory manifest VINs with inventory and claim state
+ */
+export const listShipmentManifests = async (shipmentId: number, options?: RequestInit): Promise<ShipmentManifestVin[]> => {
+
+  return customFetch<ShipmentManifestVin[]>(getListShipmentManifestsUrl(shipmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShipmentManifestsQueryKey = (shipmentId: number,) => {
+    return [
+    `/api/shipments/${shipmentId}/manifests`
+    ] as const;
+    }
+
+
+export const getListShipmentManifestsQueryOptions = <TData = Awaited<ReturnType<typeof listShipmentManifests>>, TError = ErrorType<unknown>>(shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentManifests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShipmentManifestsQueryKey(shipmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShipmentManifests>>> = ({ signal }) => listShipmentManifests(shipmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: shipmentId !== null && shipmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShipmentManifests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShipmentManifestsQueryResult = NonNullable<Awaited<ReturnType<typeof listShipmentManifests>>>
+export type ListShipmentManifestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Factory manifest VINs with inventory and claim state
+ */
+
+export function useListShipmentManifests<TData = Awaited<ReturnType<typeof listShipmentManifests>>, TError = ErrorType<unknown>>(
+ shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShipmentManifests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShipmentManifestsQueryOptions(shipmentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetShipmentMatchingUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/matching`
+}
+
+/**
+ * @summary Proposals, pending shortages and run history
+ */
+export const getShipmentMatching = async (shipmentId: number, options?: RequestInit): Promise<ShipmentMatchingView> => {
+
+  return customFetch<ShipmentMatchingView>(getGetShipmentMatchingUrl(shipmentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetShipmentMatchingQueryKey = (shipmentId: number,) => {
+    return [
+    `/api/shipments/${shipmentId}/matching`
+    ] as const;
+    }
+
+
+export const getGetShipmentMatchingQueryOptions = <TData = Awaited<ReturnType<typeof getShipmentMatching>>, TError = ErrorType<unknown>>(shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShipmentMatching>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetShipmentMatchingQueryKey(shipmentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getShipmentMatching>>> = ({ signal }) => getShipmentMatching(shipmentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: shipmentId !== null && shipmentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getShipmentMatching>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetShipmentMatchingQueryResult = NonNullable<Awaited<ReturnType<typeof getShipmentMatching>>>
+export type GetShipmentMatchingQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Proposals, pending shortages and run history
+ */
+
+export function useGetShipmentMatching<TData = Awaited<ReturnType<typeof getShipmentMatching>>, TError = ErrorType<unknown>>(
+ shipmentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getShipmentMatching>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetShipmentMatchingQueryOptions(shipmentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRunShipmentMatchingUrl = (shipmentId: number,) => {
+
+
+
+
+  return `/api/shipments/${shipmentId}/matching`
+}
+
+/**
+ * @summary Propose exact matches (oldest allocation first, random VIN identity)
+ */
+export const runShipmentMatching = async (shipmentId: number, options?: RequestInit): Promise<ShipmentMatchingView> => {
+
+  return customFetch<ShipmentMatchingView>(getRunShipmentMatchingUrl(shipmentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRunShipmentMatchingMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runShipmentMatching>>, TError,{shipmentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runShipmentMatching>>, TError,{shipmentId: number}, TContext> => {
+
+const mutationKey = ['runShipmentMatching'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runShipmentMatching>>, {shipmentId: number}> = (props) => {
+          const {shipmentId} = props ?? {};
+
+          return  runShipmentMatching(shipmentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunShipmentMatchingMutationResult = NonNullable<Awaited<ReturnType<typeof runShipmentMatching>>>
+
+    export type RunShipmentMatchingMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Propose exact matches (oldest allocation first, random VIN identity)
+ */
+export const useRunShipmentMatching = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runShipmentMatching>>, TError,{shipmentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof runShipmentMatching>>,
+        TError,
+        {shipmentId: number},
+        TContext
+      > => {
+      return useMutation(getRunShipmentMatchingMutationOptions(options));
+    }
+
+export const getConfirmShipmentProposalUrl = (proposalId: number,) => {
+
+
+
+
+  return `/api/shipments/proposals/${proposalId}/confirm`
+}
+
+/**
+ * @summary Confirm through the existing reservation claim authority, or report why it stays pending
+ */
+export const confirmShipmentProposal = async (proposalId: number,
+    shipmentProposalConfirmInput: ShipmentProposalConfirmInput, options?: RequestInit): Promise<ShipmentProposalConfirmResult> => {
+
+  return customFetch<ShipmentProposalConfirmResult>(getConfirmShipmentProposalUrl(proposalId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentProposalConfirmInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmShipmentProposalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmShipmentProposal>>, TError,{proposalId: number;data: BodyType<ShipmentProposalConfirmInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmShipmentProposal>>, TError,{proposalId: number;data: BodyType<ShipmentProposalConfirmInput>}, TContext> => {
+
+const mutationKey = ['confirmShipmentProposal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmShipmentProposal>>, {proposalId: number;data: BodyType<ShipmentProposalConfirmInput>}> = (props) => {
+          const {proposalId,data} = props ?? {};
+
+          return  confirmShipmentProposal(proposalId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmShipmentProposalMutationResult = NonNullable<Awaited<ReturnType<typeof confirmShipmentProposal>>>
+    export type ConfirmShipmentProposalMutationBody = BodyType<ShipmentProposalConfirmInput>
+    export type ConfirmShipmentProposalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Confirm through the existing reservation claim authority, or report why it stays pending
+ */
+export const useConfirmShipmentProposal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmShipmentProposal>>, TError,{proposalId: number;data: BodyType<ShipmentProposalConfirmInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmShipmentProposal>>,
+        TError,
+        {proposalId: number;data: BodyType<ShipmentProposalConfirmInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmShipmentProposalMutationOptions(options));
+    }
+
+export const getRejectShipmentProposalUrl = (proposalId: number,) => {
+
+
+
+
+  return `/api/shipments/proposals/${proposalId}/reject`
+}
+
+/**
+ * @summary Reject a pending proposal (VIN returns to unmatched)
+ */
+export const rejectShipmentProposal = async (proposalId: number,
+    shipmentAllocationReleaseInput: ShipmentAllocationReleaseInput, options?: RequestInit): Promise<ShipmentMatchingView> => {
+
+  return customFetch<ShipmentMatchingView>(getRejectShipmentProposalUrl(proposalId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shipmentAllocationReleaseInput)
+  }
+);}
+
+
+
+
+
+export const getRejectShipmentProposalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectShipmentProposal>>, TError,{proposalId: number;data: BodyType<ShipmentAllocationReleaseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectShipmentProposal>>, TError,{proposalId: number;data: BodyType<ShipmentAllocationReleaseInput>}, TContext> => {
+
+const mutationKey = ['rejectShipmentProposal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectShipmentProposal>>, {proposalId: number;data: BodyType<ShipmentAllocationReleaseInput>}> = (props) => {
+          const {proposalId,data} = props ?? {};
+
+          return  rejectShipmentProposal(proposalId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectShipmentProposalMutationResult = NonNullable<Awaited<ReturnType<typeof rejectShipmentProposal>>>
+    export type RejectShipmentProposalMutationBody = BodyType<ShipmentAllocationReleaseInput>
+    export type RejectShipmentProposalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reject a pending proposal (VIN returns to unmatched)
+ */
+export const useRejectShipmentProposal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectShipmentProposal>>, TError,{proposalId: number;data: BodyType<ShipmentAllocationReleaseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectShipmentProposal>>,
+        TError,
+        {proposalId: number;data: BodyType<ShipmentAllocationReleaseInput>},
+        TContext
+      > => {
+      return useMutation(getRejectShipmentProposalMutationOptions(options));
     }
 

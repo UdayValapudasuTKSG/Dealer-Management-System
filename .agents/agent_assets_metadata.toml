@@ -447,3 +447,17 @@ mtime_ms = 1791751774512
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/a07584dc-109a-47c3-ac44-8991da5251eb/9b44e358-318f-4840-83bb-b77bdce5e920"
 storage_version_token = "1791751804959785"
 content_type = "text/html"
+
+[[outputs]]
+id = "W4vpAiot6IPrim6afuqQ-"
+uri = "file://docs/shipment-flow-user-guide.md"
+type = "text"
+title = "Shipment allocation — operating guide"
+description = "Step-by-step catalogue, allocation, imports, VIN confirmation, tracking and initial-rollout limitations."
+logical_id = "991d113b-ed81-4754-872c-40198109f754"
+content_hash = "sha256:175d46ab78df186200de615f8ed794ba69350bea04831d1347ed8d486fdd6a6f"
+size = 5327
+mtime_ms = 1791755150948
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/991d113b-ed81-4754-872c-40198109f754/49f13d6d-c29b-46bd-a9ba-70d8a3f39720"
+storage_version_token = "1791755175832438"
+content_type = "text/markdown"

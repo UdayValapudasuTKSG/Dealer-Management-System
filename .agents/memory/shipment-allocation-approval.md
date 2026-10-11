@@ -14,3 +14,10 @@ The user supplied a revision labelled “Approved Business Scope,” first reque
 **Why:** These are explicit changes to the earlier draft, not blanket approval of its recommendations. The revised document still conflicts internally on proposed versus permanent VIN claims; its one-month ETA notification threshold is approximate, and multi-unit fulfilment and active-shipment rules are not fully resolved. Catalogue confirmation remains pending despite the approval heading.
 
 **How to apply:** Use the revised business directions when explaining or preparing a consolidated BRD. Resolve the remaining contradictions before coding. Keep isolated ERP accounting-test fixtures distinct from operational shipment records; test-data authorisation does not authorise placeholder VINs for customer allocations. Do not treat the status label as authorisation to migrate production or send customer messages.
+
+## Catalogue and initial rollout
+The user explicitly selected a manager-maintained approved specification catalogue, rather than waiting for an external spreadsheet.
+
+**Why:** Existing inventory does not provide all required matching attributes, especially interior colour; inferred or blank catalogue values would undermine exact matching.
+
+**How to apply:** Managers approve explicit specifications before allocations/imports use them. Do not derive catalogue approval from existing stock. VIN confirmation must preserve the established fully paid reservation boundary; lacking eligibility should leave an actionable pending proposal, not a new unpaid claim. Initial rollout records communications as withheld pending template rollout; do not silently turn real sending on or replay test/historical events.

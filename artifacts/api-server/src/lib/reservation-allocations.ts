@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import {
   db,
   bookingsTable,
   dealsTable,
   dealItemsTable,
+  invoicesTable,
   reservationAllocationsTable,
   timelineEventsTable,
   vehiclesTable,
@@ -448,4 +449,148 @@ export async function expireLapsedReservationHolds(): Promise<void> {
       );
     }
   }
+}
+
+export class SpecificHoldRefused extends Error {
+  constructor(message: string, public handoff: "reservation_payment" | null = null) {
+    super(message);
+  }
+}
+
+/**
+ * Bind SPECIFIC, already-verified inventory VINs to every unit of a deal
+ * through this same claim ledger (used by shipment manifest confirmation).
+ * Same invariants as allocateReservationInventory: per-deal advisory lock,
+ * desking-only, all-or-nothing (the supplied units must cover every deal-item
+ * unit exactly and no active holds may exist), vehicle rows locked and only
+ * `available` + unclaimed units accepted, partial unique indexes as backstop.
+ * Must run inside the caller's transaction; throws SpecificHoldRefused with
+ * an actionable message instead of partially holding.
+ */
+export async function holdSpecificVehiclesForDeal(
+  tx: Tx,
+  opts: {
+    dealerId: number;
+    dealId: number;
+    units: { dealItemId: number; dealItemUnit: number; vehicleId: number }[];
+    actor: string;
+  },
+): Promise<{ allocationIds: number[]; expiresAt: Date }> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`reservation-alloc:${opts.dealerId}:${opts.dealId}`}))`,
+  );
+  const [deal] = await tx
+    .select()
+    .from(dealsTable)
+    .where(and(eq(dealsTable.id, opts.dealId), eq(dealsTable.dealerId, opts.dealerId)))
+    .for("update");
+  if (!deal) throw new SpecificHoldRefused("Linked deal not found for this dealership");
+  if (deal.stage !== "desking")
+    throw new SpecificHoldRefused(`Deal #${deal.id} is ${deal.stage}; holds can only bind to a desking deal`);
+  // Finance boundary: identical eligibility to the manager retry path -
+  // only a FULLY PAID reservation invoice that is blocked on stock
+  // (reservationHoldStatus = unfulfilled) may bind VINs. Invoice row locked.
+  const [paidInvoice] = await tx
+    .select({ id: invoicesTable.id })
+    .from(invoicesTable)
+    .where(and(
+      eq(invoicesTable.dealId, deal.id),
+      eq(invoicesTable.dealerId, opts.dealerId),
+      eq(invoicesTable.kind, "reservation"),
+      eq(invoicesTable.status, "paid"),
+    ))
+    .orderBy(desc(invoicesTable.id))
+    .limit(1)
+    .for("update");
+  if (!paidInvoice || deal.reservationHoldStatus !== "unfulfilled")
+    throw new SpecificHoldRefused(
+      `Deal #${deal.id} has no fully paid reservation awaiting stock; the reservation invoice must be paid in full before a VIN can be held`,
+      "reservation_payment",
+    );
+  const items = await tx
+    .select()
+    .from(dealItemsTable)
+    .where(and(eq(dealItemsTable.dealId, deal.id), eq(dealItemsTable.dealerId, opts.dealerId)));
+  const expected = new Set<string>();
+  for (const item of items)
+    for (let u = 0; u < item.quantity; u += 1) expected.add(`${item.id}:${u}`);
+  const supplied = new Set(opts.units.map((u) => `${u.dealItemId}:${u.dealItemUnit}`));
+  if (supplied.size !== opts.units.length || supplied.size !== expected.size || [...expected].some((k) => !supplied.has(k)))
+    throw new SpecificHoldRefused(
+      `Deal #${deal.id} needs ${expected.size} unit(s) held together (all-or-nothing); ${opts.units.length} verified VIN(s) supplied`,
+    );
+  const active = await activeReservationAllocations(deal.id, opts.dealerId, tx);
+  if (active.length) throw new SpecificHoldRefused(`Deal #${deal.id} already has active reservation holds`);
+  const [booking] = await tx
+    .select({ expiresAt: bookingsTable.expiresAt })
+    .from(bookingsTable)
+    .where(and(
+      eq(bookingsTable.dealId, deal.id),
+      eq(bookingsTable.dealerId, opts.dealerId),
+      eq(bookingsTable.status, "active"),
+    ))
+    .limit(1);
+  const expiresAt =
+    booking?.expiresAt && booking.expiresAt.getTime() > Date.now()
+      ? booking.expiresAt
+      : new Date(Date.now() + RESERVATION_HOLD_HOURS * 60 * 60 * 1000);
+  const ids: number[] = [];
+  for (const unit of opts.units) {
+    const [vehicle] = await tx
+      .select()
+      .from(vehiclesTable)
+      .where(and(eq(vehiclesTable.id, unit.vehicleId), eq(vehiclesTable.dealerId, opts.dealerId), isNull(vehiclesTable.deletedAt)))
+      .for("update");
+    if (!vehicle || vehicle.status !== "available")
+      throw new SpecificHoldRefused(`Vehicle ${vehicle?.vin ?? unit.vehicleId} is ${vehicle?.status ?? "missing"}; existing held/sold/committed units are preserved`);
+    if (vehicle.recallFlag || vehicle.damageFlag ||
+        !isValidVinLength(vehicle.vin) || !isValidEngineNumberLength(vehicle.engineNumber) ||
+        (vehicle.registration && !REGISTRATION_PATTERN.test(vehicle.registration)))
+      throw new SpecificHoldRefused(`Vehicle ${vehicle.vin ?? vehicle.id} fails the existing inventory identity/recall/damage checks; correct Inventory before confirming`);
+    const item = items.find(i => i.id === unit.dealItemId)!;
+    const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+    if (!item.make || !item.model || !item.modelYear || !item.variant || !item.color ||
+        norm(item.make) !== norm(vehicle.make) || norm(item.model) !== norm(vehicle.model) ||
+        item.modelYear !== vehicle.year || norm(item.variant) !== norm(vehicle.trim ?? vehicle.variant) ||
+        norm(item.color) !== norm(vehicle.exteriorColor))
+      throw new SpecificHoldRefused(`Vehicle ${vehicle.vin} does not exactly match deal item #${item.id}; blanks are not wildcards`);
+    if (await vehicleOtherwiseClaimed(tx, vehicle.id, opts.dealerId))
+      throw new SpecificHoldRefused(`Vehicle ${vehicle.vin} is already claimed by a booking or reservation hold`);
+    await tx
+      .update(vehiclesTable)
+      .set({ status: "reserved", holdUntil: expiresAt, holdReason: "reservation_hold" })
+      .where(and(eq(vehiclesTable.id, vehicle.id), eq(vehiclesTable.dealerId, opts.dealerId), eq(vehiclesTable.status, "available")));
+    const [row] = await tx
+      .insert(reservationAllocationsTable)
+      .values({
+        dealerId: opts.dealerId,
+        dealId: deal.id,
+        invoiceId: paidInvoice.id,
+        dealItemId: unit.dealItemId,
+        dealItemUnit: unit.dealItemUnit,
+        vehicleId: vehicle.id,
+        status: "active",
+        expiresAt,
+        createdBy: opts.actor,
+      })
+      .returning({ id: reservationAllocationsTable.id });
+    ids.push(row!.id);
+  }
+  await tx
+    .update(dealsTable)
+    .set({ reservationHoldStatus: "held" })
+    .where(and(eq(dealsTable.id, deal.id), eq(dealsTable.dealerId, opts.dealerId)));
+  await tx.insert(timelineEventsTable).values({
+    dealerId: opts.dealerId,
+    customerId: deal.customerId,
+    domain: "deal",
+    kind: "reservation_hold",
+    title: `Shipment VINs confirmed - ${ids.length} vehicle(s) held`,
+    detail: `Manifest VINs were confirmed by ${opts.actor} and held for deal #${deal.id} until ${expiresAt.toISOString().slice(0, 10)} or final commitment.`,
+    actor: opts.actor,
+    isAgent: false,
+    refType: "deal",
+    refId: deal.id,
+  });
+  return { allocationIds: ids, expiresAt };
 }

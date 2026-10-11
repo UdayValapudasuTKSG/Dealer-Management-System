@@ -982,6 +982,20 @@ const PATH_MODULES: Record<string, RouteRule> = {
   // Test-drive capacity planning has its own permission module so it shows
   // as a distinct row in Roles & Permissions. Writes map to "edit" (not
   // create/delete) so a single edit grant covers block + unblock.
+  // Shipment allocation: inventory module. Allocation, lease and proposal
+  // endpoints are mapped to "view" at the route level because the handlers
+  // enforce the specific grant (leads:edit for customer allocations,
+  // deals:approve for spec approval / VIN confirmation). Lease ownership is
+  // re-checked server-side inside every write transaction.
+  shipments: {
+    module: "inventory",
+    category: (req) => {
+      if (req.method === "GET") return "view";
+      const p = req.path;
+      if (/^\/shipments\/(\d+\/allocations|allocations\/\d+\/(release|reassign)|\d+\/lock|proposals\/\d+\/confirm|specs\/\d+\/status)$/.test(p)) return "view";
+      return "edit";
+    },
+  },
   "capacity-blocks": {
     module: "capacity",
     category: (req) => (req.method === "GET" ? "view" : "edit"),

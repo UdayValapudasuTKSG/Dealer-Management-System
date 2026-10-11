@@ -20,6 +20,7 @@ import {
   Landmark,
   Car,
   Truck,
+  Ship,
   Wrench,
   Package,
   Radio,
@@ -72,6 +73,7 @@ const CLUSTERS: Cluster[] = [
     label: "Operations",
     items: [
       { name: "Inventory", href: "/inventory", module: "inventory", icon: Car },
+      { name: "Shipments", href: "/shipments", module: "inventory", icon: Ship },
       { name: "Capacity", href: "/capacity", module: "capacity", icon: CalendarRange },
       { name: "Deliveries", href: "/deliveries", module: "deliveries", icon: Truck },
       { name: "Service", href: "/service", module: "service", icon: Wrench, ent: "service_module" },
