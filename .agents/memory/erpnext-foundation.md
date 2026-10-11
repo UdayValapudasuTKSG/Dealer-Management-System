@@ -28,6 +28,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
   **How to apply:** Keep prepared charts explicitly draft until the master list and existing ERPNext account export/template are reconciled. Never replace an existing company chart or load historical balances from narrative examples.
 
 ## Confirmed test environment
+- On 2026-10-12 the user approved VAT at delivery only for CAM Motors Dummy: hold the full advance as a customer-deposit liability. This is a dummy-test assumption, not approval for live dealerships.
+  **Why:** The workflow document leaves advance VAT unresolved; the user explicitly selected this provisional policy when asked.
+  **How to apply:** Isolate the policy to the confirmed dummy workflow. Never infer live tax approval from this choice or from the existence of a VAT-on-advances account.
 - On 2026-10-10, the user explicitly confirmed ERPNext company `GT AUTOMOTIVE` on `https://erpnext-jcy-qlx.m.frappe.cloud` is test-only and authorized using it for AURA's CAM Motors Dummy dealership in production. Its screenshot showed GYD, Guyana and perpetual inventory enabled.
   **Why:** The AURA dealership and ERPNext company intentionally have different names; this particular mapping is approved for dummy testing.
   **How to apply:** Continue test setup for this pairing without repeatedly asking whether that company is live. This does not authorize connecting real GT/CAM dealerships, changing posting rules, or backfilling existing transactions.
