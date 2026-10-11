@@ -1,4 +1,5 @@
 import { and, desc, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
+import { withShipmentEmailDelivery } from "./shipments/email-delivery";
 import { loadServiceInvoicePartsCharges } from "./parts-estimate-charges";
 import { leadReportWhatsappTemplate } from "./lead-report-whatsapp";
 import { quoteDocumentWhatsappTemplate, quoteDocumentTemplateParameters } from "./quote-document-whatsapp";
@@ -186,10 +187,28 @@ type TemplateDef = {
   sample: TemplateData;
 };
 
-const d = (data: TemplateData, key: string, fallback: string) =>
+const d = (data: TemplateData, key: string, fallback = "") =>
   data[key] && data[key].trim() ? data[key] : fallback;
 
 export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
+  "shipment.allocated": {
+    label: "Shipment allocation confirmation",
+    description: "Confirms shipment capacity allocated to a customer; not a delivery or VIN guarantee.",
+    subject: x => `Your vehicle allocation — ${d(x, "shipmentReference")}`,
+    heading: () => "Your vehicle allocation is recorded",
+    body: x => `Hello ${d(x, "customerName", "there")},\n\nWe have allocated ${d(x, "quantity")} vehicle(s) matching ${d(x, "specification")} to your enquiry.\n\nShipment: ${d(x, "shipmentReference")}\nExpected arrival: ${d(x, "etaLabel")}\n\nThis is an estimated arrival, not a confirmed handover date. Your VIN, payment requirements and delivery arrangements remain subject to confirmation. Please reply if you have any questions.`,
+    cta: () => ({ label: "Contact your dealership" }),
+    sample: { customerName: "Alex", quantity: "1", specification: "2026 Example EV — Standard, White / Black", shipmentReference: "SHIP-2026-01", etaLabel: "November 2026" },
+  },
+  "shipment.eta.changed": {
+    label: "Shipment arrival estimate update",
+    description: "Notifies customers of a revised shipment ETA in the current or next dealership calendar month.",
+    subject: x => `Updated vehicle arrival estimate — ${d(x, "shipmentReference")}`,
+    heading: () => "Your vehicle's expected arrival has changed",
+    body: x => `Hello ${d(x, "customerName", "there")},\n\nThe expected arrival for your allocated ${d(x, "specification")} has been updated.\n\nShipment: ${d(x, "shipmentReference")}\nRevised expected arrival: ${d(x, "etaLabel")}\n\nThis remains an estimate, not a confirmed delivery appointment. Our team will confirm your handover arrangements separately. Please reply if you have any questions.`,
+    cta: () => ({ label: "Contact your dealership" }),
+    sample: { customerName: "Alex", specification: "2026 Example EV — Standard, White / Black", shipmentReference: "SHIP-2026-01", etaLabel: "December 2026" },
+  },
   "parts.requisition.submitted": {
     label: "New parts requisition",
     description: "Alerts Parts Advisors when a new workshop requisition arrives.",
@@ -1505,6 +1524,8 @@ function backoffDate(attempts: number): Date {
 }
 
 export type EnqueueOptions = {
+  /** Trusted email-template test route only; never accepted from merge data. */
+  shipmentTemplateTest?: boolean;
   template: EmailTemplate;
   to: string;
   dealerId: number;
@@ -1544,10 +1565,11 @@ export type EnqueueOptions = {
 /** Routing metadata is server-owned; arbitrary merge fields from request data
  * cannot impersonate a policy bypass or choose a weaker visibility check. */
 function safeEmailData(opts: EnqueueOptions): TemplateData {
-  const { internalRouted: _routed, internalRoutingBypass: _bypass,
+  const { __shipmentTemplateTest: _shipmentTest, internalRouted: _routed, internalRoutingBypass: _bypass,
     internalRequiredModule: _required, ...data } = opts.data ?? {};
   return {
     ...data,
+    ...(opts.shipmentTemplateTest ? { __shipmentTemplateTest: "1" } : {}),
     ...(opts.internalRouted ? { internalRouted: "1" } : {}),
     ...(opts.bypassInternalRouting ? { internalRoutingBypass: "1" } : {}),
     ...(opts.internalRequiredModule ? { internalRequiredModule: opts.internalRequiredModule } : {}),
@@ -1893,7 +1915,11 @@ function queuedPayloadLeadId(
  * row locks; a dedicated session lock gives the importer the same exclusion
  * while ensuring the connection is always released in finally.
  */
-export async function withReviewedOutboxCommunicationLock<T>(
+export async function withReviewedOutboxCommunicationLock<T>(item: Parameters<typeof reviewedOutboxCommunicationLock>[0] & { template?: string }, work: () => Promise<T>): Promise<T | undefined> {
+  return withShipmentEmailDelivery(item, () => reviewedOutboxCommunicationLock(item, work));
+}
+
+async function reviewedOutboxCommunicationLock<T>(
   item: Pick<EmailLog, "id" | "channel" | "customerId" | "dealerId" | "leadId" | "payload" | "recipient">,
   work: () => Promise<T>,
 ): Promise<T> {

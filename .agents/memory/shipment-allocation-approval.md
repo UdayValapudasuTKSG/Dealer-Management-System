@@ -20,4 +20,10 @@ The user explicitly selected a manager-maintained approved specification catalog
 
 **Why:** Existing inventory does not provide all required matching attributes, especially interior colour; inferred or blank catalogue values would undermine exact matching.
 
-**How to apply:** Managers approve explicit specifications before allocations/imports use them. Do not derive catalogue approval from existing stock. VIN confirmation must preserve the established fully paid reservation boundary; lacking eligibility should leave an actionable pending proposal, not a new unpaid claim. Initial rollout records communications as withheld pending template rollout; do not silently turn real sending on or replay test/historical events.
+**How to apply:** Managers approve explicit specifications before allocations/imports use them. Do not derive catalogue approval from existing stock. VIN confirmation must preserve the established fully paid reservation boundary; lacking eligibility should leave an actionable pending proposal, not a new unpaid claim.
+
+The user subsequently authorised connecting allocation/ETA emails and preparing the two templates. New production events may use the dealer's email service; development and historical withheld events must not be replayed automatically.
+
+**Why:** Connecting delivery must not unexpectedly release accumulated test/historical notifications.
+
+**How to apply:** Keep template test-sends explicit, dealer-scoped and separate from automatic shipment events. Preserve customer opt-out/import suppression and no-global-sender rules. Do not introduce an automatic historical catch-up sweep.

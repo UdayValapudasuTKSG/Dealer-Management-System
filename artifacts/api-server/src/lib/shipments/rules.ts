@@ -3,15 +3,26 @@
  */
 
 export const NA = "N/A";
+export function shipmentEmailEligible(a: {
+  production: boolean; allocationStatus?: string; shipmentStatus?: string;
+  jobStatus?: string; currentEta?: string; eventEta: string; leadMatches: boolean;
+  kind: string; now: Date; timezone: string;
+}): boolean {
+  return a.production && ["active", "fulfilled"].includes(a.allocationStatus ?? "") &&
+    ["open", "in_transit", "arrived"].includes(a.shipmentStatus ?? "") &&
+    ["queued", "failed"].includes(a.jobStatus ?? "") && a.currentEta === a.eventEta &&
+    a.leadMatches && (a.kind === "initial" ||
+      (a.kind === "eta_change" && etaChangeWithinWindow(a.eventEta, a.now, a.timezone)));
+}
 export const MONTH_RE = /^[0-9]{4}-(0[1-9]|1[0-2])$/;
 export const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
 export const LEASE_TTL_MS = 5 * 60 * 1000;
 
 export const ETA_EMAIL_RULE =
-  "An ETA-change email is queued only when the revised ETA month is the current calendar month or the next calendar month. Later revisions are logged internally without a customer email. The initial allocation email is always queued. Customer sending is currently disabled pending template rollout approval, so queued emails are recorded as withheld - nothing is sent.";
+  "New allocations queue a dealership-branded email in production. ETA-change emails qualify only for the current or next dealership calendar month. Development notifications are withheld. Customer preferences and the dealership SMTP configuration apply; historical withheld events are never replayed automatically.";
 
 export const TEMPLATE_WITHHELD_REASON =
-  "Withheld: customer shipment email templates are pending rollout approval. Nothing was sent.";
+  "Withheld in development: no customer shipment email was sent. This event will not be replayed automatically.";
 
 export type SpecFields = {
   make: string;

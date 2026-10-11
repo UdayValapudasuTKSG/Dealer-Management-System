@@ -10,6 +10,8 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const EMAIL_TEMPLATES = [
+  "shipment.allocated",
+  "shipment.eta.changed",
   "lead_received",
   "vehicle_quote",
   "lead.brochures",

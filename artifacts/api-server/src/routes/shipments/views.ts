@@ -5,6 +5,7 @@ import {
   shipmentAllocationsTable,
   shipmentEditLocksTable,
   shipmentEmailJobsTable,
+  emailLogsTable,
   shipmentLinesTable,
   shipmentManifestsTable,
   shipmentMatchProposalsTable,
@@ -152,6 +153,25 @@ export async function allocationViews(tx: DbLike, dealerId: number, rows: Shipme
     .where(and(eq(shipmentEmailJobsTable.dealerId, dealerId), inArray(shipmentEmailJobsTable.allocationId, ids)))
     .orderBy(desc(shipmentEmailJobsTable.createdAt), desc(shipmentEmailJobsTable.id));
   const em = new Map<number, typeof emails>();
+  const deliveryRows = emails.length ? await tx.select().from(emailLogsTable).where(and(
+    eq(emailLogsTable.dealerId, dealerId),
+    inArray(emailLogsTable.dedupeKey, emails.map(e => `shipment-email:${dealerId}:${e.id}`)),
+  )) : [];
+  const deliveries = new Map(deliveryRows.map(e => [e.dedupeKey, e]));
+  for (const email of emails) {
+    const delivery = deliveries.get(`shipment-email:${dealerId}:${email.id}`);
+    if (!delivery) continue;
+    if (delivery.status === "sent") {
+      email.status = "sent"; email.reason = "Accepted by the dealership email provider";
+    } else if (delivery.status === "failed") {
+      email.status = "failed"; email.reason = "Email delivery failed; see the email outbox for retry details";
+    } else if (delivery.status === "cancelled") {
+      email.status = email.status === "superseded" ? "superseded" : "suppressed";
+      email.reason = "Delivery cancelled by current communication, shipment or sender policy";
+    } else if (email.status === "queued") {
+      email.reason = delivery.status === "sending" ? "Sending through dealership email provider" : "Waiting in dealership email outbox";
+    }
+  }
   for (const e of emails) em.set(e.allocationId, [...(em.get(e.allocationId) ?? []), e]);
   return rows.map((r) => {
     const s = sm.get(r.shipmentId);

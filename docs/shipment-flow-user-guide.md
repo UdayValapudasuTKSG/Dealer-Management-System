@@ -49,12 +49,23 @@ when the revised ETA is in the current or next **dealership calendar month**.
 Changes outside this window are logged as suppressed, with a visible reason.
 Unsent stale ETA revisions are superseded.
 
-**Important: actual email sending is not connected in this initial rollout.**
-Qualifying events appear as Withheld pending approved template rollout.
-Withheld does not mean sent. No automatic email activation or old-event replay
-is included. Delivery integration and approved templates are still needed before
-customer emails can be enabled. WhatsApp/SMS and ERPNext postings are outside
-this shipment scope.
+**Email delivery is connected for new production events.**
+The dealership's configured SMTP sender, branding, customer opt-outs and
+controlled-import communication rules apply. There is no global sender fallback.
+Development events remain Withheld and are never automatically replayed.
+Historical withheld events also stay withheld after publishing.
+
+In **Settings → Email**, preview and customise **Shipment allocation confirmation**
+and **Shipment arrival estimate update**. An explicit template test-send uses
+sample information and the recipient you select; automatic shipment events
+never send from development. Tracking reflects the actual email outbox state,
+not simply whether a notification was created. Sent means accepted by the
+email provider, not proof of inbox delivery.
+
+Before each automatic send, the system rechecks allocation, shipment and ETA
+eligibility. Shipment edits and the provider handoff are serialized to avoid
+sending an outdated update after an edit has already completed.
+WhatsApp/SMS and ERPNext postings are outside this shipment scope.
 
 ## 6. Import shipment lines or real factory VINs
 
@@ -104,5 +115,6 @@ control handover. Shipment arrival or VIN matching never completes delivery.
 
 Built and tested in development. No production publication, historical
 backfill, live-customer sending or ERPNext accounting change is authorised
-by this implementation. Confirm real catalogue data and communications
-rollout before using customer notifications.
+by this implementation. Confirm real catalogue data and review the two email
+templates and dealer SMTP configuration before publishing. Publication enables
+new production shipment emails; it does not replay past events.

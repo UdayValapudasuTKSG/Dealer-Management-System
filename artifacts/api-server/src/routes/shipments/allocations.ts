@@ -203,7 +203,7 @@ router.post("/shipments/:shipmentId/allocations", h(async (req, res) => {
       shipmentId: id,
       allocationId: row!.id,
       kind: "vehicle_allocated",
-      detail: `${r.quantity}${r.partial ? ` of ${b.requestedQuantity} (partial consent)` : ""} x ${specLabel(spec)} allocated to ${lead.name}; ETA ${ship.currentEtaMonth}. Initial email withheld pending template approval.`,
+      detail: `${r.quantity}${r.partial ? ` of ${b.requestedQuantity} (partial consent)` : ""} x ${specLabel(spec)} allocated to ${lead.name}; ETA ${ship.currentEtaMonth}. See communication status for email delivery.`,
       actor,
     });
     return row!.id;

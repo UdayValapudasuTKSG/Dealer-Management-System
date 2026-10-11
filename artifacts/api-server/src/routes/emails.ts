@@ -436,6 +436,7 @@ router.post(
       to: parsed.data.to,
       dealerId,
       data: TEMPLATE_DEFS[key].sample,
+      shipmentTemplateTest: key === "shipment.allocated" || key === "shipment.eta.changed",
       bypassInternalRouting: true,
     });
     res.json(SendTestEmailResponse.parse({ ok: true, error: null }));
