@@ -17,6 +17,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 
 ## Environment/company mapping
 ## Workflow document versus master accounts
+- The user supplied the expanded master account definitions directly in the connected ERPNext test company. Use the live account list to resolve model/brand accounts rather than requiring the missing standalone master PDF again.
+  **Why:** The workflow PDF had only ranges, but the user subsequently populated the actual ledgers. Corresponding sales, stock and COGS accounts do not universally share matching numeric suffixes.
+  **How to apply:** Validate explicit model/variant-to-account mappings against the live chart, including duty-free variants; never derive a stock or COGS account by replacing an income-account prefix. Revalidate saved AURA account names after chart changes.
 - Reuse compatible existing test-company accounts without renumbering them to the workflow's seven-digit codes; retain an explicit source-code-to-ERPNext-account cross-reference.
   **Why:** The existing ERPNext company uses a four-digit chart and configured defaults. Replacing or renumbering it risks breaking those references; the user approved a limited dummy setup, not a chart replacement.
   **How to apply:** Resolve by exact ERPNext account document name for AURA settings. Do not assume a workflow code is itself an ERPNext account identifier, or that created accounts implement the related posting flow.
