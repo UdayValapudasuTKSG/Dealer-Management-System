@@ -547,6 +547,7 @@ export default function Leads() {
   // "select all filtered" that spans every result page (not just the visible
   // one). The send dialog can also target all_matching via server filters.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  useEffect(() => { setSelectedIds(new Set()); }, [me?.activeDealerId, me?.id]);
   const [sendFeedbackOpen, setSendFeedbackOpen] = useState(false);
   const toggleSelected = (id: number) =>
     setSelectedIds((cur) => {
@@ -916,7 +917,7 @@ export default function Leads() {
                   </Select>
                 </div>
 
-                {isLeadership && advisorOptions.length > 0 && (
+                {(isLeadership || can("leads", "assign")) && advisorOptions.length > 0 && (
                   <div className="space-y-1.5">
                     <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Advisor</Label>
                     <Select value={filters.advisor} onValueChange={v => setFilterQuery(setToken(filterQuery, 'advisor', v === 'all' ? '' : v))}>
@@ -1030,7 +1031,7 @@ export default function Leads() {
           </div>
         </div>
 
-        {isLeadership && selectedIds.size > 0 && (
+        {(isLeadership || can("leads", "assign")) && selectedIds.size > 0 && (
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/30 bg-primary/[0.07] px-4 py-2.5">
             <span className="text-sm font-semibold">
               {selectedIds.size} lead{selectedIds.size === 1 ? "" : "s"} selected
@@ -1052,13 +1053,14 @@ export default function Leads() {
               Clear selection
             </button>
             <div className="flex-1" />
-            <Button
+            {can("leads", "assign") && <BulkCallCentreReassign selectedIds={selectedIds} />}
+            {isLeadership && <Button
               size="sm"
               onClick={() => setSendFeedbackOpen(true)}
               className="rounded-full h-8 text-xs bg-primary hover:bg-primary/90"
             >
               Send Feedback Form
-            </Button>
+            </Button>}
           </div>
         )}
         {isLoading ? (
@@ -1080,7 +1082,7 @@ export default function Leads() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  {isLeadership && (
+                  {(isLeadership || can("leads", "assign")) && (
                     <th className="pl-4 pr-1 py-3 w-8">
                       <input
                         type="checkbox"
@@ -1126,7 +1128,7 @@ export default function Leads() {
                       compact ? "h-11" : "h-14",
                     )}
                   >
-                    {isLeadership && (
+                    {(isLeadership || can("leads", "assign")) && (
                       <td
                         className="pl-4 pr-1 py-2 w-8"
                         onClick={(e) => e.stopPropagation()}
