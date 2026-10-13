@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import {
   db,
@@ -37,7 +38,7 @@ export async function usersWithPermission(
         eq(dealerUsersTable.dealerId, dealerId),
         eq(rolePermissionsTable.module, module),
         inArray(rolePermissionsTable.category, categories),
-        eq(usersTable.status, "active"),
+        activeMember,
       ),
     );
   return [...new Set(rows.map((r) => r.id))];
@@ -63,7 +64,7 @@ export async function generalManagers(dealerId: number): Promise<number[]> {
           eq(dealerUsersTable.isGeneralManager, true),
           eq(rolesTable.name, "General Manager"),
         ),
-        eq(usersTable.status, "active"),
+        activeMember,
       ),
     );
   return [...new Set(rows.map((r) => r.id))];
@@ -90,7 +91,7 @@ export async function divisionSalesManagers(
         eq(dealerUsersTable.dealerId, dealerId),
         eq(rolePermissionsTable.module, "leads"),
         inArray(rolePermissionsTable.category, ["admin", "approve"]),
-        eq(usersTable.status, "active"),
+        activeMember,
         divisionId == null
           ? undefined
           : or(

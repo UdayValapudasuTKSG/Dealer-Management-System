@@ -1,3 +1,4 @@
+import { activeMember } from "../lib/member-status";
 import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
 import PDFDocument from "pdfkit";
@@ -1327,7 +1328,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
                 and(
                   eq(dealerUsersTable.dealerId, delivery.dealerId),
                   eq(rolesTable.name, "Service Advisor"),
-                  eq(usersTable.status, "active"),
+                  activeMember,
                   ...(divisionId != null
                     ? [eq(dealerUsersTable.divisionId, divisionId)]
                     : []),

@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
@@ -44,7 +45,7 @@ export async function dealerStaffIdsByRole(
     .where(
       and(
         eq(dealerUsersTable.dealerId, dealerId),
-        eq(usersTable.status, "active"),
+        activeMember,
         inArray(rolesTable.name, roleNames),
       ),
     );

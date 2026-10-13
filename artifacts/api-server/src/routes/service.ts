@@ -1,3 +1,4 @@
+import { activeMember } from "../lib/member-status";
 import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { moveStock, releaseHold } from "../lib/parts-inventory";
 import { issuedUnits, issueJobParts, reserveJobPart, releaseJobPartHolds } from "../lib/job-part-stock";
@@ -1261,7 +1262,7 @@ router.post("/service-orders/:id/claim", async (req, res): Promise<void> => {
   }).from(dealerUsersTable)
     .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
     .innerJoin(rolesTable, eq(rolesTable.id, dealerUsersTable.roleId))
-    .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, targetId), eq(usersTable.status, "active")));
+    .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, targetId), activeMember));
   if (!target || (targetId !== actor.id && !/technician/i.test(target.roleName))) {
     res.status(422).json({ error: "Selected technician is not eligible at this dealership" }); return;
   }

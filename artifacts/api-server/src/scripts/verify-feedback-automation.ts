@@ -43,12 +43,12 @@ try {
       const endpoint = `https://${process.env.REPLIT_DEV_DOMAIN}/api/feedback/${invitation.token}`;
       const response = await fetch(endpoint);
       assert.equal(response.status, 200, `${invitation.automationKind} public form opens`);
-      assert.equal((await response.json()).formName, form!.name);
+      assert.equal(((await response.json()) as { formName: string }).formName, form!.name);
       if (invitation.deliveryId != null) {
         const submitted = await fetch(`${endpoint}/submit`, { method: "POST",
           headers: { "content-type": "application/json" }, body: JSON.stringify({ answers: [{ questionId: "rating", rating: 5 }] }) });
         assert.equal(submitted.status, 200, "delivery survey accepts customer response");
-        assert.equal((await submitted.json()).state, "submitted");
+        assert.equal(((await submitted.json()) as { state: string }).state, "submitted");
       }
     }
     console.log("PASS: both public survey links open; delivery response is persisted.");

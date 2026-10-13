@@ -1,3 +1,4 @@
+import { effectiveMemberStatus } from "../lib/member-status";
 import { Router, type IRouter } from "express";
 import { eq, desc, and, notInArray, gt, count } from "drizzle-orm";
 import {
@@ -36,7 +37,7 @@ router.get("/team/:id", async (req, res): Promise<void> => {
       name: usersTable.name,
       email: usersTable.email,
       imageUrl: usersTable.imageUrl,
-      status: usersTable.status,
+      status: effectiveMemberStatus,
       createdAt: usersTable.createdAt,
       lastLoginAt: usersTable.lastLoginAt,
       roleName: rolesTable.name,

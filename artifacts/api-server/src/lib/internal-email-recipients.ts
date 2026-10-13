@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import { and, eq } from "drizzle-orm";
 import {
   db, dealerUsersTable, internalEmailRecipientsTable, rolePermissionsTable,
@@ -70,7 +71,7 @@ export async function eligibleInternalRecipients(dealerId: number, template: Ema
       eq(rolePermissionsTable.module, module),
       eq(rolePermissionsTable.category, "view"),
     ))
-    .where(eq(usersTable.status, "active"));
+    .where(activeMember);
   const extraIds = extraModule
     ? new Set(await usersWithPermission(dealerId, extraModule))
     : null;

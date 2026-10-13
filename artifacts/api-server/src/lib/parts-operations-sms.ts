@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import twilio from "twilio";
 import { and, eq } from "drizzle-orm";
 import { db, dealerUsersTable, usersTable, dealersTable, customersTable } from "@workspace/db";
@@ -20,7 +21,7 @@ export async function sendPartsAdvisorSms(dealerId: number, recipientId: number,
   const [recipient] = await db.select({ phone: usersTable.phone }).from(dealerUsersTable)
     .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
     .innerJoin(dealersTable, eq(dealersTable.id, dealerUsersTable.dealerId))
-    .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, recipientId), eq(usersTable.status, "active"), eq(dealersTable.status, "active")));
+    .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, recipientId), activeMember, eq(dealersTable.status, "active")));
   if (!recipient) throw new PartsSmsConfigurationError("Advisor is not an active member of this dealer. Update the special-order advisor before retrying.");
   const to = recipient.phone?.replace(/[\s()-]/g, "");
   if (!to || !/^\+[1-9]\d{7,14}$/.test(to)) throw new PartsSmsConfigurationError("Advisor SMS phone is missing or not E.164. Update the staff phone number before retrying.");

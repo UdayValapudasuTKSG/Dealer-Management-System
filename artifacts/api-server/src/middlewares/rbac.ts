@@ -1,3 +1,4 @@
+import { activeMember } from "../lib/member-status";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import { eq, sql } from "drizzle-orm";
@@ -261,7 +262,8 @@ async function loadMemberships(userId: number): Promise<DealerMembership[]> {
     .from(dealerUsersTable)
     .innerJoin(dealersTable, eq(dealerUsersTable.dealerId, dealersTable.id))
     .leftJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
-    .where(eq(dealerUsersTable.userId, userId))
+    .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
+    .where(and(eq(dealerUsersTable.userId, userId), activeMember))
     .orderBy(dealerUsersTable.dealerId);
   return rows;
 }
@@ -588,11 +590,6 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
       return;
     }
     const user = await provisionUser(clerkId);
-    if (user.status === "suspended") {
-      res.status(403).json({ error: "Account suspended" });
-      return;
-    }
-
     const isSuperAdmin = isSuperAdminEmail(user.email);
     if (!isSuperAdmin) await claimPendingInvites(user);
     const dealers = isSuperAdmin

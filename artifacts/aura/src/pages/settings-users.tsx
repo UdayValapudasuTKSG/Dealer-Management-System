@@ -85,7 +85,7 @@ export default function SettingsUsers() {
       icon={ShieldCheck}
       title="Team"
       accent="Members"
-      subtitle="Assign roles and manage account access for this dealership."
+      subtitle="Assign roles and manage access to this dealership only. Suspending a member does not affect their other dealerships."
       action={
         <Button onClick={() => setAddOpen(true)}>
           <UserPlus className="h-4 w-4 mr-2" /> Add Member
@@ -168,7 +168,7 @@ export default function SettingsUsers() {
                 <th className="px-5 py-3">Role</th>
                 <th className="px-5 py-3">Reports to</th>
                 <th className="px-5 py-3">Division</th>
-                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Dealer status</th>
                 <th className="px-5 py-3">Last sign-in</th>
                 <th className="px-5 py-3 text-right">Actions</th>
               </tr>
@@ -324,6 +324,7 @@ export default function SettingsUsers() {
                               },
                             })
                           }
+                          title="Changes access to this dealership only. Other dealerships are unaffected."
                         >
                           {u.status === "active" ? (
                             <>

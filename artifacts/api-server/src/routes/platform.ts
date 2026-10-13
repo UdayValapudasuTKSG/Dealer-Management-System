@@ -1,3 +1,4 @@
+import { effectiveMemberStatus } from "../lib/member-status";
 import { Router, type IRouter, type Response } from "express";
 import { asc, desc, eq, sql, and, isNull } from "drizzle-orm";
 import {
@@ -1265,7 +1266,7 @@ async function memberRows(dealerId: number) {
       email: usersTable.email,
       name: usersTable.name,
       imageUrl: usersTable.imageUrl,
-      userStatus: usersTable.status,
+      userStatus: effectiveMemberStatus,
     })
     .from(dealerUsersTable)
     .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))

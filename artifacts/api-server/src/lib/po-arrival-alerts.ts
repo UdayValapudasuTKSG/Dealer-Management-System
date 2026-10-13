@@ -12,7 +12,7 @@ export async function queuePoArrivalAlerts(tx: PartsTx, input: { dealerId: numbe
   // Existing dealer memberships are dealer-wide (no branch user assignment model).
   // Recipients are resolved from the selected dealer only; settings and events
   // remain tied to the concrete inventory location of this receipt.
-  const managers = await tx.execute(sql`select u.id,u.phone,r.name from dealer_users m join users u on u.id=m.user_id join roles r on r.id=m.role_id where m.dealer_id=${input.dealerId} and u.status='active' and lower(replace(r.name,'_',' ')) in ('parts manager','service manager')`);
+  const managers = await tx.execute(sql`select u.id,u.phone,r.name from dealer_users m join users u on u.id=m.user_id join roles r on r.id=m.role_id where m.dealer_id=${input.dealerId} and coalesce(m.status,u.status)='active' and lower(replace(r.name,'_',' ')) in ('parts manager','service manager')`);
   for (const received of input.received) {
     if (received.quantity <= 0) continue;
     const line = await owned(tx, purchaseOrderLinesTable, input.dealerId, received.lineId);
@@ -32,7 +32,7 @@ export async function queuePoArrivalAlerts(tx: PartsTx, input: { dealerId: numbe
     const body = `Special-order part ${line.partName} (${part?.sku ?? "external"}) x${received.quantity} received for ${customer?.name ?? service?.customerName ?? "Unlinked customer"} / RO ${service?.id ?? job?.id ?? "unlinked"} at ${branch.name}.`;
     const referenceId = `${po.id}:receipt:${input.receiptId}:line:${line.id}`;
     for (const recipientId of recipientIds) {
-      const member = await tx.execute(sql`select u.phone from dealer_users m join users u on u.id=m.user_id where m.dealer_id=${input.dealerId} and m.user_id=${recipientId} and u.status='active'`);
+      const member = await tx.execute(sql`select u.phone from dealer_users m join users u on u.id=m.user_id where m.dealer_id=${input.dealerId} and m.user_id=${recipientId} and coalesce(m.status,u.status)='active'`);
       if (!member.rows.length) continue;
       const channels = settings.sms_enabled && member.rows[0].phone ? ["internal", "sms"] : ["internal"];
       for (const channel of channels) await tx.insert(partNotificationDeliveriesTable).values({ dealerId: input.dealerId, locationId: po.locationId, recipientId, channel, type: "special_order.received", referenceType: "purchase_order_line", referenceId, payload: { locationId: po.locationId, purchaseOrderId: po.id, purchaseOrderLineId: line.id, receiptId: input.receiptId, title: "Special-order part received", body } }).onConflictDoNothing();

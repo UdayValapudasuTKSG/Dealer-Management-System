@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import {
   db, partsTable, suppliersTable, purchaseOrdersTable, purchaseOrderLinesTable,
@@ -119,7 +120,7 @@ export async function createSpecialOrder(dealerId: number, actorId: number, inpu
     // Service estimates are versions of the existing job card, not a second stock entity.
     await owned(tx, jobCardsTable, dealerId, input.referenceId);
     const [member] = await tx.select().from(dealerUsersTable).innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
-      .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, input.advisorId), eq(usersTable.status, "active")));
+      .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, input.advisorId), activeMember));
     demand(member, "Advisor is not an active member of this dealer", 400);
     const part = await owned(tx, partsTable, dealerId, input.partId);
     let supplierId = part.supplierId;
@@ -284,7 +285,7 @@ export async function sweepPartsNotifications(dealerId: number, transport: Parts
       demand(row.type !== "supplier.po", "Legacy supplier email blocked: approve and preview this PO before sending");
       if (row.channel === "internal") {
         const [member] = await db.select({ id: usersTable.id }).from(dealerUsersTable).innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
-          .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, row.recipientId), eq(usersTable.status, "active")));
+          .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, row.recipientId), activeMember));
         demand(member, "Advisor is no longer an active member of this dealer");
         await db.insert(notificationsTable).values({ dealerId, userId: row.recipientId, type: "system", title: String(p.title), body: String(p.body), entityType: "parts_arrival_delivery", entityId: row.id, link: "/parts?tab=orders" }).onConflictDoUpdate({ target: [notificationsTable.dealerId, notificationsTable.userId, notificationsTable.type, notificationsTable.entityType, notificationsTable.entityId], targetWhere: sql`entity_type is not null and entity_id is not null`, set: { read: false, body: String(p.body), updatedAt: new Date() } });
       } else if (row.channel === "sms") {

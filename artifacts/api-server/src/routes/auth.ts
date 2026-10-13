@@ -52,7 +52,8 @@ router.get("/auth/me", async (_req, res): Promise<void> => {
       imageUrl: user.imageUrl,
       roleId: user.roleId,
       roleName: user.roleName,
-      status: user.status,
+      // Bound memberships have already passed the per-dealer active check.
+      status: user.dealerId != null ? "active" : user.status,
       isSuperAdmin: user.isSuperAdmin,
       activeDealerId: user.dealerId,
       entitlements:

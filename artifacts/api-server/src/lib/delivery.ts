@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
@@ -43,7 +44,7 @@ async function pickDeliveryAdvisor(
     .where(
       and(
         eq(dealerUsersTable.dealerId, dealerId),
-        eq(usersTable.status, "active"),
+        activeMember,
         eq(rolesTable.name, "Delivery Advisor"),
       ),
     );
@@ -76,7 +77,7 @@ async function deliveryUserIds(dealerId: number): Promise<number[]> {
         eq(rolePermissionsTable.module, "deliveries"),
         // view is the explicit visibility switch — admin does not imply it
         eq(rolePermissionsTable.category, "view"),
-        eq(usersTable.status, "active"),
+        activeMember,
       ),
     );
   return [...new Set(rows.map((r) => r.id))];

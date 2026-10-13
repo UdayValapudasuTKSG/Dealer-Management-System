@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import {
   db, leadsTable, callLogsTable, tasksTable, dealerUsersTable, timelineEventsTable,
@@ -57,7 +58,7 @@ export async function reassignCallCentreLead(
       .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
       .innerJoin(rolesTable, eq(rolesTable.id, dealerUsersTable.roleId))
       .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, userId),
-        eq(usersTable.status, "active")));
+        activeMember));
     if (!rep || !isCallCentreRole(rep.role)) {
       throw new CallCentreError(400, "Select an active Call Center or Centre Representative in this dealership");
     }

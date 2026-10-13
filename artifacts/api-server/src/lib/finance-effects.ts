@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import { eq, inArray, and } from "drizzle-orm";
 import {
   db,
@@ -51,7 +52,7 @@ async function financeUserIds(dealerId: number): Promise<number[]> {
         eq(rolePermissionsTable.module, "finance"),
         // view is the explicit visibility switch — admin does not imply it
         eq(rolePermissionsTable.category, "view"),
-        eq(usersTable.status, "active"),
+        activeMember,
       ),
     );
   return [...new Set(rows.map((r) => r.id))];

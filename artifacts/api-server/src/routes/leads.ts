@@ -1,3 +1,4 @@
+import { activeMember } from "../lib/member-status";
 import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
 import { z } from "zod/v4";
@@ -555,7 +556,7 @@ router.get("/leads/advisors", async (req, res): Promise<void> => {
     .where(
       and(
         eq(dealerUsersTable.dealerId, activeDealerId(res)),
-        eq(usersTable.status, "active"),
+        activeMember,
       ),
     );
 

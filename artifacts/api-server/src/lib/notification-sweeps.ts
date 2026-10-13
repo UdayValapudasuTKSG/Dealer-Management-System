@@ -883,7 +883,7 @@ async function sweepUnassignedLeads(): Promise<void> {
             SELECT 1 FROM dealer_users du
             JOIN users u ON u.id = du.user_id
             JOIN roles r ON r.id = du.role_id
-            WHERE du.dealer_id = ${leadsTable.dealerId} AND u.status = 'active'
+            WHERE du.dealer_id = ${leadsTable.dealerId} AND coalesce(du.status, u.status) = 'active'
               AND lower(regexp_replace(trim(r.name), '\\s+', ' ', 'g'))
                 IN ('call center representative', 'call centre representative')
           )

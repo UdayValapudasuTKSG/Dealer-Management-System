@@ -1,3 +1,4 @@
+import { effectiveMemberStatus } from "../lib/member-status";
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -137,7 +138,7 @@ router.get("/admin/users", async (_req, res): Promise<void> => {
       imageUrl: usersTable.imageUrl,
       roleId: dealerUsersTable.roleId,
       roleName: rolesTable.name,
-      status: usersTable.status,
+      status: effectiveMemberStatus,
       reportingManagerUserId: dealerUsersTable.reportingManagerUserId,
       reportingManagerName: managerUsers.name,
       divisionId: dealerUsersTable.divisionId,
@@ -251,10 +252,22 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
 
   // Employee-master fields (manager, division) live on the dealer membership.
   const membershipPatch: Partial<{
+    status: "active" | "suspended";
     roleId: number;
     reportingManagerUserId: number | null;
     divisionId: number | null;
   }> = {};
+  if (body.data.status !== undefined) {
+    if (body.data.status !== "active" && body.data.status !== "suspended") {
+      res.status(400).json({ error: "Member status must be active or suspended" });
+      return;
+    }
+    if (params.data.id === res.locals.user?.id && body.data.status === "suspended") {
+      res.status(400).json({ error: "You cannot suspend your own dealership membership" });
+      return;
+    }
+    membershipPatch.status = body.data.status;
+  }
   if (body.data.roleId !== undefined && body.data.roleId !== null) {
     membershipPatch.roleId = body.data.roleId;
   }
@@ -312,7 +325,6 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(usersTable)
     .set({
-      ...(body.data.status !== undefined ? { status: body.data.status } : {}),
       ...(body.data.phone !== undefined
         ? { phone: body.data.phone?.trim() || null }
         : {}),
@@ -364,6 +376,7 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
   res.json(
     UpdateAdminUserResponse.parse({
       ...updated,
+      status: membershipPatch.status ?? membership.status ?? updated.status,
       roleId,
       roleName,
       reportingManagerUserId,

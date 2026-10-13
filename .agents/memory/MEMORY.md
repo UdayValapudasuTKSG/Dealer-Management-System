@@ -17,6 +17,7 @@
 - [Clerk + RBAC testing](clerk-rbac-testing.md) — use testClerkAuth with SHORT test plans (long ones hit the 600s timeout); headless harnesses need a dev-only AUTH_BYPASS after global auth.
 - [Headless api-server testing](headless-server-testing.md) — never `pkill -f dist/index.mjs` to stop a headless test server; the real workflow runs the same command and dies too. Kill by captured PID.
 - [Multi-dealer tenancy](multi-dealer-tenancy.md) — every select filtered + insert stamped with dealerId; cross-dealer = 404; helpers require dealerId from parent record.
+- [Dealer-specific suspension](dealer-member-suspension.md) — suspend/reactivate only the selected membership; retain legacy suspensions until explicitly changed.
 - [Date-only fields shift a day in UTC-4](date-only-utc-shift.md) — API serializes date columns as UTC midnight; parse only the date part locally or today-filters miss rows.
 - [Gmail intake relay emails](gmail-intake-relay-emails.md) — form-notification relays are enquiries (extract customer email from body); retrying a skipped email needs ledger row deleted + \Seen cleared.
 - [Agent kill switches fail open](agent-governance-kill-switch.md) — per-dealer agent pause only works if that dealer has seeded `agents` rows; seed every dealer or the toggle silently no-ops.

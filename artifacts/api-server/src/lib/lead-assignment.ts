@@ -1,3 +1,4 @@
+import { activeMember } from "./member-status";
 import { eq, sql, and, inArray } from "drizzle-orm";
 import {
   db,
@@ -34,7 +35,7 @@ export async function nextRoundRobinCandidate(
   }).from(dealerUsersTable)
     .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
     .innerJoin(rolesTable, eq(rolesTable.id, dealerUsersTable.roleId))
-    .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(usersTable.status, "active")));
+    .where(and(eq(dealerUsersTable.dealerId, dealerId), activeMember));
   let eligible = members.filter((r) => queue === "call_centre"
     ? isCallCentreRole(r.roleName) : r.roleName?.trim().toLowerCase() === "sales advisor");
   if (queue === "legacy_sales" && eligible.length === 0) {

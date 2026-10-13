@@ -183,6 +183,8 @@ export const dealerUsersTable = pgTable(
       .notNull()
       .references(() => rolesTable.id),
     isGeneralManager: boolean("is_general_manager").notNull().default(false),
+    // Null preserves the legacy account status until this membership is edited.
+    status: text("status", { enum: ["active", "suspended"] }),
     // Timestamp-based round robin: stamped whenever a lead is assigned to
     // this member (auto or manual). Oldest (or never) goes next.
     lastLeadAssignedAt: timestamp("last_lead_assigned_at", {
