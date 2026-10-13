@@ -8,6 +8,68 @@
 import * as zod from 'zod';
 
 
+export const getFeedbackAutomationResponseRulesItemDelayDaysMin = 0;
+export const getFeedbackAutomationResponseRulesItemDelayDaysMax = 365;
+
+export const getFeedbackAutomationResponseRulesItemChannelsMax = 2;
+
+export const getFeedbackAutomationResponseRulesMin = 2;
+export const getFeedbackAutomationResponseRulesMax = 2;
+
+
+
+export const GetFeedbackAutomationResponse = zod.object({
+  "rules": zod.array(zod.object({
+  "kind": zod.enum(['sales', 'service']),
+  "enabled": zod.boolean(),
+  "formId": zod.number().nullable(),
+  "delayDays": zod.number().min(getFeedbackAutomationResponseRulesItemDelayDaysMin).max(getFeedbackAutomationResponseRulesItemDelayDaysMax),
+  "channels": zod.array(zod.enum(['email', 'whatsapp'])).min(1).max(getFeedbackAutomationResponseRulesItemChannelsMax)
+})).min(getFeedbackAutomationResponseRulesMin).max(getFeedbackAutomationResponseRulesMax)
+})
+
+
+export const updateFeedbackAutomationBodyRulesItemDelayDaysMin = 0;
+export const updateFeedbackAutomationBodyRulesItemDelayDaysMax = 365;
+
+export const updateFeedbackAutomationBodyRulesItemChannelsMax = 2;
+
+export const updateFeedbackAutomationBodyRulesMin = 2;
+export const updateFeedbackAutomationBodyRulesMax = 2;
+
+
+
+export const UpdateFeedbackAutomationBody = zod.object({
+  "rules": zod.array(zod.object({
+  "kind": zod.enum(['sales', 'service']),
+  "enabled": zod.boolean(),
+  "formId": zod.number().nullable(),
+  "delayDays": zod.number().min(updateFeedbackAutomationBodyRulesItemDelayDaysMin).max(updateFeedbackAutomationBodyRulesItemDelayDaysMax),
+  "channels": zod.array(zod.enum(['email', 'whatsapp'])).min(1).max(updateFeedbackAutomationBodyRulesItemChannelsMax)
+})).min(updateFeedbackAutomationBodyRulesMin).max(updateFeedbackAutomationBodyRulesMax)
+})
+
+export const updateFeedbackAutomationResponseRulesItemDelayDaysMin = 0;
+export const updateFeedbackAutomationResponseRulesItemDelayDaysMax = 365;
+
+export const updateFeedbackAutomationResponseRulesItemChannelsMax = 2;
+
+export const updateFeedbackAutomationResponseRulesMin = 2;
+export const updateFeedbackAutomationResponseRulesMax = 2;
+
+
+
+export const UpdateFeedbackAutomationResponse = zod.object({
+  "rules": zod.array(zod.object({
+  "kind": zod.enum(['sales', 'service']),
+  "enabled": zod.boolean(),
+  "formId": zod.number().nullable(),
+  "delayDays": zod.number().min(updateFeedbackAutomationResponseRulesItemDelayDaysMin).max(updateFeedbackAutomationResponseRulesItemDelayDaysMax),
+  "channels": zod.array(zod.enum(['email', 'whatsapp'])).min(1).max(updateFeedbackAutomationResponseRulesItemChannelsMax)
+})).min(updateFeedbackAutomationResponseRulesMin).max(updateFeedbackAutomationResponseRulesMax)
+})
+
+
 export const ListWorkshopOilsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -19769,7 +19831,9 @@ export const listFeedbackFormInvitationsResponseQuestionsSnapshotItemMaxStarsMax
 export const ListFeedbackFormInvitationsResponseItem = zod.object({
   "id": zod.number(),
   "formId": zod.number(),
-  "leadId": zod.number(),
+  "leadId": zod.number().nullable(),
+  "automationState": zod.string().nullish(),
+  "automationError": zod.string().nullish(),
   "leadName": zod.string().nullish(),
   "formName": zod.string(),
   "status": zod.enum(['sent', 'completed']),
@@ -19811,7 +19875,9 @@ export const getLeadFeedbackResponseQuestionsSnapshotItemMaxStarsMax = 10;
 export const GetLeadFeedbackResponseItem = zod.object({
   "id": zod.number(),
   "formId": zod.number(),
-  "leadId": zod.number(),
+  "leadId": zod.number().nullable(),
+  "automationState": zod.string().nullish(),
+  "automationError": zod.string().nullish(),
   "leadName": zod.string().nullish(),
   "formName": zod.string(),
   "status": zod.enum(['sent', 'completed']),

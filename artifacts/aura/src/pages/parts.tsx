@@ -449,7 +449,7 @@ function PartsTab() {
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const { data: settings } = useGetPartsSettings();
-  const { data: allParts, isLoading } = useListParts({
+  const { data: allParts, isLoading, error: searchError } = useListParts({
     ...(search ? { search } : {}),
     ...(lowOnly ? { lowStock: "1" } : {}),
   });
@@ -470,9 +470,21 @@ function PartsTab() {
             onChange={(e) => {
               setSearch(e.target.value);
             }}
-            placeholder="Search by name or SKU..."
+            onPaste={(e) => {
+              const text = e.clipboardData.getData("text");
+              if (/[\r\n]/.test(text)) {
+                e.preventDefault();
+                const input = e.currentTarget;
+                setSearch(search.slice(0, input.selectionStart ?? search.length) +
+                  text.replace(/[\r\n]+/g, ", ") + search.slice(input.selectionEnd ?? search.length));
+              }
+            }}
+            aria-label="Search parts by name, SKU or barcode"
+            placeholder="Oil filter, brake pad, SKU-123..."
             className="pl-10 rounded-full bg-white/[0.03] border-white/10"
           />
+          <p className="text-xs text-muted-foreground mt-1">Search up to 50 names, SKUs or barcodes. Separate with commas, semicolons or paste one per line.</p>
+          {searchError && <p role="alert" className="text-sm text-destructive">Search failed. Use up to 50 terms and 4,000 characters, then retry.</p>}
         </div>
         <Button
           variant={lowOnly ? "default" : "outline"}

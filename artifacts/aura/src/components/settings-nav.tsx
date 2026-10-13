@@ -31,6 +31,14 @@ export type SettingsSection = {
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
+    name: "Automatic Feedback",
+    href: "/settings/feedback",
+    icon: MessageSquare,
+    description: "Survey forms, post-completion delays and delivery channels.",
+    module: "settings",
+    gmOnly: true,
+  },
+  {
     name: "Profile",
     href: "/settings/profile",
     icon: UserCircle,

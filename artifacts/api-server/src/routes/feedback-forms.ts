@@ -1,3 +1,4 @@
+import { feedbackAutomationRouter } from "./feedback-automation";
 import { Router, type IRouter, type Response } from "express";
 import { and, desc, eq, gte, ilike, inArray, isNull, lte, not, or, sql, type SQL } from "drizzle-orm";
 import {
@@ -5,6 +6,7 @@ import {
   feedbackFormsTable,
   feedbackInvitationsTable,
   leadsTable,
+  customersTable,
   emailLogsTable,
   timelineEventsTable,
   type FeedbackForm,
@@ -166,6 +168,8 @@ async function serializeInvitations(
     leadId: i.leadId,
     leadName: i.leadName ?? null,
     formName: i.formName,
+    automationState: i.automationState ?? null,
+    automationError: i.automationError ?? null,
     status: i.status,
     channels: (i.channels ?? []) as string[],
     delivery: [
@@ -439,6 +443,10 @@ router.post("/feedback-forms", async (req, res): Promise<void> => {
 });
 
 // Literal sub-path BEFORE /feedback-forms/:id.
+router.use("/feedback-forms/automation", (_req, res, next) => {
+  if (requireGM(res)) next();
+});
+router.use(feedbackAutomationRouter);
 router.post(
   "/feedback-forms/preview-recipients",
   async (req, res): Promise<void> => {
@@ -821,9 +829,10 @@ router.get(
       return;
     }
     const rows = await db
-      .select({ invitation: feedbackInvitationsTable, leadName: leadsTable.name })
+      .select({ invitation: feedbackInvitationsTable, leadName: sql<string>`coalesce(${leadsTable.name}, ${customersTable.name})` })
       .from(feedbackInvitationsTable)
       .leftJoin(leadsTable, eq(leadsTable.id, feedbackInvitationsTable.leadId))
+      .leftJoin(customersTable, and(eq(customersTable.id, feedbackInvitationsTable.customerId), eq(customersTable.dealerId, dealerId)))
       .where(
         and(
           eq(feedbackInvitationsTable.dealerId, dealerId),

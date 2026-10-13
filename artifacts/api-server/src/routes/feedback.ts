@@ -9,6 +9,7 @@ import {
   timelineEventsTable,
   customersTable,
   serviceOrdersTable,
+  deliveriesTable,
   reviewsTable,
   type FeedbackInvitation,
   type FeedbackQuestion,
@@ -52,10 +53,13 @@ async function brandNameFor(dealerId: number): Promise<string> {
 }
 
 async function serializePublic(inv: FeedbackInvitation) {
-  if (inv.serviceOrderId != null) {
-    const [order] = await db.select().from(serviceOrdersTable).where(
+  if (inv.serviceOrderId != null || inv.deliveryId != null) {
+    const [order] = inv.deliveryId != null ? await db.select().from(deliveriesTable).where(and(
+      eq(deliveriesTable.id, inv.deliveryId), eq(deliveriesTable.dealerId, inv.dealerId),
+      eq(deliveriesTable.customerId, inv.customerId!),
+    )) : await db.select().from(serviceOrdersTable).where(
       and(
-        eq(serviceOrdersTable.id, inv.serviceOrderId),
+        eq(serviceOrdersTable.id, inv.serviceOrderId!),
         eq(serviceOrdersTable.dealerId, inv.dealerId),
         eq(serviceOrdersTable.customerId, inv.customerId!),
       ),

@@ -44,6 +44,7 @@ import VehicleDetailPage from "@/pages/vehicle-detail";
 import TeamProfile from "@/pages/team-profile";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
+import SettingsFeedback from "@/pages/settings-feedback";
 import SettingsErpnext from "@/pages/settings-erpnext";
 import Amber from "@/pages/amber";
 import SettingsWhatsapp from "@/pages/settings-whatsapp";
@@ -405,6 +406,9 @@ function AppRoutes() {
                   <RequireSettings>
                     <SettingsLocalization />
                   </RequireSettings>
+                </Route>
+                <Route path="/settings/feedback">
+                  <RequireSettings><SettingsFeedback /></RequireSettings>
                 </Route>
                 <Route path="/settings/email">
                   <RequireSettings>

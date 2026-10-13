@@ -1,3 +1,4 @@
+import { partsSearchTerms, literalPartPattern } from "../lib/parts-search";
 import { Router, type IRouter } from "express";
 import { createHash } from "node:crypto";
 import { assignPartStorage, ensureInventory, moveStock } from "../lib/parts-inventory";
@@ -487,10 +488,15 @@ router.get("/parts", async (req, res): Promise<void> => {
   }
   const filters = [eq(partsTable.dealerId, activeDealerId(res))];
   if (query.data.search) {
-    const term = `%${query.data.search}%`;
-    filters.push(
-      or(ilike(partsTable.name, term), ilike(partsTable.sku, term), ilike(partsTable.barcode, term))!,
-    );
+    const terms = partsSearchTerms(query.data.search);
+    if (terms.length > 50 || query.data.search.length > 4000) {
+      res.status(400).json({ error: "Search up to 50 parts at once (maximum 4,000 characters)." });
+      return;
+    }
+    if (terms.length) filters.push(or(...terms.map(value => {
+      const term = literalPartPattern(value);
+      return or(ilike(partsTable.name, term), ilike(partsTable.sku, term), ilike(partsTable.barcode, term))!;
+    }))!);
   }
   if (query.data.lowStock === "1") {
     filters.push(sql`${partsTable.stock} <= ${partsTable.reorderLevel}`);

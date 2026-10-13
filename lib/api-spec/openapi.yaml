@@ -71,6 +71,39 @@ tags:
   - name: whatsapp
     description: Per-dealer Meta WhatsApp Business channel settings
 paths:
+  /feedback-forms/automation:
+    get:
+      operationId: getFeedbackAutomation
+      tags: [feedback]
+      responses:
+        "200":
+          description: Dealership survey automation rules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackAutomationConfig"
+    put:
+      operationId: updateFeedbackAutomation
+      tags: [feedback]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackAutomationConfig"
+      responses:
+        "200":
+          description: Saved rules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackAutomationConfig"
+        "400":
+          description: Invalid configuration
+        "403":
+          description: General Manager permission required
+        "422":
+          description: Choose a published form in this dealership
   /parts/oils:
     get:
       operationId: listWorkshopOils
@@ -12056,6 +12089,38 @@ paths:
               schema: { $ref: "#/components/schemas/ShipmentMatchingView" }
 components:
   schemas:
+    FeedbackAutomationRule:
+      type: object
+      required: [kind, enabled, formId, delayDays, channels]
+      properties:
+        kind:
+          type: string
+          enum: [sales, service]
+        enabled:
+          type: boolean
+        formId:
+          type: [integer, "null"]
+        delayDays:
+          type: integer
+          minimum: 0
+          maximum: 365
+        channels:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            type: string
+            enum: [email, whatsapp]
+    FeedbackAutomationConfig:
+      type: object
+      required: [rules]
+      properties:
+        rules:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/FeedbackAutomationRule"
     WorkshopOil:
       type: object
       required: [id, name, grade, specification, brand, purchaseCostPerLitre, sellingPricePerLitre, stockLitres, reorderLitres, active]
@@ -19103,7 +19168,9 @@ components:
       properties:
         id: { type: integer }
         formId: { type: integer }
-        leadId: { type: integer }
+        leadId: { type: ["integer", "null"] }
+        automationState: { type: ["string", "null"] }
+        automationError: { type: ["string", "null"] }
         leadName: { type: ["string", "null"] }
         formName: { type: string }
         status: { type: string, enum: [sent, completed] }

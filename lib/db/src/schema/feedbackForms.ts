@@ -80,8 +80,14 @@ export const feedbackInvitationsTable = pgTable(
       .references(() => leadsTable.id, { onDelete: "cascade" }),
     /** Service invitations are customer/order-bound and intentionally leadless. */
     serviceOrderId: integer("service_order_id").references(() => serviceOrdersTable.id),
+    deliveryId: integer("delivery_id"),
     customerId: integer("customer_id").references(() => customersTable.id),
     vehicleLabel: text("vehicle_label"),
+    /** Event-level identity; automatic surveys are per delivery/visit, not per lead. */
+    automationKey: text("automation_key"),
+    automationKind: text("automation_kind"),
+    automationState: text("automation_state"),
+    automationError: text("automation_error"),
     /** Snapshot: survives later edits/archive of the reusable form. */
     formName: text("form_name").notNull(),
     questionsSnapshot: jsonb("questions_snapshot").notNull(),
@@ -105,6 +111,7 @@ export const feedbackInvitationsTable = pgTable(
       .defaultNow(),
   },
   (t) => [
+    uniqueIndex("feedback_invitations_automation_key_unique").on(t.automationKey),
     uniqueIndex("feedback_invitations_form_lead_uq").on(
       t.dealerId,
       t.formId,

@@ -189,6 +189,7 @@ import type {
   Error,
   ExportNamedPartsAgingParams,
   ExportNamedPartsCycleCountParams,
+  FeedbackAutomationConfig,
   FeedbackForm,
   FeedbackFormInput,
   FeedbackFormStatusInput,
@@ -591,6 +592,142 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetFeedbackAutomationUrl = () => {
+
+
+
+
+  return `/api/feedback-forms/automation`
+}
+
+export const getFeedbackAutomation = async ( options?: RequestInit): Promise<FeedbackAutomationConfig> => {
+
+  return customFetch<FeedbackAutomationConfig>(getGetFeedbackAutomationUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFeedbackAutomationQueryKey = () => {
+    return [
+    `/api/feedback-forms/automation`
+    ] as const;
+    }
+
+
+export const getGetFeedbackAutomationQueryOptions = <TData = Awaited<ReturnType<typeof getFeedbackAutomation>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedbackAutomation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFeedbackAutomationQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeedbackAutomation>>> = ({ signal }) => getFeedbackAutomation({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFeedbackAutomation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFeedbackAutomationQueryResult = NonNullable<Awaited<ReturnType<typeof getFeedbackAutomation>>>
+export type GetFeedbackAutomationQueryError = ErrorType<unknown>
+
+
+
+export function useGetFeedbackAutomation<TData = Awaited<ReturnType<typeof getFeedbackAutomation>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedbackAutomation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFeedbackAutomationQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateFeedbackAutomationUrl = () => {
+
+
+
+
+  return `/api/feedback-forms/automation`
+}
+
+export const updateFeedbackAutomation = async (feedbackAutomationConfig: FeedbackAutomationConfig, options?: RequestInit): Promise<FeedbackAutomationConfig> => {
+
+  return customFetch<FeedbackAutomationConfig>(getUpdateFeedbackAutomationUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(feedbackAutomationConfig)
+  }
+);}
+
+
+
+
+
+export const getUpdateFeedbackAutomationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackAutomation>>, TError,{data: BodyType<FeedbackAutomationConfig>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackAutomation>>, TError,{data: BodyType<FeedbackAutomationConfig>}, TContext> => {
+
+const mutationKey = ['updateFeedbackAutomation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFeedbackAutomation>>, {data: BodyType<FeedbackAutomationConfig>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateFeedbackAutomation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFeedbackAutomationMutationResult = NonNullable<Awaited<ReturnType<typeof updateFeedbackAutomation>>>
+    export type UpdateFeedbackAutomationMutationBody = BodyType<FeedbackAutomationConfig>
+    export type UpdateFeedbackAutomationMutationError = ErrorType<void>
+
+    export const useUpdateFeedbackAutomation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackAutomation>>, TError,{data: BodyType<FeedbackAutomationConfig>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFeedbackAutomation>>,
+        TError,
+        {data: BodyType<FeedbackAutomationConfig>},
+        TContext
+      > => {
+      return useMutation(getUpdateFeedbackAutomationMutationOptions(options));
+    }
 
 export const getListWorkshopOilsUrl = () => {
 

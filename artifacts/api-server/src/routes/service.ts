@@ -1161,6 +1161,7 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     if (updatedCustomer) queueCustomerSync(dealerId, updatedCustomer.id);
   }
   if (dateStr) updateValues.scheduledDate = dateStr;
+  if (updateValues.status === "closed" && before?.status !== "closed") updateValues.closedAt = new Date();
 
   const [order] = await db
     .update(serviceOrdersTable)
@@ -2074,6 +2075,7 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
     .update(serviceOrdersTable)
     .set({
       status: target,
+      ...(target === "closed" && order.status !== "closed" ? { closedAt: new Date() } : {}),
       stageHistory: sql`coalesce(${serviceOrdersTable.stageHistory}, '[]'::jsonb) || ${JSON.stringify([stageEvent])}::jsonb`,
     })
     .where(

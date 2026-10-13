@@ -16,7 +16,6 @@ import {
   jobCardsTable,
   serviceEstimateDecisionsTable,
   serviceInvoicesTable,
-  feedbackInvitationsTable,
   type JobCard,
 } from "@workspace/db";
 import {
@@ -1302,8 +1301,8 @@ export function onServiceInvoiceIssued(invoice: ServiceInvoice): void {
   });
 }
 
-/** Service-order transitions own appointment acknowledgement and the
- * closed→36h feedback schedule only. Workshop milestones are job-card driven. */
+/** Workshop milestones are job-card driven. Post-closure surveys are managed
+ * by the configurable feedback automation sweep, not a fixed 36-hour email. */
 export function onServiceOrderStatusChanged(
   before: ServiceOrder,
   after: ServiceOrder,
@@ -1324,63 +1323,6 @@ export function onServiceOrderStatusChanged(
         break;
       case "closed":
         await cancelServiceReminders(after.id, after.dealerId);
-        // A service invitation is deliberately customer/order-bound (not
-        // lead-bound). Store only its digest and schedule the existing branded
-        // feedback email after collection, never immediately on closure.
-        const origin = publicAppOrigin();
-        if (!origin || after.customerId == null) break;
-        const [existingInvitation] = await db
-          .select({ id: feedbackInvitationsTable.id })
-          .from(feedbackInvitationsTable)
-          .where(
-            and(
-              eq(feedbackInvitationsTable.dealerId, after.dealerId),
-              eq(feedbackInvitationsTable.serviceOrderId, after.id),
-            ),
-          )
-          .limit(1);
-        if (existingInvitation) break;
-        const feedbackToken = randomBytes(32).toString("base64url");
-        const feedbackHash = createHash("sha256")
-          .update(feedbackToken)
-          .digest("hex");
-        const feedbackExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        const [invitation] = await db
-          .insert(feedbackInvitationsTable)
-          .values({
-            dealerId: after.dealerId,
-            formId: 0,
-            leadId: null,
-            serviceOrderId: after.id,
-            customerId: after.customerId,
-            vehicleLabel: after.vehicleInfo,
-            token: null,
-            tokenHash: feedbackHash,
-            formName: "Your service feedback",
-            questionsSnapshot: [
-              { id: "rating", type: "star_rating", label: "How would you rate your service experience?", required: true, maxStars: 5 },
-              { id: "comment", type: "long_text", label: "Is there anything else you would like us to know?", required: false },
-            ],
-            expiresAt: feedbackExpiresAt,
-            channels: ["email"],
-            createdBy: "Service lifecycle",
-          })
-          .onConflictDoNothing()
-          .returning({ id: feedbackInvitationsTable.id });
-        if (!invitation) break;
-        await enqueueEmail({
-          dealerId: after.dealerId,
-          template: "feedback.survey",
-          to: c.email,
-          customerId: after.customerId,
-          dedupeKey: `csat:service_order:${after.id}:email`,
-          data: {
-            ...(c.name ? { name: c.name } : {}),
-            context: `your recent ${after.type} service on the ${after.vehicleInfo}`,
-            link: `${origin}/feedback/${feedbackToken}`,
-          },
-          sendAt: new Date(Date.now() + 36 * 60 * 60 * 1000),
-        });
         break;
       case "cancelled":
         await cancelServiceReminders(after.id, after.dealerId);

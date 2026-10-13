@@ -88,3 +88,4 @@
 - [Workshop revenue report approval](workshop-revenue-report-approval.md) — approved BRD baseline; branch isolation and GL reconciliation cannot be silently omitted.
 - [Test-drive customer branding](test-drive-customer-branding.md) — public invitations use GT/CAM identity and user-confirmed showroom locations, not AURA OS.
 - [Shipment allocation approval](shipment-allocation-approval.md) — BRD approval required before implementation; resolve VIN commitment and shortage fairness against existing holds.
+- [Automatic survey policy](automatic-survey-policy.md) — forward-only activation, elapsed-day delays and one invitation per delivery or service visit.

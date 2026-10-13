@@ -5,6 +5,47 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export type FeedbackAutomationRuleKind = typeof FeedbackAutomationRuleKind[keyof typeof FeedbackAutomationRuleKind];
+
+
+export const FeedbackAutomationRuleKind = {
+  sales: 'sales',
+  service: 'service',
+} as const;
+
+export type FeedbackAutomationRuleChannelsItem = typeof FeedbackAutomationRuleChannelsItem[keyof typeof FeedbackAutomationRuleChannelsItem];
+
+
+export const FeedbackAutomationRuleChannelsItem = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+} as const;
+
+export interface FeedbackAutomationRule {
+  kind: FeedbackAutomationRuleKind;
+  enabled: boolean;
+  /** @nullable */
+  formId: number | null;
+  /**
+     * @minimum 0
+     * @maximum 365
+     */
+  delayDays: number;
+  /**
+     * @minItems 1
+     * @maxItems 2
+     */
+  channels: FeedbackAutomationRuleChannelsItem[];
+}
+
+export interface FeedbackAutomationConfig {
+  /**
+     * @minItems 2
+     * @maxItems 2
+     */
+  rules: FeedbackAutomationRule[];
+}
+
 export interface WorkshopOil {
   id: number;
   name: string;
@@ -11794,7 +11835,12 @@ export type FeedbackInvitationAnswers = { [key: string]: unknown } | null;
 export interface FeedbackInvitation {
   id: number;
   formId: number;
-  leadId: number;
+  /** @nullable */
+  leadId: number | null;
+  /** @nullable */
+  automationState?: string | null;
+  /** @nullable */
+  automationError?: string | null;
   /** @nullable */
   leadName?: string | null;
   formName: string;

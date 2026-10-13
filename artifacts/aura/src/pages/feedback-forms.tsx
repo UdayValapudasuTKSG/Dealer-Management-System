@@ -674,6 +674,8 @@ export function InvitationRow({
   inv: {
     id: number;
     leadName?: string | null;
+    automationState?: string | null;
+    automationError?: string | null;
     formName: string;
     status: string;
     channels: string[];
@@ -708,6 +710,8 @@ export function InvitationRow({
                 {d.channel}: {d.status}
               </span>
             ))}
+            {inv.automationState && <span>Automation: {inv.automationState}</span>}
+            {inv.automationError && <span className="text-destructive">{inv.automationError}</span>}
           </div>
         </div>
         <span

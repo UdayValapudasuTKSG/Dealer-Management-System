@@ -73,6 +73,7 @@ export const serviceOrdersTable = pgTable("service_orders", {
   type: text("type").notNull().default("maintenance"),
   payType: text("pay_type").notNull().default("customer"),
   status: text("status").notNull().default("open"),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   scheduledDate: date("scheduled_date", { mode: "string" }).notNull(),
   complaint: text("complaint"),
   odometer: integer("odometer"),

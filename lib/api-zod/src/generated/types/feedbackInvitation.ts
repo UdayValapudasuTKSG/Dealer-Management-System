@@ -13,7 +13,12 @@ import type { FeedbackQuestion } from './feedbackQuestion';
 export interface FeedbackInvitation {
   id: number;
   formId: number;
-  leadId: number;
+  /** @nullable */
+  leadId: number | null;
+  /** @nullable */
+  automationState?: string | null;
+  /** @nullable */
+  automationError?: string | null;
   /** @nullable */
   leadName?: string | null;
   formName: string;
