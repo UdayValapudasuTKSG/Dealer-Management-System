@@ -5,6 +5,84 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export type SalesAccountingConfigInputAccountsItem = {
+  key: string;
+  account: string;
+};
+
+export type SalesAccountingConfigInputSourcesItemKind = typeof SalesAccountingConfigInputSourcesItemKind[keyof typeof SalesAccountingConfigInputSourcesItemKind];
+
+
+export const SalesAccountingConfigInputSourcesItemKind = {
+  bank: 'bank',
+  cash: 'cash',
+  float: 'float',
+  supplier: 'supplier',
+} as const;
+
+export type SalesAccountingConfigInputSourcesItem = {
+  id: string;
+  label: string;
+  kind: SalesAccountingConfigInputSourcesItemKind;
+  account: string;
+};
+
+export type SalesAccountingConfigInputModelsItem = {
+  make: string;
+  model: string;
+  income: string;
+  dutyFreeIncome: string;
+  inventory: string;
+  cogs: string;
+  discount: string;
+};
+
+export interface SalesAccountingConfigInput {
+  revision: number;
+  accounts: SalesAccountingConfigInputAccountsItem[];
+  sources: SalesAccountingConfigInputSourcesItem[];
+  models: SalesAccountingConfigInputModelsItem[];
+}
+
+export type SalesAccountingEntryInputStage = typeof SalesAccountingEntryInputStage[keyof typeof SalesAccountingEntryInputStage];
+
+
+export const SalesAccountingEntryInputStage = {
+  'VS-01': 'VS-01',
+  'VS-02': 'VS-02',
+  'VS-03': 'VS-03',
+  'VS-04': 'VS-04',
+  'VS-05': 'VS-05',
+  'VS-06': 'VS-06',
+  'VS-07': 'VS-07',
+  'VS-08': 'VS-08',
+  'VS-09': 'VS-09',
+  'VS-10': 'VS-10',
+} as const;
+
+export interface SalesAccountingEntryInput {
+  stage: SalesAccountingEntryInputStage;
+  date: string;
+  amount: number;
+  revision: number;
+  sourceId?: string;
+  expenseType?: string;
+  payerType?: string;
+  reference?: string;
+  notes?: string;
+  invoiceId?: number;
+  paymentId?: number;
+  discount?: number;
+  vat?: number;
+  cost?: number;
+  costEvidence?: string;
+}
+
+export interface SalesAccountingReviewInput {
+  stage: string;
+  revision: number;
+}
+
 export type FeedbackAutomationRuleKind = typeof FeedbackAutomationRuleKind[keyof typeof FeedbackAutomationRuleKind];
 
 
@@ -12727,6 +12805,776 @@ export interface SupplierInvoiceVarianceInput {
      */
   reason: string;
 }
+
+export type GetSalesAccountingConfig200VatPolicy = typeof GetSalesAccountingConfig200VatPolicy[keyof typeof GetSalesAccountingConfig200VatPolicy];
+
+
+export const GetSalesAccountingConfig200VatPolicy = {
+  pending: 'pending',
+} as const;
+
+export type GetSalesAccountingConfig200AccountsItem = {
+  key: string;
+  account: string;
+};
+
+export type GetSalesAccountingConfig200SourcesItemKind = typeof GetSalesAccountingConfig200SourcesItemKind[keyof typeof GetSalesAccountingConfig200SourcesItemKind];
+
+
+export const GetSalesAccountingConfig200SourcesItemKind = {
+  bank: 'bank',
+  cash: 'cash',
+  float: 'float',
+  supplier: 'supplier',
+} as const;
+
+export type GetSalesAccountingConfig200SourcesItem = {
+  id: string;
+  label: string;
+  kind: GetSalesAccountingConfig200SourcesItemKind;
+  account: string;
+};
+
+export type GetSalesAccountingConfig200ModelsItem = {
+  make: string;
+  model: string;
+  income: string;
+  dutyFreeIncome: string;
+  inventory: string;
+  cogs: string;
+  discount: string;
+};
+
+export type GetSalesAccountingConfig200AccountRolesItem = {
+  key: string;
+  label: string;
+  suggestedCode: string;
+  rootType: string;
+};
+
+export type GetSalesAccountingConfig200Validation = {
+  state: string;
+  errors: string[];
+  checkedAt?: string;
+  company?: string;
+};
+
+export type GetSalesAccountingConfig200 = {
+  eligible: boolean;
+  vatPolicy: GetSalesAccountingConfig200VatPolicy;
+  revision: number;
+  accounts: GetSalesAccountingConfig200AccountsItem[];
+  sources: GetSalesAccountingConfig200SourcesItem[];
+  models: GetSalesAccountingConfig200ModelsItem[];
+  accountRoles: GetSalesAccountingConfig200AccountRolesItem[];
+  validation: GetSalesAccountingConfig200Validation;
+};
+
+export type SaveSalesAccountingConfig200VatPolicy = typeof SaveSalesAccountingConfig200VatPolicy[keyof typeof SaveSalesAccountingConfig200VatPolicy];
+
+
+export const SaveSalesAccountingConfig200VatPolicy = {
+  pending: 'pending',
+} as const;
+
+export type SaveSalesAccountingConfig200AccountsItem = {
+  key: string;
+  account: string;
+};
+
+export type SaveSalesAccountingConfig200SourcesItemKind = typeof SaveSalesAccountingConfig200SourcesItemKind[keyof typeof SaveSalesAccountingConfig200SourcesItemKind];
+
+
+export const SaveSalesAccountingConfig200SourcesItemKind = {
+  bank: 'bank',
+  cash: 'cash',
+  float: 'float',
+  supplier: 'supplier',
+} as const;
+
+export type SaveSalesAccountingConfig200SourcesItem = {
+  id: string;
+  label: string;
+  kind: SaveSalesAccountingConfig200SourcesItemKind;
+  account: string;
+};
+
+export type SaveSalesAccountingConfig200ModelsItem = {
+  make: string;
+  model: string;
+  income: string;
+  dutyFreeIncome: string;
+  inventory: string;
+  cogs: string;
+  discount: string;
+};
+
+export type SaveSalesAccountingConfig200AccountRolesItem = {
+  key: string;
+  label: string;
+  suggestedCode: string;
+  rootType: string;
+};
+
+export type SaveSalesAccountingConfig200Validation = {
+  state: string;
+  errors: string[];
+  checkedAt?: string;
+  company?: string;
+};
+
+export type SaveSalesAccountingConfig200 = {
+  eligible: boolean;
+  vatPolicy: SaveSalesAccountingConfig200VatPolicy;
+  revision: number;
+  accounts: SaveSalesAccountingConfig200AccountsItem[];
+  sources: SaveSalesAccountingConfig200SourcesItem[];
+  models: SaveSalesAccountingConfig200ModelsItem[];
+  accountRoles: SaveSalesAccountingConfig200AccountRolesItem[];
+  validation: SaveSalesAccountingConfig200Validation;
+};
+
+export type ValidateSalesAccountingConfig200VatPolicy = typeof ValidateSalesAccountingConfig200VatPolicy[keyof typeof ValidateSalesAccountingConfig200VatPolicy];
+
+
+export const ValidateSalesAccountingConfig200VatPolicy = {
+  pending: 'pending',
+} as const;
+
+export type ValidateSalesAccountingConfig200AccountsItem = {
+  key: string;
+  account: string;
+};
+
+export type ValidateSalesAccountingConfig200SourcesItemKind = typeof ValidateSalesAccountingConfig200SourcesItemKind[keyof typeof ValidateSalesAccountingConfig200SourcesItemKind];
+
+
+export const ValidateSalesAccountingConfig200SourcesItemKind = {
+  bank: 'bank',
+  cash: 'cash',
+  float: 'float',
+  supplier: 'supplier',
+} as const;
+
+export type ValidateSalesAccountingConfig200SourcesItem = {
+  id: string;
+  label: string;
+  kind: ValidateSalesAccountingConfig200SourcesItemKind;
+  account: string;
+};
+
+export type ValidateSalesAccountingConfig200ModelsItem = {
+  make: string;
+  model: string;
+  income: string;
+  dutyFreeIncome: string;
+  inventory: string;
+  cogs: string;
+  discount: string;
+};
+
+export type ValidateSalesAccountingConfig200AccountRolesItem = {
+  key: string;
+  label: string;
+  suggestedCode: string;
+  rootType: string;
+};
+
+export type ValidateSalesAccountingConfig200Validation = {
+  state: string;
+  errors: string[];
+  checkedAt?: string;
+  company?: string;
+};
+
+export type ValidateSalesAccountingConfig200 = {
+  eligible: boolean;
+  vatPolicy: ValidateSalesAccountingConfig200VatPolicy;
+  revision: number;
+  accounts: ValidateSalesAccountingConfig200AccountsItem[];
+  sources: ValidateSalesAccountingConfig200SourcesItem[];
+  models: ValidateSalesAccountingConfig200ModelsItem[];
+  accountRoles: ValidateSalesAccountingConfig200AccountRolesItem[];
+  validation: ValidateSalesAccountingConfig200Validation;
+};
+
+export type ListSalesAccountingDeals200Item = {
+  id: number;
+  customerName: string;
+  stage: string;
+  amount: number;
+  enrolled: boolean;
+  vehicle?: string;
+  vin?: string;
+};
+
+export type GetSalesAccountingWorkflow200Deal = {
+  id: number;
+  customerName: string;
+  stage: string;
+  amount: number;
+  enrolled: boolean;
+  vehicle?: string;
+  vin?: string;
+};
+
+export type GetSalesAccountingWorkflow200ConfigVatPolicy = typeof GetSalesAccountingWorkflow200ConfigVatPolicy[keyof typeof GetSalesAccountingWorkflow200ConfigVatPolicy];
+
+
+export const GetSalesAccountingWorkflow200ConfigVatPolicy = {
+  pending: 'pending',
+} as const;
+
+export type GetSalesAccountingWorkflow200ConfigAccountsItem = {
+  key: string;
+  account: string;
+};
+
+export type GetSalesAccountingWorkflow200ConfigSourcesItemKind = typeof GetSalesAccountingWorkflow200ConfigSourcesItemKind[keyof typeof GetSalesAccountingWorkflow200ConfigSourcesItemKind];
+
+
+export const GetSalesAccountingWorkflow200ConfigSourcesItemKind = {
+  bank: 'bank',
+  cash: 'cash',
+  float: 'float',
+  supplier: 'supplier',
+} as const;
+
+export type GetSalesAccountingWorkflow200ConfigSourcesItem = {
+  id: string;
+  label: string;
+  kind: GetSalesAccountingWorkflow200ConfigSourcesItemKind;
+  account: string;
+};
+
+export type GetSalesAccountingWorkflow200ConfigModelsItem = {
+  make: string;
+  model: string;
+  income: string;
+  dutyFreeIncome: string;
+  inventory: string;
+  cogs: string;
+  discount: string;
+};
+
+export type GetSalesAccountingWorkflow200ConfigAccountRolesItem = {
+  key: string;
+  label: string;
+  suggestedCode: string;
+  rootType: string;
+};
+
+export type GetSalesAccountingWorkflow200ConfigValidation = {
+  state: string;
+  errors: string[];
+  checkedAt?: string;
+  company?: string;
+};
+
+export type GetSalesAccountingWorkflow200Config = {
+  eligible: boolean;
+  vatPolicy: GetSalesAccountingWorkflow200ConfigVatPolicy;
+  revision: number;
+  accounts: GetSalesAccountingWorkflow200ConfigAccountsItem[];
+  sources: GetSalesAccountingWorkflow200ConfigSourcesItem[];
+  models: GetSalesAccountingWorkflow200ConfigModelsItem[];
+  accountRoles: GetSalesAccountingWorkflow200ConfigAccountRolesItem[];
+  validation: GetSalesAccountingWorkflow200ConfigValidation;
+};
+
+export type GetSalesAccountingWorkflow200EntriesItemInputStage = typeof GetSalesAccountingWorkflow200EntriesItemInputStage[keyof typeof GetSalesAccountingWorkflow200EntriesItemInputStage];
+
+
+export const GetSalesAccountingWorkflow200EntriesItemInputStage = {
+  'VS-01': 'VS-01',
+  'VS-02': 'VS-02',
+  'VS-03': 'VS-03',
+  'VS-04': 'VS-04',
+  'VS-05': 'VS-05',
+  'VS-06': 'VS-06',
+  'VS-07': 'VS-07',
+  'VS-08': 'VS-08',
+  'VS-09': 'VS-09',
+  'VS-10': 'VS-10',
+} as const;
+
+export type GetSalesAccountingWorkflow200EntriesItemInput = {
+  stage: GetSalesAccountingWorkflow200EntriesItemInputStage;
+  date: string;
+  amount: number;
+  revision: number;
+  sourceId?: string;
+  expenseType?: string;
+  payerType?: string;
+  reference?: string;
+  notes?: string;
+  invoiceId?: number;
+  paymentId?: number;
+  discount?: number;
+  vat?: number;
+  cost?: number;
+  costEvidence?: string;
+};
+
+export type GetSalesAccountingWorkflow200EntriesItemLinesItem = {
+  account: string;
+  debit: number;
+  credit: number;
+  purpose: string;
+};
+
+export type GetSalesAccountingWorkflow200EntriesItem = {
+  id: number;
+  stage: string;
+  input: GetSalesAccountingWorkflow200EntriesItemInput;
+  state: string;
+  revision: number;
+  lines: GetSalesAccountingWorkflow200EntriesItemLinesItem[];
+  blockers: string[];
+  updatedAt: string;
+  reviewedAt?: string;
+};
+
+export type GetSalesAccountingWorkflow200StagesItem = {
+  id: string;
+  title: string;
+  posts: boolean;
+  requirements: string;
+};
+
+export type GetSalesAccountingWorkflow200 = {
+  deal: GetSalesAccountingWorkflow200Deal;
+  config: GetSalesAccountingWorkflow200Config;
+  entries: GetSalesAccountingWorkflow200EntriesItem[];
+  stages: GetSalesAccountingWorkflow200StagesItem[];
+  notice: string;
+};
+
+export type StartSalesAccountingWorkflow200Deal = {
+  id: number;
+  customerName: string;
+  stage: string;
+  amount: number;
+  enrolled: boolean;
+  vehicle?: string;
+  vin?: string;
+};
+
+export type StartSalesAccountingWorkflow200ConfigVatPolicy = typeof StartSalesAccountingWorkflow200ConfigVatPolicy[keyof typeof StartSalesAccountingWorkflow200ConfigVatPolicy];
+
+
+export const StartSalesAccountingWorkflow200ConfigVatPolicy = {
+  pending: 'pending',
+} as const;
+
+export type StartSalesAccountingWorkflow200ConfigAccountsItem = {
+  key: string;
+  account: string;
+};
+
+export type StartSalesAccountingWorkflow200ConfigSourcesItemKind = typeof StartSalesAccountingWorkflow200ConfigSourcesItemKind[keyof typeof StartSalesAccountingWorkflow200ConfigSourcesItemKind];
+
+
+export const StartSalesAccountingWorkflow200ConfigSourcesItemKind = {
+  bank: 'bank',
+  cash: 'cash',
+  float: 'float',
+  supplier: 'supplier',
+} as const;
+
+export type StartSalesAccountingWorkflow200ConfigSourcesItem = {
+  id: string;
+  label: string;
+  kind: StartSalesAccountingWorkflow200ConfigSourcesItemKind;
+  account: string;
+};
+
+export type StartSalesAccountingWorkflow200ConfigModelsItem = {
+  make: string;
+  model: string;
+  income: string;
+  dutyFreeIncome: string;
+  inventory: string;
+  cogs: string;
+  discount: string;
+};
+
+export type StartSalesAccountingWorkflow200ConfigAccountRolesItem = {
+  key: string;
+  label: string;
+  suggestedCode: string;
+  rootType: string;
+};
+
+export type StartSalesAccountingWorkflow200ConfigValidation = {
+  state: string;
+  errors: string[];
+  checkedAt?: string;
+  company?: string;
+};
+
+export type StartSalesAccountingWorkflow200Config = {
+  eligible: boolean;
+  vatPolicy: StartSalesAccountingWorkflow200ConfigVatPolicy;
+  revision: number;
+  accounts: StartSalesAccountingWorkflow200ConfigAccountsItem[];
+  sources: StartSalesAccountingWorkflow200ConfigSourcesItem[];
+  models: StartSalesAccountingWorkflow200ConfigModelsItem[];
+  accountRoles: StartSalesAccountingWorkflow200ConfigAccountRolesItem[];
+  validation: StartSalesAccountingWorkflow200ConfigValidation;
+};
+
+export type StartSalesAccountingWorkflow200EntriesItemInputStage = typeof StartSalesAccountingWorkflow200EntriesItemInputStage[keyof typeof StartSalesAccountingWorkflow200EntriesItemInputStage];
+
+
+export const StartSalesAccountingWorkflow200EntriesItemInputStage = {
+  'VS-01': 'VS-01',
+  'VS-02': 'VS-02',
+  'VS-03': 'VS-03',
+  'VS-04': 'VS-04',
+  'VS-05': 'VS-05',
+  'VS-06': 'VS-06',
+  'VS-07': 'VS-07',
+  'VS-08': 'VS-08',
+  'VS-09': 'VS-09',
+  'VS-10': 'VS-10',
+} as const;
+
+export type StartSalesAccountingWorkflow200EntriesItemInput = {
+  stage: StartSalesAccountingWorkflow200EntriesItemInputStage;
+  date: string;
+  amount: number;
+  revision: number;
+  sourceId?: string;
+  expenseType?: string;
+  payerType?: string;
+  reference?: string;
+  notes?: string;
+  invoiceId?: number;
+  paymentId?: number;
+  discount?: number;
+  vat?: number;
+  cost?: number;
+  costEvidence?: string;
+};
+
+export type StartSalesAccountingWorkflow200EntriesItemLinesItem = {
+  account: string;
+  debit: number;
+  credit: number;
+  purpose: string;
+};
+
+export type StartSalesAccountingWorkflow200EntriesItem = {
+  id: number;
+  stage: string;
+  input: StartSalesAccountingWorkflow200EntriesItemInput;
+  state: string;
+  revision: number;
+  lines: StartSalesAccountingWorkflow200EntriesItemLinesItem[];
+  blockers: string[];
+  updatedAt: string;
+  reviewedAt?: string;
+};
+
+export type StartSalesAccountingWorkflow200StagesItem = {
+  id: string;
+  title: string;
+  posts: boolean;
+  requirements: string;
+};
+
+export type StartSalesAccountingWorkflow200 = {
+  deal: StartSalesAccountingWorkflow200Deal;
+  config: StartSalesAccountingWorkflow200Config;
+  entries: StartSalesAccountingWorkflow200EntriesItem[];
+  stages: StartSalesAccountingWorkflow200StagesItem[];
+  notice: string;
+};
+
+export type SaveSalesAccountingEntry200Deal = {
+  id: number;
+  customerName: string;
+  stage: string;
+  amount: number;
+  enrolled: boolean;
+  vehicle?: string;
+  vin?: string;
+};
+
+export type SaveSalesAccountingEntry200ConfigVatPolicy = typeof SaveSalesAccountingEntry200ConfigVatPolicy[keyof typeof SaveSalesAccountingEntry200ConfigVatPolicy];
+
+
+export const SaveSalesAccountingEntry200ConfigVatPolicy = {
+  pending: 'pending',
+} as const;
+
+export type SaveSalesAccountingEntry200ConfigAccountsItem = {
+  key: string;
+  account: string;
+};
+
+export type SaveSalesAccountingEntry200ConfigSourcesItemKind = typeof SaveSalesAccountingEntry200ConfigSourcesItemKind[keyof typeof SaveSalesAccountingEntry200ConfigSourcesItemKind];
+
+
+export const SaveSalesAccountingEntry200ConfigSourcesItemKind = {
+  bank: 'bank',
+  cash: 'cash',
+  float: 'float',
+  supplier: 'supplier',
+} as const;
+
+export type SaveSalesAccountingEntry200ConfigSourcesItem = {
+  id: string;
+  label: string;
+  kind: SaveSalesAccountingEntry200ConfigSourcesItemKind;
+  account: string;
+};
+
+export type SaveSalesAccountingEntry200ConfigModelsItem = {
+  make: string;
+  model: string;
+  income: string;
+  dutyFreeIncome: string;
+  inventory: string;
+  cogs: string;
+  discount: string;
+};
+
+export type SaveSalesAccountingEntry200ConfigAccountRolesItem = {
+  key: string;
+  label: string;
+  suggestedCode: string;
+  rootType: string;
+};
+
+export type SaveSalesAccountingEntry200ConfigValidation = {
+  state: string;
+  errors: string[];
+  checkedAt?: string;
+  company?: string;
+};
+
+export type SaveSalesAccountingEntry200Config = {
+  eligible: boolean;
+  vatPolicy: SaveSalesAccountingEntry200ConfigVatPolicy;
+  revision: number;
+  accounts: SaveSalesAccountingEntry200ConfigAccountsItem[];
+  sources: SaveSalesAccountingEntry200ConfigSourcesItem[];
+  models: SaveSalesAccountingEntry200ConfigModelsItem[];
+  accountRoles: SaveSalesAccountingEntry200ConfigAccountRolesItem[];
+  validation: SaveSalesAccountingEntry200ConfigValidation;
+};
+
+export type SaveSalesAccountingEntry200EntriesItemInputStage = typeof SaveSalesAccountingEntry200EntriesItemInputStage[keyof typeof SaveSalesAccountingEntry200EntriesItemInputStage];
+
+
+export const SaveSalesAccountingEntry200EntriesItemInputStage = {
+  'VS-01': 'VS-01',
+  'VS-02': 'VS-02',
+  'VS-03': 'VS-03',
+  'VS-04': 'VS-04',
+  'VS-05': 'VS-05',
+  'VS-06': 'VS-06',
+  'VS-07': 'VS-07',
+  'VS-08': 'VS-08',
+  'VS-09': 'VS-09',
+  'VS-10': 'VS-10',
+} as const;
+
+export type SaveSalesAccountingEntry200EntriesItemInput = {
+  stage: SaveSalesAccountingEntry200EntriesItemInputStage;
+  date: string;
+  amount: number;
+  revision: number;
+  sourceId?: string;
+  expenseType?: string;
+  payerType?: string;
+  reference?: string;
+  notes?: string;
+  invoiceId?: number;
+  paymentId?: number;
+  discount?: number;
+  vat?: number;
+  cost?: number;
+  costEvidence?: string;
+};
+
+export type SaveSalesAccountingEntry200EntriesItemLinesItem = {
+  account: string;
+  debit: number;
+  credit: number;
+  purpose: string;
+};
+
+export type SaveSalesAccountingEntry200EntriesItem = {
+  id: number;
+  stage: string;
+  input: SaveSalesAccountingEntry200EntriesItemInput;
+  state: string;
+  revision: number;
+  lines: SaveSalesAccountingEntry200EntriesItemLinesItem[];
+  blockers: string[];
+  updatedAt: string;
+  reviewedAt?: string;
+};
+
+export type SaveSalesAccountingEntry200StagesItem = {
+  id: string;
+  title: string;
+  posts: boolean;
+  requirements: string;
+};
+
+export type SaveSalesAccountingEntry200 = {
+  deal: SaveSalesAccountingEntry200Deal;
+  config: SaveSalesAccountingEntry200Config;
+  entries: SaveSalesAccountingEntry200EntriesItem[];
+  stages: SaveSalesAccountingEntry200StagesItem[];
+  notice: string;
+};
+
+export type ReviewSalesAccountingEntry200Deal = {
+  id: number;
+  customerName: string;
+  stage: string;
+  amount: number;
+  enrolled: boolean;
+  vehicle?: string;
+  vin?: string;
+};
+
+export type ReviewSalesAccountingEntry200ConfigVatPolicy = typeof ReviewSalesAccountingEntry200ConfigVatPolicy[keyof typeof ReviewSalesAccountingEntry200ConfigVatPolicy];
+
+
+export const ReviewSalesAccountingEntry200ConfigVatPolicy = {
+  pending: 'pending',
+} as const;
+
+export type ReviewSalesAccountingEntry200ConfigAccountsItem = {
+  key: string;
+  account: string;
+};
+
+export type ReviewSalesAccountingEntry200ConfigSourcesItemKind = typeof ReviewSalesAccountingEntry200ConfigSourcesItemKind[keyof typeof ReviewSalesAccountingEntry200ConfigSourcesItemKind];
+
+
+export const ReviewSalesAccountingEntry200ConfigSourcesItemKind = {
+  bank: 'bank',
+  cash: 'cash',
+  float: 'float',
+  supplier: 'supplier',
+} as const;
+
+export type ReviewSalesAccountingEntry200ConfigSourcesItem = {
+  id: string;
+  label: string;
+  kind: ReviewSalesAccountingEntry200ConfigSourcesItemKind;
+  account: string;
+};
+
+export type ReviewSalesAccountingEntry200ConfigModelsItem = {
+  make: string;
+  model: string;
+  income: string;
+  dutyFreeIncome: string;
+  inventory: string;
+  cogs: string;
+  discount: string;
+};
+
+export type ReviewSalesAccountingEntry200ConfigAccountRolesItem = {
+  key: string;
+  label: string;
+  suggestedCode: string;
+  rootType: string;
+};
+
+export type ReviewSalesAccountingEntry200ConfigValidation = {
+  state: string;
+  errors: string[];
+  checkedAt?: string;
+  company?: string;
+};
+
+export type ReviewSalesAccountingEntry200Config = {
+  eligible: boolean;
+  vatPolicy: ReviewSalesAccountingEntry200ConfigVatPolicy;
+  revision: number;
+  accounts: ReviewSalesAccountingEntry200ConfigAccountsItem[];
+  sources: ReviewSalesAccountingEntry200ConfigSourcesItem[];
+  models: ReviewSalesAccountingEntry200ConfigModelsItem[];
+  accountRoles: ReviewSalesAccountingEntry200ConfigAccountRolesItem[];
+  validation: ReviewSalesAccountingEntry200ConfigValidation;
+};
+
+export type ReviewSalesAccountingEntry200EntriesItemInputStage = typeof ReviewSalesAccountingEntry200EntriesItemInputStage[keyof typeof ReviewSalesAccountingEntry200EntriesItemInputStage];
+
+
+export const ReviewSalesAccountingEntry200EntriesItemInputStage = {
+  'VS-01': 'VS-01',
+  'VS-02': 'VS-02',
+  'VS-03': 'VS-03',
+  'VS-04': 'VS-04',
+  'VS-05': 'VS-05',
+  'VS-06': 'VS-06',
+  'VS-07': 'VS-07',
+  'VS-08': 'VS-08',
+  'VS-09': 'VS-09',
+  'VS-10': 'VS-10',
+} as const;
+
+export type ReviewSalesAccountingEntry200EntriesItemInput = {
+  stage: ReviewSalesAccountingEntry200EntriesItemInputStage;
+  date: string;
+  amount: number;
+  revision: number;
+  sourceId?: string;
+  expenseType?: string;
+  payerType?: string;
+  reference?: string;
+  notes?: string;
+  invoiceId?: number;
+  paymentId?: number;
+  discount?: number;
+  vat?: number;
+  cost?: number;
+  costEvidence?: string;
+};
+
+export type ReviewSalesAccountingEntry200EntriesItemLinesItem = {
+  account: string;
+  debit: number;
+  credit: number;
+  purpose: string;
+};
+
+export type ReviewSalesAccountingEntry200EntriesItem = {
+  id: number;
+  stage: string;
+  input: ReviewSalesAccountingEntry200EntriesItemInput;
+  state: string;
+  revision: number;
+  lines: ReviewSalesAccountingEntry200EntriesItemLinesItem[];
+  blockers: string[];
+  updatedAt: string;
+  reviewedAt?: string;
+};
+
+export type ReviewSalesAccountingEntry200StagesItem = {
+  id: string;
+  title: string;
+  posts: boolean;
+  requirements: string;
+};
+
+export type ReviewSalesAccountingEntry200 = {
+  deal: ReviewSalesAccountingEntry200Deal;
+  config: ReviewSalesAccountingEntry200Config;
+  entries: ReviewSalesAccountingEntry200EntriesItem[];
+  stages: ReviewSalesAccountingEntry200StagesItem[];
+  notice: string;
+};
 
 export type VerifyMetaWebhookParams = {
 'hub.mode'?: string;

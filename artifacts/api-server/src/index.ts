@@ -12,6 +12,7 @@ import { migrateLegacyAttachments } from "./lib/documents-migrate";
 import { startMetricsFlusher } from "./lib/metrics";
 import { logPendingInfraSeams } from "./lib/infra-seams";
 import { registerErpnextEntitySync } from "./lib/erpnext/entities";
+import { registerSalesGlValidation } from "./lib/erpnext/sales-gl-validation";
 import { startMetaLeadPolling } from "./lib/meta-lead-poll";
 import { startPartsImportWorker } from "./lib/parts-imports";
 import { startPartsOperationsWorker } from "./lib/parts-operations-worker";
@@ -44,6 +45,7 @@ app.listen(port, (err) => {
   startRetentionSweeps();
   registerErpnextPartsSync();
   registerErpnextEntitySync();
+  registerSalesGlValidation();
   startErpnextSyncWorker();
   startAmberSyncWorker();
   void migrateLegacyAttachments();

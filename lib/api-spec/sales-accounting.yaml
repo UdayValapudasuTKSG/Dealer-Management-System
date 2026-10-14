@@ -1,0 +1,295 @@
+config:
+  get:
+    operationId: getSalesAccountingConfig
+    tags: [finance]
+    responses:
+      "200":
+        description: Dealer-specific accounting workpaper configuration
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/SalesAccountingConfig"
+  put:
+    operationId: saveSalesAccountingConfig
+    tags: [finance]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SalesAccountingConfigInput"
+    responses:
+      "200":
+        description: Saved
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/SalesAccountingConfig"
+validate:
+  post:
+    operationId: validateSalesAccountingConfig
+    tags: [finance]
+    responses:
+      "200":
+        description: Validation queued
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/SalesAccountingConfig"
+deals:
+  get:
+    operationId: listSalesAccountingDeals
+    tags: [finance]
+    responses:
+      "200":
+        description: Deals eligible for accounting preparation
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/schemas/SalesAccountingDeal"
+workflow:
+  parameters:
+    - in: path
+      name: dealId
+      required: true
+      schema: { type: integer }
+  get:
+    operationId: getSalesAccountingWorkflow
+    tags: [finance]
+    responses:
+      "200":
+        description: Workpapers and stage requirements
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/SalesAccountingWorkflow"
+  post:
+    operationId: startSalesAccountingWorkflow
+    tags: [finance]
+    responses:
+      "200":
+        description: Enrolled deal; legacy financial ERP sync held
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/SalesAccountingWorkflow"
+entries:
+  parameters:
+    - in: path
+      name: dealId
+      required: true
+      schema: { type: integer }
+  put:
+    operationId: saveSalesAccountingEntry
+    tags: [finance]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SalesAccountingEntryInput"
+    responses:
+      "200":
+        description: Draft and derived journal preview saved
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/SalesAccountingWorkflow"
+review:
+  parameters:
+    - in: path
+      name: dealId
+      required: true
+      schema: { type: integer }
+  post:
+    operationId: reviewSalesAccountingEntry
+    tags: [finance]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SalesAccountingReviewInput"
+    responses:
+      "200":
+        description: Reviewed workpaper, not financial posting
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/SalesAccountingWorkflow"
+schemas:
+  SalesAccountingConfigInput:
+    type: object
+    required: [accounts, sources, models, revision]
+    properties:
+      revision: { type: integer }
+      accounts:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingAccount"
+      sources:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingSource"
+      models:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingModel"
+  SalesAccountingAccount:
+    type: object
+    required: [key, account]
+    properties:
+      key: { type: string }
+      account: { type: string }
+  SalesAccountingSource:
+    type: object
+    required: [id, label, kind, account]
+    properties:
+      id: { type: string }
+      label: { type: string }
+      kind: { type: string, enum: [bank, cash, float, supplier] }
+      account: { type: string }
+  SalesAccountingModel:
+    type: object
+    required: [make, model, income, dutyFreeIncome, inventory, cogs, discount]
+    properties:
+      make: { type: string }
+      model: { type: string }
+      income: { type: string }
+      dutyFreeIncome: { type: string }
+      inventory: { type: string }
+      cogs: { type: string }
+      discount: { type: string }
+  SalesAccountingAccountRole:
+    type: object
+    required: [key, label, suggestedCode, rootType]
+    properties:
+      key: { type: string }
+      label: { type: string }
+      suggestedCode: { type: string }
+      rootType: { type: string }
+  SalesAccountingValidation:
+    type: object
+    required: [state, errors]
+    properties:
+      state: { type: string }
+      errors:
+        type: array
+        items: { type: string }
+      checkedAt: { type: string }
+      company: { type: string }
+  SalesAccountingConfig:
+    type: object
+    required: [eligible, vatPolicy, revision, accounts, sources, models, accountRoles, validation]
+    properties:
+      eligible: { type: boolean }
+      vatPolicy: { type: string, enum: [pending] }
+      revision: { type: integer }
+      accounts:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingAccount"
+      sources:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingSource"
+      models:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingModel"
+      accountRoles:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingAccountRole"
+      validation:
+        $ref: "#/schemas/SalesAccountingValidation"
+  SalesAccountingDeal:
+    type: object
+    required: [id, customerName, stage, amount, enrolled]
+    properties:
+      id: { type: integer }
+      customerName: { type: string }
+      stage: { type: string }
+      amount: { type: number }
+      enrolled: { type: boolean }
+      vehicle: { type: string }
+      vin: { type: string }
+  SalesAccountingEntryInput:
+    type: object
+    required: [stage, date, amount, revision]
+    properties:
+      stage: { type: string, enum: [VS-01, VS-02, VS-03, VS-04, VS-05, VS-06, VS-07, VS-08, VS-09, VS-10] }
+      date: { type: string }
+      amount: { type: number }
+      revision: { type: integer }
+      sourceId: { type: string }
+      expenseType: { type: string }
+      payerType: { type: string }
+      reference: { type: string }
+      notes: { type: string }
+      invoiceId: { type: integer }
+      paymentId: { type: integer }
+      discount: { type: number }
+      vat: { type: number }
+      cost: { type: number }
+      costEvidence: { type: string }
+  SalesAccountingReviewInput:
+    type: object
+    required: [stage, revision]
+    properties:
+      stage: { type: string }
+      revision: { type: integer }
+  SalesAccountingJournalLine:
+    type: object
+    required: [account, debit, credit, purpose]
+    properties:
+      account: { type: string }
+      debit: { type: number }
+      credit: { type: number }
+      purpose: { type: string }
+  SalesAccountingEntry:
+    type: object
+    required: [id, stage, input, state, revision, lines, blockers, updatedAt]
+    properties:
+      id: { type: integer }
+      stage: { type: string }
+      input:
+        $ref: "#/schemas/SalesAccountingEntryInput"
+      state: { type: string }
+      revision: { type: integer }
+      lines:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingJournalLine"
+      blockers:
+        type: array
+        items: { type: string }
+      updatedAt: { type: string }
+      reviewedAt: { type: string }
+  SalesAccountingStage:
+    type: object
+    required: [id, title, posts, requirements]
+    properties:
+      id: { type: string }
+      title: { type: string }
+      posts: { type: boolean }
+      requirements: { type: string }
+  SalesAccountingWorkflow:
+    type: object
+    required: [deal, config, entries, stages, notice]
+    properties:
+      deal:
+        $ref: "#/schemas/SalesAccountingDeal"
+      config:
+        $ref: "#/schemas/SalesAccountingConfig"
+      entries:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingEntry"
+      stages:
+        type: array
+        items:
+          $ref: "#/schemas/SalesAccountingStage"
+      notice: { type: string }

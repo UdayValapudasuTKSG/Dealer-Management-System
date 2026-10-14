@@ -216,6 +216,12 @@ export default function Finance() {
           ))}
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/finance/sales-accounting">
+            <Button variant="outline" size="sm" className="rounded-full h-8 gap-1.5 text-xs" data-testid="link-sales-accounting">
+              <FileText className="w-3.5 h-3.5" />
+              Sales Accounting Workpapers
+            </Button>
+          </Link>
           <Link href="/finance/gl-codes">
             <Button
               variant="outline"

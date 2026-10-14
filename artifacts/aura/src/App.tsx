@@ -33,6 +33,8 @@ import Leads from "@/pages/leads";
 import Deals from "@/pages/deals";
 import Finance from "@/pages/finance";
 import FinanceGlCodes from "@/pages/finance-gl-codes";
+import FinanceSalesAccounting from "@/pages/finance-sales-accounting";
+import FinanceSalesAccountingConfig from "@/pages/finance-sales-accounting-config";
 import Service from "@/pages/service";
 import Parts from "@/pages/parts";
 import Deliveries from "@/pages/deliveries";
@@ -305,6 +307,8 @@ function AppRoutes() {
                   </RequireModule>
                 </Route>
                 <Route path="/deals" component={Deals} />
+                <Route path="/finance/sales-accounting/config" component={FinanceSalesAccountingConfig} />
+                <Route path="/finance/sales-accounting" component={FinanceSalesAccounting} />
                 <Route path="/finance/gl-codes" component={FinanceGlCodes} />
                 <Route path="/finance" component={Finance} />
                 <Route path="/approvals">

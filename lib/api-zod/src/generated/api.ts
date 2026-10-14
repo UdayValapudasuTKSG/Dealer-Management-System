@@ -8,6 +8,546 @@
 import * as zod from 'zod';
 
 
+export const GetSalesAccountingConfigResponse = zod.object({
+  "eligible": zod.boolean(),
+  "vatPolicy": zod.enum(['pending']),
+  "revision": zod.number(),
+  "accounts": zod.array(zod.object({
+  "key": zod.string(),
+  "account": zod.string()
+})),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "kind": zod.enum(['bank', 'cash', 'float', 'supplier']),
+  "account": zod.string()
+})),
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "income": zod.string(),
+  "dutyFreeIncome": zod.string(),
+  "inventory": zod.string(),
+  "cogs": zod.string(),
+  "discount": zod.string()
+})),
+  "accountRoles": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "suggestedCode": zod.string(),
+  "rootType": zod.string()
+})),
+  "validation": zod.object({
+  "state": zod.string(),
+  "errors": zod.array(zod.string()),
+  "checkedAt": zod.string().optional(),
+  "company": zod.string().optional()
+})
+})
+
+
+export const SaveSalesAccountingConfigBody = zod.object({
+  "revision": zod.number(),
+  "accounts": zod.array(zod.object({
+  "key": zod.string(),
+  "account": zod.string()
+})),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "kind": zod.enum(['bank', 'cash', 'float', 'supplier']),
+  "account": zod.string()
+})),
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "income": zod.string(),
+  "dutyFreeIncome": zod.string(),
+  "inventory": zod.string(),
+  "cogs": zod.string(),
+  "discount": zod.string()
+}))
+})
+
+export const SaveSalesAccountingConfigResponse = zod.object({
+  "eligible": zod.boolean(),
+  "vatPolicy": zod.enum(['pending']),
+  "revision": zod.number(),
+  "accounts": zod.array(zod.object({
+  "key": zod.string(),
+  "account": zod.string()
+})),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "kind": zod.enum(['bank', 'cash', 'float', 'supplier']),
+  "account": zod.string()
+})),
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "income": zod.string(),
+  "dutyFreeIncome": zod.string(),
+  "inventory": zod.string(),
+  "cogs": zod.string(),
+  "discount": zod.string()
+})),
+  "accountRoles": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "suggestedCode": zod.string(),
+  "rootType": zod.string()
+})),
+  "validation": zod.object({
+  "state": zod.string(),
+  "errors": zod.array(zod.string()),
+  "checkedAt": zod.string().optional(),
+  "company": zod.string().optional()
+})
+})
+
+
+export const ValidateSalesAccountingConfigResponse = zod.object({
+  "eligible": zod.boolean(),
+  "vatPolicy": zod.enum(['pending']),
+  "revision": zod.number(),
+  "accounts": zod.array(zod.object({
+  "key": zod.string(),
+  "account": zod.string()
+})),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "kind": zod.enum(['bank', 'cash', 'float', 'supplier']),
+  "account": zod.string()
+})),
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "income": zod.string(),
+  "dutyFreeIncome": zod.string(),
+  "inventory": zod.string(),
+  "cogs": zod.string(),
+  "discount": zod.string()
+})),
+  "accountRoles": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "suggestedCode": zod.string(),
+  "rootType": zod.string()
+})),
+  "validation": zod.object({
+  "state": zod.string(),
+  "errors": zod.array(zod.string()),
+  "checkedAt": zod.string().optional(),
+  "company": zod.string().optional()
+})
+})
+
+
+export const ListSalesAccountingDealsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "stage": zod.string(),
+  "amount": zod.number(),
+  "enrolled": zod.boolean(),
+  "vehicle": zod.string().optional(),
+  "vin": zod.string().optional()
+})
+export const ListSalesAccountingDealsResponse = zod.array(ListSalesAccountingDealsResponseItem)
+
+
+export const GetSalesAccountingWorkflowParams = zod.object({
+  "dealId": zod.coerce.number()
+})
+
+export const GetSalesAccountingWorkflowResponse = zod.object({
+  "deal": zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "stage": zod.string(),
+  "amount": zod.number(),
+  "enrolled": zod.boolean(),
+  "vehicle": zod.string().optional(),
+  "vin": zod.string().optional()
+}),
+  "config": zod.object({
+  "eligible": zod.boolean(),
+  "vatPolicy": zod.enum(['pending']),
+  "revision": zod.number(),
+  "accounts": zod.array(zod.object({
+  "key": zod.string(),
+  "account": zod.string()
+})),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "kind": zod.enum(['bank', 'cash', 'float', 'supplier']),
+  "account": zod.string()
+})),
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "income": zod.string(),
+  "dutyFreeIncome": zod.string(),
+  "inventory": zod.string(),
+  "cogs": zod.string(),
+  "discount": zod.string()
+})),
+  "accountRoles": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "suggestedCode": zod.string(),
+  "rootType": zod.string()
+})),
+  "validation": zod.object({
+  "state": zod.string(),
+  "errors": zod.array(zod.string()),
+  "checkedAt": zod.string().optional(),
+  "company": zod.string().optional()
+})
+}),
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "stage": zod.string(),
+  "input": zod.object({
+  "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
+  "date": zod.string(),
+  "amount": zod.number(),
+  "revision": zod.number(),
+  "sourceId": zod.string().optional(),
+  "expenseType": zod.string().optional(),
+  "payerType": zod.string().optional(),
+  "reference": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "invoiceId": zod.number().optional(),
+  "paymentId": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "vat": zod.number().optional(),
+  "cost": zod.number().optional(),
+  "costEvidence": zod.string().optional()
+}),
+  "state": zod.string(),
+  "revision": zod.number(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "updatedAt": zod.string(),
+  "reviewedAt": zod.string().optional()
+})),
+  "stages": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "posts": zod.boolean(),
+  "requirements": zod.string()
+})),
+  "notice": zod.string()
+})
+
+
+export const StartSalesAccountingWorkflowParams = zod.object({
+  "dealId": zod.coerce.number()
+})
+
+export const StartSalesAccountingWorkflowResponse = zod.object({
+  "deal": zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "stage": zod.string(),
+  "amount": zod.number(),
+  "enrolled": zod.boolean(),
+  "vehicle": zod.string().optional(),
+  "vin": zod.string().optional()
+}),
+  "config": zod.object({
+  "eligible": zod.boolean(),
+  "vatPolicy": zod.enum(['pending']),
+  "revision": zod.number(),
+  "accounts": zod.array(zod.object({
+  "key": zod.string(),
+  "account": zod.string()
+})),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "kind": zod.enum(['bank', 'cash', 'float', 'supplier']),
+  "account": zod.string()
+})),
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "income": zod.string(),
+  "dutyFreeIncome": zod.string(),
+  "inventory": zod.string(),
+  "cogs": zod.string(),
+  "discount": zod.string()
+})),
+  "accountRoles": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "suggestedCode": zod.string(),
+  "rootType": zod.string()
+})),
+  "validation": zod.object({
+  "state": zod.string(),
+  "errors": zod.array(zod.string()),
+  "checkedAt": zod.string().optional(),
+  "company": zod.string().optional()
+})
+}),
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "stage": zod.string(),
+  "input": zod.object({
+  "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
+  "date": zod.string(),
+  "amount": zod.number(),
+  "revision": zod.number(),
+  "sourceId": zod.string().optional(),
+  "expenseType": zod.string().optional(),
+  "payerType": zod.string().optional(),
+  "reference": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "invoiceId": zod.number().optional(),
+  "paymentId": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "vat": zod.number().optional(),
+  "cost": zod.number().optional(),
+  "costEvidence": zod.string().optional()
+}),
+  "state": zod.string(),
+  "revision": zod.number(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "updatedAt": zod.string(),
+  "reviewedAt": zod.string().optional()
+})),
+  "stages": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "posts": zod.boolean(),
+  "requirements": zod.string()
+})),
+  "notice": zod.string()
+})
+
+
+export const SaveSalesAccountingEntryParams = zod.object({
+  "dealId": zod.coerce.number()
+})
+
+export const SaveSalesAccountingEntryBody = zod.object({
+  "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
+  "date": zod.string(),
+  "amount": zod.number(),
+  "revision": zod.number(),
+  "sourceId": zod.string().optional(),
+  "expenseType": zod.string().optional(),
+  "payerType": zod.string().optional(),
+  "reference": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "invoiceId": zod.number().optional(),
+  "paymentId": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "vat": zod.number().optional(),
+  "cost": zod.number().optional(),
+  "costEvidence": zod.string().optional()
+})
+
+export const SaveSalesAccountingEntryResponse = zod.object({
+  "deal": zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "stage": zod.string(),
+  "amount": zod.number(),
+  "enrolled": zod.boolean(),
+  "vehicle": zod.string().optional(),
+  "vin": zod.string().optional()
+}),
+  "config": zod.object({
+  "eligible": zod.boolean(),
+  "vatPolicy": zod.enum(['pending']),
+  "revision": zod.number(),
+  "accounts": zod.array(zod.object({
+  "key": zod.string(),
+  "account": zod.string()
+})),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "kind": zod.enum(['bank', 'cash', 'float', 'supplier']),
+  "account": zod.string()
+})),
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "income": zod.string(),
+  "dutyFreeIncome": zod.string(),
+  "inventory": zod.string(),
+  "cogs": zod.string(),
+  "discount": zod.string()
+})),
+  "accountRoles": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "suggestedCode": zod.string(),
+  "rootType": zod.string()
+})),
+  "validation": zod.object({
+  "state": zod.string(),
+  "errors": zod.array(zod.string()),
+  "checkedAt": zod.string().optional(),
+  "company": zod.string().optional()
+})
+}),
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "stage": zod.string(),
+  "input": zod.object({
+  "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
+  "date": zod.string(),
+  "amount": zod.number(),
+  "revision": zod.number(),
+  "sourceId": zod.string().optional(),
+  "expenseType": zod.string().optional(),
+  "payerType": zod.string().optional(),
+  "reference": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "invoiceId": zod.number().optional(),
+  "paymentId": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "vat": zod.number().optional(),
+  "cost": zod.number().optional(),
+  "costEvidence": zod.string().optional()
+}),
+  "state": zod.string(),
+  "revision": zod.number(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "updatedAt": zod.string(),
+  "reviewedAt": zod.string().optional()
+})),
+  "stages": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "posts": zod.boolean(),
+  "requirements": zod.string()
+})),
+  "notice": zod.string()
+})
+
+
+export const ReviewSalesAccountingEntryParams = zod.object({
+  "dealId": zod.coerce.number()
+})
+
+export const ReviewSalesAccountingEntryBody = zod.object({
+  "stage": zod.string(),
+  "revision": zod.number()
+})
+
+export const ReviewSalesAccountingEntryResponse = zod.object({
+  "deal": zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "stage": zod.string(),
+  "amount": zod.number(),
+  "enrolled": zod.boolean(),
+  "vehicle": zod.string().optional(),
+  "vin": zod.string().optional()
+}),
+  "config": zod.object({
+  "eligible": zod.boolean(),
+  "vatPolicy": zod.enum(['pending']),
+  "revision": zod.number(),
+  "accounts": zod.array(zod.object({
+  "key": zod.string(),
+  "account": zod.string()
+})),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "kind": zod.enum(['bank', 'cash', 'float', 'supplier']),
+  "account": zod.string()
+})),
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "income": zod.string(),
+  "dutyFreeIncome": zod.string(),
+  "inventory": zod.string(),
+  "cogs": zod.string(),
+  "discount": zod.string()
+})),
+  "accountRoles": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "suggestedCode": zod.string(),
+  "rootType": zod.string()
+})),
+  "validation": zod.object({
+  "state": zod.string(),
+  "errors": zod.array(zod.string()),
+  "checkedAt": zod.string().optional(),
+  "company": zod.string().optional()
+})
+}),
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "stage": zod.string(),
+  "input": zod.object({
+  "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
+  "date": zod.string(),
+  "amount": zod.number(),
+  "revision": zod.number(),
+  "sourceId": zod.string().optional(),
+  "expenseType": zod.string().optional(),
+  "payerType": zod.string().optional(),
+  "reference": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "invoiceId": zod.number().optional(),
+  "paymentId": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "vat": zod.number().optional(),
+  "cost": zod.number().optional(),
+  "costEvidence": zod.string().optional()
+}),
+  "state": zod.string(),
+  "revision": zod.number(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "updatedAt": zod.string(),
+  "reviewedAt": zod.string().optional()
+})),
+  "stages": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "posts": zod.boolean(),
+  "requirements": zod.string()
+})),
+  "notice": zod.string()
+})
+
+
 export const getFeedbackAutomationResponseRulesItemDelayDaysMin = 0;
 export const getFeedbackAutomationResponseRulesItemDelayDaysMax = 365;
 

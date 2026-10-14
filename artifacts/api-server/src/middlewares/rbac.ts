@@ -806,6 +806,10 @@ const PATH_MODULES: Record<string, RouteRule> = {
     module: "finance",
     category: (req) => (req.method === "GET" ? "view" : "edit"),
   },
+  "sales-accounting": {
+    module: "finance",
+    category: (req) => req.method === "GET" ? "view" : /\/review\/?$/.test(req.path) ? "approve" : "edit",
+  },
   "service-orders": {
     module: "service",
     category: (req) => {

@@ -1,3 +1,4 @@
+import { SalesAccountingHoldError } from "../sales-accounting-hold";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   db,
@@ -158,6 +159,12 @@ async function processJob(job: ErpnextSyncJob): Promise<void> {
       })
       .where(eq(erpnextSyncJobsTable.id, job.id));
   } catch (err) {
+    if (err instanceof SalesAccountingHoldError) {
+      await db.update(erpnextSyncJobsTable).set({
+        status: "queued", lastError: err.message, nextAttemptAt: new Date(Date.now() + UNCONFIGURED_RETRY_MS), updatedAt: new Date(),
+      }).where(eq(erpnextSyncJobsTable.id, job.id));
+      return;
+    }
     const message =
       err instanceof Error ? err.message : String(err);
     const retryable = err instanceof ErpnextError ? err.retryable : true;

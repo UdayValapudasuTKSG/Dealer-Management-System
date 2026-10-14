@@ -8,3 +8,6 @@ description: Why new request bodies must be named component schemas, and why lib
 **Rule 2:** Orval workspace mode appends `export * from './generated/...'` lines to index.ts if it doesn't find them verbatim — it uses single quotes. If index.ts uses double quotes, every codegen run appends duplicates and typecheck breaks. Keep `lib/api-zod/src/index.ts` single-quoted.
 
 **How to apply:** when editing lib/api-spec/openapi.yaml request bodies, add a component schema + `$ref`; after codegen failures with "already exported a member", check index.ts for duplicated export lines.
+
+**External references:** External schema files need an explicit parser allowlist. Request bodies referenced under an external non-components key are treated as inline and still collide. Keep mutation request schemas in the root components section. Do not alias one YAML schema tree into two locations: the bundler mutates shared reference nodes and can produce doubled `x-ext` paths.
+**Why:** External response schemas bundled successfully, while external request-body roots and shared YAML anchors failed code generation. Use ordinary named component refs instead of aliases.

@@ -71,6 +71,83 @@ tags:
   - name: whatsapp
     description: Per-dealer Meta WhatsApp Business channel settings
 paths:
+  /sales-accounting/config:
+    get:
+      operationId: getSalesAccountingConfig
+      tags: [finance]
+      responses:
+        "200":
+          description: Accounting configuration
+          content:
+            application/json:
+              schema:
+                $ref: "./sales-accounting.yaml#/schemas/SalesAccountingConfig"
+    put:
+      operationId: saveSalesAccountingConfig
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesAccountingConfigInput"
+      responses:
+        "200":
+          description: Saved configuration
+          content:
+            application/json:
+              schema:
+                $ref: "./sales-accounting.yaml#/schemas/SalesAccountingConfig"
+  /sales-accounting/validate:
+    $ref: "./sales-accounting.yaml#/validate"
+  /sales-accounting/deals:
+    $ref: "./sales-accounting.yaml#/deals"
+  /sales-accounting/deals/{dealId}:
+    $ref: "./sales-accounting.yaml#/workflow"
+  /sales-accounting/deals/{dealId}/entries:
+    parameters:
+      - in: path
+        name: dealId
+        required: true
+        schema: { type: integer }
+    put:
+      operationId: saveSalesAccountingEntry
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesAccountingEntryInput"
+      responses:
+        "200":
+          description: Saved workpaper
+          content:
+            application/json:
+              schema:
+                $ref: "./sales-accounting.yaml#/schemas/SalesAccountingWorkflow"
+  /sales-accounting/deals/{dealId}/review:
+    parameters:
+      - in: path
+        name: dealId
+        required: true
+        schema: { type: integer }
+    post:
+      operationId: reviewSalesAccountingEntry
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesAccountingReviewInput"
+      responses:
+        "200":
+          description: Reviewed workpaper
+          content:
+            application/json:
+              schema:
+                $ref: "./sales-accounting.yaml#/schemas/SalesAccountingWorkflow"
   /feedback-forms/automation:
     get:
       operationId: getFeedbackAutomation
@@ -12089,6 +12166,48 @@ paths:
               schema: { $ref: "#/components/schemas/ShipmentMatchingView" }
 components:
   schemas:
+    SalesAccountingConfigInput:
+      type: object
+      required: [accounts, sources, models, revision]
+      properties:
+        revision: { type: integer }
+        accounts:
+          type: array
+          items:
+            $ref: "./sales-accounting.yaml#/schemas/SalesAccountingAccount"
+        sources:
+          type: array
+          items:
+            $ref: "./sales-accounting.yaml#/schemas/SalesAccountingSource"
+        models:
+          type: array
+          items:
+            $ref: "./sales-accounting.yaml#/schemas/SalesAccountingModel"
+    SalesAccountingEntryInput:
+      type: object
+      required: [stage, date, amount, revision]
+      properties:
+        stage: { type: string, enum: [VS-01, VS-02, VS-03, VS-04, VS-05, VS-06, VS-07, VS-08, VS-09, VS-10] }
+        date: { type: string }
+        amount: { type: number }
+        revision: { type: integer }
+        sourceId: { type: string }
+        expenseType: { type: string }
+        payerType: { type: string }
+        reference: { type: string }
+        notes: { type: string }
+        invoiceId: { type: integer }
+        paymentId: { type: integer }
+        discount: { type: number }
+        vat: { type: number }
+        cost: { type: number }
+        costEvidence: { type: string }
+    SalesAccountingReviewInput:
+      type: object
+      required: [stage, revision]
+      properties:
+        stage: { type: string }
+        revision: { type: integer }
     FeedbackAutomationRule:
       type: object
       required: [kind, enabled, formId, delayDays, channels]

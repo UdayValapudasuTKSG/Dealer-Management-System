@@ -34,9 +34,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - The test site's stock and compliance features affect API payloads: serial support must be enabled before serialised Item creation, and its installed HSN validator requires an existing six/eight-digit code even for dummy items.
   **Why:** Company country/currency alone does not control installed compliance extensions. The site rejected otherwise-valid test Items.
   **How to apply:** Inspect actual enabled features and metadata; do not disable compliance validation or copy dummy classifications into live items. Customer names must also differ from Customer Group names.
-- On 2026-10-12 the user approved VAT at delivery only for CAM Motors Dummy: hold the full advance as a customer-deposit liability. This is a dummy-test assumption, not approval for live dealerships.
-  **Why:** The workflow document leaves advance VAT unresolved; the user explicitly selected this provisional policy when asked.
-  **How to apply:** Isolate the policy to the confirmed dummy workflow. Never infer live tax approval from this choice or from the existence of a VAT-on-advances account.
+- On 2026-10-14 the user restricted the Sales & F&I rollout to CAM Motors Dummy and explicitly chose to keep advance-VAT posting blocked pending finance approval. This supersedes the earlier provisional dummy delivery-only VAT choice.
+  **Why:** The new workflow's tax policy is awaiting approval; the presence of a deposit or VAT account does not authorize posting.
+  **How to apply:** Do not activate advance posting or broaden rollout to live dealerships without approval. Production's approved dummy dealership is ID 2. Never retroactively enrol transactions with existing receipts or attempted ERP postings. Current workpapers are preparation/review, not financial execution.
 - On 2026-10-10, the user explicitly confirmed ERPNext company `GT AUTOMOTIVE` on `https://erpnext-jcy-qlx.m.frappe.cloud` is test-only and authorized using it for AURA's CAM Motors Dummy dealership in production. Its screenshot showed GYD, Guyana and perpetual inventory enabled.
   **Why:** The AURA dealership and ERPNext company intentionally have different names; this particular mapping is approved for dummy testing.
   **How to apply:** Continue test setup for this pairing without repeatedly asking whether that company is live. This does not authorize connecting real GT/CAM dealerships, changing posting rules, or backfilling existing transactions.

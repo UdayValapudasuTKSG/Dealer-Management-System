@@ -216,6 +216,8 @@ import type {
   GetPermissionMeta200,
   GetPipelineSuggestionsParams,
   GetReportParams,
+  GetSalesAccountingConfig200,
+  GetSalesAccountingWorkflow200,
   GetSentimentAnalysisParams,
   GetSupplierInvoicesForPo200,
   GetSupplierInvoicesForPoParams,
@@ -315,6 +317,7 @@ import type {
   ListPartsVendorReconciliationsParams,
   ListPlatformAuditParams,
   ListReviewsParams,
+  ListSalesAccountingDeals200Item,
   ListServiceInvoicesParams,
   ListServiceOrdersParams,
   ListTasksParams,
@@ -429,13 +432,19 @@ import type {
   ReservationHoldRetryResult,
   Review,
   ReviewCreate,
+  ReviewSalesAccountingEntry200,
   RoleFieldPermissionsInput,
   RoleInput,
   RolePermissionsInput,
   RoleUpdate,
   RoleWithPermissions,
   RotateErpnextWebhookSecret200,
+  SalesAccountingConfigInput,
+  SalesAccountingEntryInput,
+  SalesAccountingReviewInput,
   SalesPerformance,
+  SaveSalesAccountingConfig200,
+  SaveSalesAccountingEntry200,
   SearchResults,
   SendDeliveryWarrantyEmail200,
   SendFeedbackFormRequest,
@@ -492,6 +501,7 @@ import type {
   SmtpConnectionTestResult,
   StageChecklistConfig,
   StageChecklistInput,
+  StartSalesAccountingWorkflow200,
   SubmitVehicleOnboarding201,
   Supplier,
   SupplierDeliveryHistory,
@@ -536,6 +546,7 @@ import type {
   UploadSupplierPurchaseInvoiceParams,
   UploadUrlRequest,
   UploadUrlResponse,
+  ValidateSalesAccountingConfig200,
   Vehicle,
   VehicleImportResult,
   VehicleInput,
@@ -592,6 +603,546 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetSalesAccountingConfigUrl = () => {
+
+
+
+
+  return `/api/sales-accounting/config`
+}
+
+export const getSalesAccountingConfig = async ( options?: RequestInit): Promise<GetSalesAccountingConfig200> => {
+
+  return customFetch<GetSalesAccountingConfig200>(getGetSalesAccountingConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSalesAccountingConfigQueryKey = () => {
+    return [
+    `/api/sales-accounting/config`
+    ] as const;
+    }
+
+
+export const getGetSalesAccountingConfigQueryOptions = <TData = Awaited<ReturnType<typeof getSalesAccountingConfig>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSalesAccountingConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSalesAccountingConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalesAccountingConfig>>> = ({ signal }) => getSalesAccountingConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSalesAccountingConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSalesAccountingConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getSalesAccountingConfig>>>
+export type GetSalesAccountingConfigQueryError = ErrorType<unknown>
+
+
+
+export function useGetSalesAccountingConfig<TData = Awaited<ReturnType<typeof getSalesAccountingConfig>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSalesAccountingConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSalesAccountingConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveSalesAccountingConfigUrl = () => {
+
+
+
+
+  return `/api/sales-accounting/config`
+}
+
+export const saveSalesAccountingConfig = async (salesAccountingConfigInput: SalesAccountingConfigInput, options?: RequestInit): Promise<SaveSalesAccountingConfig200> => {
+
+  return customFetch<SaveSalesAccountingConfig200>(getSaveSalesAccountingConfigUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(salesAccountingConfigInput)
+  }
+);}
+
+
+
+
+
+export const getSaveSalesAccountingConfigMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveSalesAccountingConfig>>, TError,{data: BodyType<SalesAccountingConfigInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveSalesAccountingConfig>>, TError,{data: BodyType<SalesAccountingConfigInput>}, TContext> => {
+
+const mutationKey = ['saveSalesAccountingConfig'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveSalesAccountingConfig>>, {data: BodyType<SalesAccountingConfigInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveSalesAccountingConfig(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveSalesAccountingConfigMutationResult = NonNullable<Awaited<ReturnType<typeof saveSalesAccountingConfig>>>
+    export type SaveSalesAccountingConfigMutationBody = BodyType<SalesAccountingConfigInput>
+    export type SaveSalesAccountingConfigMutationError = ErrorType<unknown>
+
+    export const useSaveSalesAccountingConfig = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveSalesAccountingConfig>>, TError,{data: BodyType<SalesAccountingConfigInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveSalesAccountingConfig>>,
+        TError,
+        {data: BodyType<SalesAccountingConfigInput>},
+        TContext
+      > => {
+      return useMutation(getSaveSalesAccountingConfigMutationOptions(options));
+    }
+
+export const getValidateSalesAccountingConfigUrl = () => {
+
+
+
+
+  return `/api/sales-accounting/validate`
+}
+
+export const validateSalesAccountingConfig = async ( options?: RequestInit): Promise<ValidateSalesAccountingConfig200> => {
+
+  return customFetch<ValidateSalesAccountingConfig200>(getValidateSalesAccountingConfigUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getValidateSalesAccountingConfigMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateSalesAccountingConfig>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof validateSalesAccountingConfig>>, TError,void, TContext> => {
+
+const mutationKey = ['validateSalesAccountingConfig'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof validateSalesAccountingConfig>>, void> = () => {
+
+
+          return  validateSalesAccountingConfig(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ValidateSalesAccountingConfigMutationResult = NonNullable<Awaited<ReturnType<typeof validateSalesAccountingConfig>>>
+
+    export type ValidateSalesAccountingConfigMutationError = ErrorType<unknown>
+
+    export const useValidateSalesAccountingConfig = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateSalesAccountingConfig>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof validateSalesAccountingConfig>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getValidateSalesAccountingConfigMutationOptions(options));
+    }
+
+export const getListSalesAccountingDealsUrl = () => {
+
+
+
+
+  return `/api/sales-accounting/deals`
+}
+
+export const listSalesAccountingDeals = async ( options?: RequestInit): Promise<ListSalesAccountingDeals200Item[]> => {
+
+  return customFetch<ListSalesAccountingDeals200Item[]>(getListSalesAccountingDealsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSalesAccountingDealsQueryKey = () => {
+    return [
+    `/api/sales-accounting/deals`
+    ] as const;
+    }
+
+
+export const getListSalesAccountingDealsQueryOptions = <TData = Awaited<ReturnType<typeof listSalesAccountingDeals>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSalesAccountingDeals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSalesAccountingDealsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSalesAccountingDeals>>> = ({ signal }) => listSalesAccountingDeals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSalesAccountingDeals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSalesAccountingDealsQueryResult = NonNullable<Awaited<ReturnType<typeof listSalesAccountingDeals>>>
+export type ListSalesAccountingDealsQueryError = ErrorType<unknown>
+
+
+
+export function useListSalesAccountingDeals<TData = Awaited<ReturnType<typeof listSalesAccountingDeals>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSalesAccountingDeals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSalesAccountingDealsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSalesAccountingWorkflowUrl = (dealId: number,) => {
+
+
+
+
+  return `/api/sales-accounting/deals/${dealId}`
+}
+
+export const getSalesAccountingWorkflow = async (dealId: number, options?: RequestInit): Promise<GetSalesAccountingWorkflow200> => {
+
+  return customFetch<GetSalesAccountingWorkflow200>(getGetSalesAccountingWorkflowUrl(dealId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSalesAccountingWorkflowQueryKey = (dealId: number,) => {
+    return [
+    `/api/sales-accounting/deals/${dealId}`
+    ] as const;
+    }
+
+
+export const getGetSalesAccountingWorkflowQueryOptions = <TData = Awaited<ReturnType<typeof getSalesAccountingWorkflow>>, TError = ErrorType<unknown>>(dealId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSalesAccountingWorkflow>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSalesAccountingWorkflowQueryKey(dealId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalesAccountingWorkflow>>> = ({ signal }) => getSalesAccountingWorkflow(dealId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: dealId !== null && dealId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSalesAccountingWorkflow>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSalesAccountingWorkflowQueryResult = NonNullable<Awaited<ReturnType<typeof getSalesAccountingWorkflow>>>
+export type GetSalesAccountingWorkflowQueryError = ErrorType<unknown>
+
+
+
+export function useGetSalesAccountingWorkflow<TData = Awaited<ReturnType<typeof getSalesAccountingWorkflow>>, TError = ErrorType<unknown>>(
+ dealId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSalesAccountingWorkflow>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSalesAccountingWorkflowQueryOptions(dealId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getStartSalesAccountingWorkflowUrl = (dealId: number,) => {
+
+
+
+
+  return `/api/sales-accounting/deals/${dealId}`
+}
+
+export const startSalesAccountingWorkflow = async (dealId: number, options?: RequestInit): Promise<StartSalesAccountingWorkflow200> => {
+
+  return customFetch<StartSalesAccountingWorkflow200>(getStartSalesAccountingWorkflowUrl(dealId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getStartSalesAccountingWorkflowMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startSalesAccountingWorkflow>>, TError,{dealId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startSalesAccountingWorkflow>>, TError,{dealId: number}, TContext> => {
+
+const mutationKey = ['startSalesAccountingWorkflow'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startSalesAccountingWorkflow>>, {dealId: number}> = (props) => {
+          const {dealId} = props ?? {};
+
+          return  startSalesAccountingWorkflow(dealId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartSalesAccountingWorkflowMutationResult = NonNullable<Awaited<ReturnType<typeof startSalesAccountingWorkflow>>>
+
+    export type StartSalesAccountingWorkflowMutationError = ErrorType<unknown>
+
+    export const useStartSalesAccountingWorkflow = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startSalesAccountingWorkflow>>, TError,{dealId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startSalesAccountingWorkflow>>,
+        TError,
+        {dealId: number},
+        TContext
+      > => {
+      return useMutation(getStartSalesAccountingWorkflowMutationOptions(options));
+    }
+
+export const getSaveSalesAccountingEntryUrl = (dealId: number,) => {
+
+
+
+
+  return `/api/sales-accounting/deals/${dealId}/entries`
+}
+
+export const saveSalesAccountingEntry = async (dealId: number,
+    salesAccountingEntryInput: SalesAccountingEntryInput, options?: RequestInit): Promise<SaveSalesAccountingEntry200> => {
+
+  return customFetch<SaveSalesAccountingEntry200>(getSaveSalesAccountingEntryUrl(dealId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(salesAccountingEntryInput)
+  }
+);}
+
+
+
+
+
+export const getSaveSalesAccountingEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveSalesAccountingEntry>>, TError,{dealId: number;data: BodyType<SalesAccountingEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveSalesAccountingEntry>>, TError,{dealId: number;data: BodyType<SalesAccountingEntryInput>}, TContext> => {
+
+const mutationKey = ['saveSalesAccountingEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveSalesAccountingEntry>>, {dealId: number;data: BodyType<SalesAccountingEntryInput>}> = (props) => {
+          const {dealId,data} = props ?? {};
+
+          return  saveSalesAccountingEntry(dealId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveSalesAccountingEntryMutationResult = NonNullable<Awaited<ReturnType<typeof saveSalesAccountingEntry>>>
+    export type SaveSalesAccountingEntryMutationBody = BodyType<SalesAccountingEntryInput>
+    export type SaveSalesAccountingEntryMutationError = ErrorType<unknown>
+
+    export const useSaveSalesAccountingEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveSalesAccountingEntry>>, TError,{dealId: number;data: BodyType<SalesAccountingEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveSalesAccountingEntry>>,
+        TError,
+        {dealId: number;data: BodyType<SalesAccountingEntryInput>},
+        TContext
+      > => {
+      return useMutation(getSaveSalesAccountingEntryMutationOptions(options));
+    }
+
+export const getReviewSalesAccountingEntryUrl = (dealId: number,) => {
+
+
+
+
+  return `/api/sales-accounting/deals/${dealId}/review`
+}
+
+export const reviewSalesAccountingEntry = async (dealId: number,
+    salesAccountingReviewInput: SalesAccountingReviewInput, options?: RequestInit): Promise<ReviewSalesAccountingEntry200> => {
+
+  return customFetch<ReviewSalesAccountingEntry200>(getReviewSalesAccountingEntryUrl(dealId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(salesAccountingReviewInput)
+  }
+);}
+
+
+
+
+
+export const getReviewSalesAccountingEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewSalesAccountingEntry>>, TError,{dealId: number;data: BodyType<SalesAccountingReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewSalesAccountingEntry>>, TError,{dealId: number;data: BodyType<SalesAccountingReviewInput>}, TContext> => {
+
+const mutationKey = ['reviewSalesAccountingEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewSalesAccountingEntry>>, {dealId: number;data: BodyType<SalesAccountingReviewInput>}> = (props) => {
+          const {dealId,data} = props ?? {};
+
+          return  reviewSalesAccountingEntry(dealId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewSalesAccountingEntryMutationResult = NonNullable<Awaited<ReturnType<typeof reviewSalesAccountingEntry>>>
+    export type ReviewSalesAccountingEntryMutationBody = BodyType<SalesAccountingReviewInput>
+    export type ReviewSalesAccountingEntryMutationError = ErrorType<unknown>
+
+    export const useReviewSalesAccountingEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewSalesAccountingEntry>>, TError,{dealId: number;data: BodyType<SalesAccountingReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewSalesAccountingEntry>>,
+        TError,
+        {dealId: number;data: BodyType<SalesAccountingReviewInput>},
+        TContext
+      > => {
+      return useMutation(getReviewSalesAccountingEntryMutationOptions(options));
+    }
 
 export const getGetFeedbackAutomationUrl = () => {
 

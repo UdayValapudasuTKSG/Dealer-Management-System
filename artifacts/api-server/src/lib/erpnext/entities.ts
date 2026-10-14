@@ -1,3 +1,4 @@
+import { withSalesAccountingHold } from "../sales-accounting-hold";
 import { and, eq } from "drizzle-orm";
 import {
   db,
@@ -818,9 +819,9 @@ export function registerErpnextEntitySync(): void {
       ? handleServiceInvoiceJob(job)
       : job.entityType === "service_invoice_credit"
         ? handleServiceInvoiceCreditJob(job)
-        : handleSalesInvoiceJob(job),
+        : withSalesAccountingHold(job, () => handleSalesInvoiceJob(job)),
   );
-  registerErpnextSyncHandler("Payment Entry", handlePaymentEntryJob);
+  registerErpnextSyncHandler("Payment Entry", job => withSalesAccountingHold(job, () => handlePaymentEntryJob(job)));
   registerErpnextInboundHandler("Customer", handleInboundCustomer);
   logger.info("ERPNext entity sync handlers registered (Customer, Sales Invoice, Payment Entry, service credits)");
 }
