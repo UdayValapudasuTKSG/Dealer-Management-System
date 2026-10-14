@@ -708,6 +708,31 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-bold text-base leading-tight truncate">{card.title}</h3>
+              {can("service", "edit") && canActOnCurrentEstimate &&
+                !["completed", "closed", "cancelled"].includes(card.status) && !linkedInvoice && (
+                <CreateRecordDialog
+                  title="Edit job card"
+                  description="Update operational details. Planned hours do not change quoted hours, customer approval or invoice charges."
+                  submitLabel="Save changes"
+                  pending={update.isPending}
+                  trigger={<Button variant="outline" size="sm" data-testid="edit-job-card">Edit job card</Button>}
+                  fields={[
+                    { name: "title", label: "Job title", type: "text", required: true, defaultValue: card.title, span: "full",
+                      validate: (value) => value.trim() ? null : "Enter a job title" },
+                    { name: "laborHours", label: "Planned labour hours", type: "number", required: true, min: 0, defaultValue: String(card.laborHours), span: "full" },
+                    { name: "notes", label: "Notes", type: "textarea", defaultValue: card.notes ?? "", span: "full" },
+                  ]}
+                  onSubmit={async (values) => {
+                    await update.mutateAsync({ id: card.id, data: {
+                      title: String(values.title).trim(),
+                      laborHours: Number(values.laborHours),
+                      notes: String(values.notes ?? ""),
+                    } });
+                    await invalidate();
+                    toast({ title: "Job card updated" });
+                  }}
+                />
+              )}
               <Badge
                 variant="secondary"
                 className={cn(

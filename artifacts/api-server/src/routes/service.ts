@@ -3236,6 +3236,29 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
         lockedCard.status !== existing.status) {
       return undefined;
     }
+    const editingDetails = parsed.data.title !== undefined ||
+      parsed.data.notes !== undefined || parsed.data.laborHours !== undefined;
+    if (editingDetails) {
+      if (parsed.data.title !== undefined && !parsed.data.title.trim()) {
+        throw Object.assign(new Error("Job title cannot be blank"), { status: 422 });
+      }
+      if (parsed.data.laborHours !== undefined &&
+          (!Number.isFinite(parsed.data.laborHours) || parsed.data.laborHours < 0)) {
+        throw Object.assign(new Error("Planned labour hours must be zero or greater"), { status: 422 });
+      }
+      if (["completed", "closed", "cancelled"].includes(lockedCard.status)) {
+        throw Object.assign(new Error("Completed, closed or cancelled job cards cannot be edited. Use the authorized reopen flow first."), { status: 422 });
+      }
+      const [invoice] = await tx.select({ id: serviceInvoicesTable.id })
+        .from(serviceInvoicesTable).where(and(
+          eq(serviceInvoicesTable.jobCardId, lockedCard.id),
+          eq(serviceInvoicesTable.dealerId, lockedCard.dealerId),
+        ));
+      if (invoice) {
+        throw Object.assign(new Error("Invoiced job cards cannot be edited."), { status: 422 });
+      }
+      if (parsed.data.title !== undefined) patch.title = parsed.data.title.trim();
+    }
     if (
       ["in_progress", "completed"].includes(parsed.data.status ?? "") &&
       lockedCard.rolloverStatus === "pending"
@@ -3339,7 +3362,9 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
       res.status(422).json({
         error: (failure.message === "locked_rollover_gate")
           ? "The rollover state changed — reload before resuming or completing work."
-          : "An issued invoice is immutable; record a linked financial adjustment instead.",
+          : failure.message === "issued_invoice_charge_mutation"
+            ? "An issued invoice is immutable; record a linked financial adjustment instead."
+            : failure.message,
       });
       return undefined;
     }
