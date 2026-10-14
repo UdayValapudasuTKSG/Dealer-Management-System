@@ -1895,6 +1895,12 @@ export interface Vehicle {
   vin?: string | null;
   /** @nullable */
   engineNumber?: string | null;
+  /**
+     * Engine displacement in cubic centimetres; 0 for pure EVs.
+     * @minimum 0
+     * @nullable
+     */
+  engineDisplacementCc?: number | null;
   /** @nullable */
   registration?: string | null;
   /** @nullable */
@@ -1988,6 +1994,11 @@ export interface VehicleInput {
      */
   engineNumber?: string;
   /**
+     * @minimum 0
+     * @nullable
+     */
+  engineDisplacementCc?: number | null;
+  /**
      * 3 uppercase letters followed by 1-4 digits
      * @pattern ^[A-Z]{3}[0-9]{1,4}$
      */
@@ -2063,6 +2074,11 @@ export interface VehicleUpdate {
      * @maxLength 18
      */
   engineNumber?: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  engineDisplacementCc?: number | null;
   /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
   registration?: string;
   variant?: string;
@@ -12805,6 +12821,40 @@ export interface SupplierInvoiceVarianceInput {
      */
   reason: string;
 }
+
+export type GetPartsIssuanceReportParams = {
+from?: string;
+to?: string;
+format?: GetPartsIssuanceReportFormat;
+};
+
+export type GetPartsIssuanceReportFormat = typeof GetPartsIssuanceReportFormat[keyof typeof GetPartsIssuanceReportFormat];
+
+
+export const GetPartsIssuanceReportFormat = {
+  csv: 'csv',
+} as const;
+
+export type GetPartsIssuanceReport200TwoRowsItem = {
+  id: number;
+  issuedAt: string;
+  sku: string;
+  part: string;
+  quantity: number;
+  issuedTo: string;
+  customer: string;
+  /** @nullable */
+  jobCardId?: number | null;
+  technician: string;
+  issuedBy: string;
+  location: string;
+  referenceType?: string;
+  reference?: string;
+};
+
+export type GetPartsIssuanceReport200Two = {
+  rows: GetPartsIssuanceReport200TwoRowsItem[];
+};
 
 export type GetSalesAccountingConfig200VatPolicy = typeof GetSalesAccountingConfig200VatPolicy[keyof typeof GetSalesAccountingConfig200VatPolicy];
 

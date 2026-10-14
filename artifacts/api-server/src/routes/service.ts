@@ -3424,7 +3424,7 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   // customer (PDF attached). Best-effort: an undecided surcharge or an
   // already-existing invoice leaves the manual "Generate invoice" path open.
   if (card && parsed.data.status === "completed" && existing.status !== "completed") {
-    const result = await issueServiceInvoice(card).catch((err) => {
+    const result = await issueServiceInvoice(card, res.locals.user?.id).catch((err) => {
       logger.error({ err, jobCardId: card.id }, "auto-invoice on completion failed");
       return null;
     });
@@ -4180,7 +4180,7 @@ router.post("/job-cards/:id/parts/:lineId/issue", idempotent("service.part.issue
       )).for("update");
       if (!card) throw Object.assign(new Error("Job card not found"), { status: 404 });
       if (["cancelled", "closed"].includes(card.status)) throw Object.assign(new Error("Cannot issue parts to a terminal job"), { status: 422 });
-      return issueJobParts(tx, dealerId, card.id, ids.data.lineId);
+      return issueJobParts(tx, dealerId, card.id, ids.data.lineId, res.locals.user?.id);
     });
     for (const line of issued) {
       checkLowStockCrossing(line.part, line.part.stock, line.part.stock - line.quantity);
@@ -4861,6 +4861,7 @@ router.post("/job-cards/:id/credit-notes", idempotent("service.part-credit.creat
  */
 async function issueServiceInvoice(
   card: JobCard,
+  actorId?: number,
 ): Promise<
   | { ok: true; invoice: ServiceInvoice }
   | { ok: false; status: number; error: string }
@@ -5124,7 +5125,7 @@ async function issueServiceInvoice(
       // The invoice and all previously unissued physical parts commit together.
       // Historical null issuedQuantity lines are already issued, not new demand.
       try {
-        stockIssues = await issueJobParts(tx, card.dealerId, card.id);
+        stockIssues = await issueJobParts(tx, card.dealerId, card.id, undefined, actorId);
       } catch (error) {
         throw Object.assign(new Error(`Parts issue failed: ${(error as Error).message}`), { stockIssue: true });
       }
@@ -5319,7 +5320,7 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Job card not found" });
     return;
   }
-  const result = await issueServiceInvoice(card);
+  const result = await issueServiceInvoice(card, res.locals.user?.id);
   if (!result.ok) {
     res.status(result.status).json({ error: result.error });
     return;

@@ -28,6 +28,11 @@ export interface VehicleUpdate {
      * @maxLength 18
      */
   engineNumber?: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  engineDisplacementCc?: number | null;
   /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
   registration?: string;
   variant?: string;

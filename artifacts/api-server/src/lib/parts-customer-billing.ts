@@ -199,7 +199,7 @@ export async function generatePartsCustomerInvoice(dealerId: number, type: Parts
             const [credit] = await tx.select({ id: partCreditNotesTable.id }).from(partCreditNotesTable).where(and(eq(partCreditNotesTable.dealerId, dealerId), eq(partCreditNotesTable.jobCardPartId, f.jobCardPartId)));
             if (credit) fail("Returned requisition parts must be reconciled before invoicing.");
             // Shared helper uses issuedUnits; historical and physically-issued parts never deduct twice.
-            const issued = await issueJobParts(tx, dealerId, card.id, jobLine.id);
+            const issued = await issueJobParts(tx, dealerId, card.id, jobLine.id, actor.id);
             for (const item of issued) stockSync.push({ dealerId, partId: item.partId, qty: item.quantity, direction: "out",
               entityType: "job_card_part", entityId: item.id, remark: `AURA parts invoice #${invoice.id}`,
               dedupeKey: `erp:se:jcp:${dealerId}:${item.id}` });
@@ -214,7 +214,7 @@ export async function generatePartsCustomerInvoice(dealerId: number, type: Parts
         }
         await tx.execute(sql`INSERT INTO parts_billed_requisition_lines (dealer_id, requisition_line_id, invoice_id) VALUES (${dealerId}, ${line.requisitionLineId}, ${invoice.id})`);
       } else if (line.jobCardPartId && card) {
-        const issued = await issueJobParts(tx, dealerId, card.id, line.jobCardPartId);
+        const issued = await issueJobParts(tx, dealerId, card.id, line.jobCardPartId, actor.id);
         for (const item of issued) stockSync.push({ dealerId, partId: item.partId, qty: item.quantity, direction: "out",
           entityType: "job_card_part", entityId: item.id, remark: `AURA parts invoice #${invoice.id}`,
           dedupeKey: `erp:se:jcp:${dealerId}:${item.id}` });

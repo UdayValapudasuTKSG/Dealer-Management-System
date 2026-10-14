@@ -211,6 +211,8 @@ import type {
   GetDailyTechnicianTimesheetParams,
   GetNamedPartsValuationParams,
   GetPartsAgingReportParams,
+  GetPartsIssuanceReport200Two,
+  GetPartsIssuanceReportParams,
   GetPartsReplenishmentSuggestionsParams,
   GetPartsValuationReportParams,
   GetPermissionMeta200,
@@ -603,6 +605,84 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetPartsIssuanceReportUrl = (params?: GetPartsIssuanceReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/parts/operations/issuance?${stringifiedParams}` : `/api/parts/operations/issuance`
+}
+
+export const getPartsIssuanceReport = async (params?: GetPartsIssuanceReportParams, options?: RequestInit): Promise<string | GetPartsIssuanceReport200Two> => {
+
+  return customFetch<string | GetPartsIssuanceReport200Two>(getGetPartsIssuanceReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPartsIssuanceReportQueryKey = (params?: GetPartsIssuanceReportParams,) => {
+    return [
+    `/api/parts/operations/issuance`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPartsIssuanceReportQueryOptions = <TData = Awaited<ReturnType<typeof getPartsIssuanceReport>>, TError = ErrorType<unknown>>(params?: GetPartsIssuanceReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPartsIssuanceReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPartsIssuanceReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPartsIssuanceReport>>> = ({ signal }) => getPartsIssuanceReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPartsIssuanceReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPartsIssuanceReportQueryResult = NonNullable<Awaited<ReturnType<typeof getPartsIssuanceReport>>>
+export type GetPartsIssuanceReportQueryError = ErrorType<unknown>
+
+
+
+export function useGetPartsIssuanceReport<TData = Awaited<ReturnType<typeof getPartsIssuanceReport>>, TError = ErrorType<unknown>>(
+ params?: GetPartsIssuanceReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPartsIssuanceReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPartsIssuanceReportQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetSalesAccountingConfigUrl = () => {
 

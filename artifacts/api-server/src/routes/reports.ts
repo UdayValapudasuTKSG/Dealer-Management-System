@@ -794,13 +794,15 @@ const serviceWorkshop: Builder = async (ctx) => {
         points: [...byWait.entries()].map(([label, value]) => ({ label, value })),
       },
       table: {
-        columns: ["Job card", "Customer", "Vehicle", "Received / first known work", "Technician", "Status", "Waiting reason", "Next action", "Follow-up", "Age", "Carry-over"],
+        columns: ["Job card", "Customer", "Vehicle", "Received / first known work", "Technician", "Labour Hour", "Labour value", "Status", "Waiting reason", "Next action", "Follow-up", "Age", "Carry-over"],
         rows: rows.map(({ card, order, elapsedDays, carryOver }) => [
           `JC #${card.id}`,
           order.customerName ?? "—",
           order.vehicleInfo,
           `${formatDealerDateTime((card.receivedAt ?? card.startedAt)!, ctx.tz)}${card.receivedAt == null ? " (legacy work-start; intake unknown)" : ""}`,
           card.technicianName ?? "Unassigned",
+          String(card.laborHours),
+          gyd(card.laborHours * card.laborRate),
           titleCase(card.status),
           card.waitingReason ? titleCase(card.waitingReason) : "—",
           card.nextAction ?? "—",
@@ -862,15 +864,18 @@ const serviceWorkshop: Builder = async (ctx) => {
       })),
     },
     table: {
-      columns: ["Technician", "Job cards", "Labor hours", "Labor value"],
-      rows: [...byTech.entries()]
-        .sort((a, b) => b[1].hours - a[1].hours)
-        .map(([name, e]) => [
-          name,
-          String(e.cards),
-          String(Math.round(e.hours * 10) / 10),
-          gyd(e.value),
-        ]),
+      columns: ["Job card", "Customer", "Vehicle", "Technician", "Labour Hour", "Labour value"],
+      rows: cards.map((card) => {
+        const order = orders.find(o => o.id === card.serviceOrderId);
+        return [
+          `JC #${card.id}`,
+          order?.customerName ?? "—",
+          order?.vehicleInfo ?? "—",
+          card.technicianName ?? "Unassigned",
+          String(card.laborHours),
+          gyd(card.laborHours * card.laborRate),
+        ];
+      }),
     },
   };
 };

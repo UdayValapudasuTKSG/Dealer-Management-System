@@ -23,6 +23,12 @@ export interface Vehicle {
   vin?: string | null;
   /** @nullable */
   engineNumber?: string | null;
+  /**
+     * Engine displacement in cubic centimetres; 0 for pure EVs.
+     * @minimum 0
+     * @nullable
+     */
+  engineDisplacementCc?: number | null;
   /** @nullable */
   registration?: string | null;
   /** @nullable */

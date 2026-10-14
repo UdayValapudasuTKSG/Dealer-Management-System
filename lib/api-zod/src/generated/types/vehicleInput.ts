@@ -31,6 +31,11 @@ export interface VehicleInput {
      */
   engineNumber?: string;
   /**
+     * @minimum 0
+     * @nullable
+     */
+  engineDisplacementCc?: number | null;
+  /**
      * 3 uppercase letters followed by 1-4 digits
      * @pattern ^[A-Z]{3}[0-9]{1,4}$
      */

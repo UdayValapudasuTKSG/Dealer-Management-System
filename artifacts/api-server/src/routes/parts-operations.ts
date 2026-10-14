@@ -15,6 +15,7 @@ import {
 } from "../lib/parts-operations";
 import { assignPartStorage, ensureInventory, createHold, releaseHold, consumeHold, moveStock, transferPartStock } from "../lib/parts-inventory";
 import { agingReport, valuationReport, replenishmentReport, reconciliationFlags, csv } from "../lib/parts-operations-reports";
+import { partsIssuanceReport } from "../lib/parts-issuance-report";
 import { partsSmsReadiness } from "../lib/parts-operations-sms";
 import { issueJobParts } from "../lib/job-part-stock";
 import { calculateLandedUnitCost } from "../lib/parts-landed-cost";
@@ -157,7 +158,7 @@ router.post("/holds/:id/consume", endpoint("edit", async (req, _res, c) => {
   let shouldSync = false;
   if (line) {
     await owned(tx, jobCardsTable, c.dealerId, line.jobCardId, true);
-    const issued = await issueJobParts(tx, c.dealerId, line.jobCardId, line.id);
+    const issued = await issueJobParts(tx, c.dealerId, line.jobCardId, line.id, c.actorId);
     shouldSync = issued.length > 0;
   } else {
     await consumeHold(tx, c.dealerId, hold.id, { createdBy: c.actorId });
@@ -402,6 +403,29 @@ router.post("/cycle-counts/:id/cancel", endpoint("edit", async (req, _res, c) =>
   demand(["in_progress", "pending_approval"].includes(count.status), "Count cannot be cancelled");
   const [updated] = await tx.update(inventoryCycleCountsTable).set({ status: "cancelled", completedAt: new Date() }).where(scope(inventoryCycleCountsTable, c.dealerId, count.id)).returning(); return updated;
 })));
+
+router.get("/issuance", endpoint("view", async (req, res, c) => {
+  const query = z.object({
+    from: z.iso.datetime({ offset: true }).optional(),
+    to: z.iso.datetime({ offset: true }).optional(),
+    format: z.enum(["csv"]).optional(),
+  }).parse(req.query);
+  demand(!query.from || !query.to || Date.parse(query.from) <= Date.parse(query.to), "Start date must precede end date", 400);
+  const report = await partsIssuanceReport(c.dealerId, query.from, query.to);
+  res.setHeader("Cache-Control", "no-store");
+  if (query.format === "csv") {
+    const rows = report.rows.map(r => ({
+      "Issued at": r.issuedAt, "Part number": r.sku, "Part": r.part, "Quantity": r.quantity,
+      "Issued to": r.issuedTo, "Customer": r.customer, "Job card": r.jobCardId ?? "",
+      "Technician (current assignment)": r.technician, "Issued by": r.issuedBy,
+      "Location": r.location, "Reference type": r.referenceType, "Reference": r.reference,
+    }));
+    const emptyHeader = '"Issued at","Part number","Part","Quantity","Issued to","Customer","Job card","Technician (current assignment)","Issued by","Location","Reference type","Reference"\r\n';
+    res.type("text/csv").attachment("parts-issuance.csv").send(rows.length ? csv(rows) : emptyHeader);
+    return;
+  }
+  return report;
+}));
 
 router.get("/aging", endpoint("view", async (req, res, c) => {
   const thresholds = req.query.thresholds ? String(req.query.thresholds).split(",").map(v => z.coerce.number().int().min(1).max(36500).parse(v)) : [30, 60, 90];

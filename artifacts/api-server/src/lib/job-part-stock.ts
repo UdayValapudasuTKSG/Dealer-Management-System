@@ -24,7 +24,7 @@ export async function reserveJobPart(tx: Tx, line: Line) {
 }
 
 /** Caller holds the job-card lock. Releasing our reservation and issuing are atomic. */
-export async function issueJobParts(tx: Tx, dealerId: number, jobCardId: number, lineId?: number) {
+export async function issueJobParts(tx: Tx, dealerId: number, jobCardId: number, lineId?: number, actorId?: number) {
   const lines = await tx.select().from(jobCardPartsTable).where(and(
     eq(jobCardPartsTable.dealerId, dealerId), eq(jobCardPartsTable.jobCardId, jobCardId),
     eq(jobCardPartsTable.kind, "issue"),
@@ -49,6 +49,7 @@ export async function issueJobParts(tx: Tx, dealerId: number, jobCardId: number,
       dealerId, partId: line.partId, locationId: line.inventoryLocationId ?? undefined,
       binId: line.inventoryBinId, type: "issue" as const, quantityDelta: -quantity,
       referenceType: "job_card_part", referenceId: String(line.id),
+      createdBy: actorId,
       idempotencyKey: `job-part-issue:${dealerId}:${line.id}:${line.quantity}`,
     };
     const movement = line.inventoryHoldId

@@ -71,6 +71,44 @@ tags:
   - name: whatsapp
     description: Per-dealer Meta WhatsApp Business channel settings
 paths:
+  /parts/operations/issuance:
+    get:
+      operationId: getPartsIssuanceReport
+      tags: [parts]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: format, in: query, schema: { type: string, enum: [csv] } }
+      responses:
+        "200":
+          description: Physical stock issue ledger with customer and technician attribution
+          content:
+            text/csv:
+              schema: { type: string }
+            application/json:
+              schema:
+                type: object
+                required: [rows]
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, issuedAt, sku, part, quantity, issuedTo, customer, technician, issuedBy, location]
+                      properties:
+                        id: { type: integer }
+                        issuedAt: { type: string }
+                        sku: { type: string }
+                        part: { type: string }
+                        quantity: { type: integer }
+                        issuedTo: { type: string }
+                        customer: { type: string }
+                        jobCardId: { type: ["integer", "null"] }
+                        technician: { type: string }
+                        issuedBy: { type: string }
+                        location: { type: string }
+                        referenceType: { type: string }
+                        reference: { type: string }
   /sales-accounting/config:
     get:
       operationId: getSalesAccountingConfig
@@ -13371,6 +13409,7 @@ components:
         year: { type: integer }
         vin: { type: ["string", "null"] }
         engineNumber: { type: ["string", "null"] }
+        engineDisplacementCc: { type: ["integer", "null"], minimum: 0, multipleOf: 1, description: "Engine displacement in cubic centimetres; 0 for pure EVs." }
         registration: { type: ["string", "null"] }
         variant: { type: ["string", "null"] }
         engine: { type: ["string", "null"] }
@@ -13433,6 +13472,7 @@ components:
         year: { type: integer, description: "Optional for new GT Automotive (dealer 1) inventory; defaults to 2026 there. Required for other dealers." }
         vin: { type: string, minLength: 17, maxLength: 18, description: "VIN / chassis number — 17 or 18 characters" }
         engineNumber: { type: string, minLength: 17, maxLength: 18, description: "Engine number must be 17 or 18 characters" }
+        engineDisplacementCc: { type: ["integer", "null"], minimum: 0, multipleOf: 1 }
         registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$", description: "3 uppercase letters followed by 1-4 digits" }
         variant: { type: string }
         engine: { type: string, minLength: 17, maxLength: 18, description: "Engine number — 17 or 18 characters" }
@@ -13468,6 +13508,7 @@ components:
         year: { type: integer }
         vin: { type: string, minLength: 17, maxLength: 18, description: "VIN / chassis number — 17 or 18 characters" }
         engineNumber: { type: string, minLength: 17, maxLength: 18 }
+        engineDisplacementCc: { type: ["integer", "null"], minimum: 0, multipleOf: 1 }
         registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$" }
         variant: { type: string }
         engine: { type: string, minLength: 17, maxLength: 18, description: "Engine number — 17 or 18 characters" }

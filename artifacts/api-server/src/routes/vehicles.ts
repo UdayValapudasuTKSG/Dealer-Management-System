@@ -373,6 +373,7 @@ const WORKBOOK_COLUMNS: WorkbookColumn[] = [
   { header: "Model", example: "i7", width: 14 },
   { header: "Trim", example: "xDrive60 M Sport", width: 22 },
   { header: "Year", example: 2026, width: 8 },
+  { header: "Engine Displacement (cc)", example: 0, width: 25 },
   {
     header: "Engine Number",
     example: "ENG0000000PCK0001",
@@ -535,6 +536,7 @@ router.get("/vehicles/export", async (req, res): Promise<void> => {
       r["model"] ?? "",
       r["trim"] ?? "",
       r["year"] ?? "",
+      r["engineDisplacementCc"] ?? "",
       r["engineNumber"] ?? "",
       r["engine"] ?? "",
       r["registration"] ?? "",
@@ -599,6 +601,9 @@ const IMPORT_HEADER_MAP: Record<string, string> = {
   variant: "variant",
   engine: "engine",
   enginenumber: "engineNumber",
+  enginedisplacementcc: "engineDisplacementCc",
+  enginedisplacement: "engineDisplacementCc",
+  enginecc: "engineDisplacementCc",
   engineno: "engineNumber",
   registration: "registration",
   registrationnumber: "registration",
@@ -655,7 +660,7 @@ function splitList(text: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-const NUMBER_FIELDS = new Set(["year", "price", "rangeKm", "mileageKm"]);
+const NUMBER_FIELDS = new Set(["year", "price", "rangeKm", "mileageKm", "engineDisplacementCc"]);
 
 function normalizeHeader(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -731,7 +736,7 @@ function normalizeExistingRow(
         : undefined;
   }
   // Numbers
-  const numFields = ["year", "price", "rangeKm", "mileageKm", "dutyFreeAmount"];
+  const numFields = ["year", "price", "rangeKm", "mileageKm", "dutyFreeAmount", "engineDisplacementCc"];
   for (const f of numFields) {
     const v = row[f];
     out[f] = v != null ? Number(v) : undefined;
@@ -777,7 +782,7 @@ function isUnchanged(
     "make", "model", "trim", "variant", "engine", "transmission",
     "exteriorColor", "bodyType", "imageUrl", "description",
     "vin", "engineNumber", "registration",
-    "year", "price", "rangeKm", "mileageKm", "dutyFreeAmount",
+    "year", "price", "rangeKm", "mileageKm", "dutyFreeAmount", "engineDisplacementCc",
     "status", "featured", "powertrain", "divisionId",
   ];
   for (const f of scalarFields) {
@@ -809,6 +814,7 @@ function isUnchanged(
 type VehicleImportUpdate = Partial<typeof vehiclesTable.$inferInsert>;
 
 const NULLABLE_IMPORT_FIELDS = [
+  "engineDisplacementCc",
   "trim",
   "vin",
   "engineNumber",
@@ -1759,33 +1765,7 @@ router.get("/vehicles/import/template", async (_req, res): Promise<void> => {
   applyColumnFormats(sheet);
 
   // Example row — clearly removable.
-  const exampleValues: (string | number)[] = [
-    "", // Inventory ID — blank for new vehicles
-    "WBY73AW0XPCK00001",
-    "BMW",
-    "i7",
-    "xDrive60 M Sport",
-    2026,
-    "ENG0000000PCK0001",
-    "ENG0000000PCK0001",
-    "PAB1234",
-    "GT Automotive",
-    "Single-speed automatic",
-    25000000,
-    0,
-    "EV",
-    610,
-    0,
-    "Obsidian Black",
-    "Sedan",
-    "available",
-    "Long Wheelbase",
-    "/vehicles/bmw-i7.png",
-    "https://example.com/front.jpg, https://example.com/interior.jpg",
-    "Floor mats, Roof rack, Tow bar",
-    "Flagship electric sedan.",
-    "false",
-  ];
+  const exampleValues = WORKBOOK_COLUMNS.map(column => column.example);
   sheet.addRow(exampleValues);
   // Mark example row comment so users know to delete it.
   sheet.getRow(2).getCell(1).note =
@@ -2037,17 +2017,20 @@ router.delete("/vehicles/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Soft delete (R4.8): never hard-remove from the data plane.
-  // A VIN actively soft-locked by a paid reservation cannot be removed.
-  if (await vehicleActivelyAllocated(params.data.id, activeDealerId(res))) {
-    res.status(409).json({
-      error:
-        "This VIN is temporarily held for a paid reservation — resolve the deal before deleting it.",
-    });
-    return;
-  }
   const actor = res.locals.user;
-  const [vehicle] = await db
+  const vehicle = await db.transaction(async tx => {
+    const [current] = await tx.select().from(vehiclesTable).where(and(
+      eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.dealerId, activeDealerId(res)),
+      isNull(vehiclesTable.deletedAt),
+    )).for("update");
+    if (!current) return undefined;
+    if (!["available", "in_transit"].includes(current.status) ||
+        (current.holdUntil && current.holdUntil > new Date()) ||
+        await vehicleActivelyAllocated(current.id, current.dealerId, tx)) {
+      res.status(409).json({ error: "Only available or in-transit vehicles without an active hold can be deleted. Resolve the linked booking, service or deal first." });
+      return undefined;
+    }
+    const [deleted] = await tx
     .update(vehiclesTable)
     .set({
       deletedAt: new Date(),
@@ -2061,6 +2044,15 @@ router.delete("/vehicles/:id", async (req, res): Promise<void> => {
       ),
     )
     .returning();
+    await tx.insert(auditLogsTable).values({
+      dealerId: current.dealerId, actorUserId: actor?.id ?? null,
+      actorEmail: actor?.email ?? null, action: "delete", module: "inventory",
+      entityType: "vehicle", entityId: String(current.id),
+      summary: `Removed vehicle ${current.id} from active inventory (history retained)`,
+    });
+    return deleted;
+  });
+  if (res.headersSent) return;
 
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });

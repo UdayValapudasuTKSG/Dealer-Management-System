@@ -1,0 +1,45 @@
+import ExcelJS from "exceljs";
+import assert from "node:assert/strict";
+
+if (process.env.NODE_ENV === "production") throw Error("Development only");
+const databaseUrl = process.env.DATABASE_URL ?? process.env.DEV_DATABASE_URL;
+if (!databaseUrl || !["helium", "localhost", "127.0.0.1"].includes(new URL(databaseUrl).hostname)) throw Error("Refusing non-development database");
+const headers = { "x-test-user-email": "gm@aura-demo.com" };
+const base = "http://localhost:80/api";
+const template = await fetch(`${base}/vehicles/import/template`, { headers });
+assert.equal(template.status, 200);
+const workbook = new ExcelJS.Workbook();
+await workbook.xlsx.load(await template.arrayBuffer());
+const sheet = workbook.getWorksheet("Vehicles")!;
+const columns = sheet.getRow(1).values as string[];
+const displacementColumn = columns.indexOf("Engine Displacement (cc)");
+assert.ok(displacementColumn > 0);
+assert.equal(sheet.getRow(2).getCell(columns.indexOf("Powertrain")).value, "EV", "Template examples stay aligned with headers");
+sheet.spliceRows(3, sheet.rowCount);
+const set = (column: string, value: string | number) => { sheet.getRow(2).getCell(columns.indexOf(column)).value = value; };
+set("VIN", "UAT99999999999991");
+set("Inventory ID", "");
+set("Division", "");
+set("Engine Number", "");
+set("Engine", "");
+set("Year", 2026);
+for (const value of [1498, 0, -1, 1498.5]) {
+  sheet.getRow(2).getCell(displacementColumn).value = value;
+  const form = new FormData();
+  const bytes = await workbook.xlsx.writeBuffer();
+  form.append("file", new Blob([new Uint8Array(bytes)]), "preview-only.xlsx");
+  const response = await fetch(`${base}/vehicles/import?mode=preview`, { method: "POST", headers, body: form });
+  const body = await response.json() as { errors: { field: string; message: string }[] };
+  assert.equal(response.status, 200);
+  if (value >= 0 && Number.isInteger(value)) assert.equal(body.errors.length, 0, JSON.stringify(body.errors));
+  else assert.ok(body.errors.some((error: { field: string }) => error.field === "engineDisplacementCc"), JSON.stringify(body.errors));
+}
+const report = await (await fetch(`${base}/reports?type=service_workshop`, { headers })).json() as { table: { columns: string[] }; kpis: { label: string }[] };
+assert.deepEqual(report.table.columns, ["Job card", "Customer", "Vehicle", "Technician", "Labour Hour", "Labour value"]);
+assert.deepEqual(report.kpis.map((k: { label: string }) => k.label), ["Orders in window", "Job cards", "Labor value", "Service billed"]);
+const issues = await (await fetch(`${base}/parts/operations/issuance`, { headers })).json() as { rows: Record<string, unknown>[] };
+assert.ok(Array.isArray(issues.rows));
+assert.ok(issues.rows.every((r: Record<string, unknown>) => "technician" in r && "issuedTo" in r && "issuedBy" in r));
+const csv = await (await fetch(`${base}/parts/operations/issuance?format=csv`, { headers })).text();
+assert.ok(csv.includes('"Technician (current assignment)"') && csv.includes('"Issued to"'));
+console.log("PASS: engine displacement template alignment + integer validation; service detail columns + unchanged KPI labels; parts attribution + CSV. Preview only: no inventory imports applied.");

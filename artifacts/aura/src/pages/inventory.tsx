@@ -6,6 +6,7 @@ import {
   useCreateBooking,
   useCreateVehicle,
   useUpdateVehicle,
+  useDeleteVehicle,
   usePreviewVehicleModelYear2026,
   useUpdateVehicleModelYear2026,
   useListDivisions,
@@ -78,6 +79,7 @@ import {
   Download,
 } from "lucide-react";
 import { useUpload } from "@workspace/object-storage-web";
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 
 function powertrainLabel(pt: string) {
@@ -194,6 +196,7 @@ function toVehicleInput(values: Record<string, unknown>): VehicleInput {
     year: Number(values.year),
     price: Number(values.price),
     dutyFreeAmount: optionalNumber("dutyFreeAmount") ?? 0,
+    engineDisplacementCc: optionalNumber("engineDisplacementCc") ?? null,
     powertrain: String(values.powertrain) as VehicleInput["powertrain"],
     mileageKm: Number(values.mileageKm),
     exteriorColor: String(values.exteriorColor ?? "").trim(),
@@ -267,6 +270,7 @@ function vehicleFields(
         ]
       : []),
     { name: "engineNumber", label: "Engine Number (17–18 characters)", type: "text", span: "half", placeholder: "ENG1234567890ABCD", defaultValue: existing?.engineNumber ?? undefined, validate: (v) => (v.length >= 17 && v.length <= 18 ? null : "Engine number must be 17 or 18 characters") },
+    { name: "engineDisplacementCc", label: "Engine displacement (cc)", type: "number", min: 0, span: "half", placeholder: "1498 (0 for pure EV)", defaultValue: existing?.engineDisplacementCc == null ? undefined : String(existing.engineDisplacementCc), validate: v => !v || Number.isInteger(Number(v)) ? null : "Enter whole cubic centimetres" },
     { name: "registration", label: "Registration (e.g. PAB1234)", type: "text", span: "half", placeholder: "PAB1234", defaultValue: existing?.registration ?? undefined, validate: (v) => (/^[A-Z]{3}[0-9]{1,4}$/.test(v) ? null : "Format: 3 letters + 1–4 digits, e.g. PAB1234") },
     { name: "price", label: "Price (GYD)", type: "number", required: true, span: "half", placeholder: "25000000", defaultValue: existing ? String(existing.price) : undefined },
     { name: "dutyFreeAmount", label: "Duty-free amount (GYD)", type: "number", span: "half", placeholder: "0", defaultValue: existing?.dutyFreeAmount != null ? String(existing.dutyFreeAmount) : "0", validate: (v) => (!v || Number(v) >= 0 ? null : "Must be non-negative") },
@@ -1087,6 +1091,7 @@ export default function Inventory() {
         vehicle={selected}
         onClose={() => setSelected(null)}
         canEdit={can("inventory", "edit")}
+        canDelete={can("inventory", "delete")}
         onUpdated={(v) => setSelected(v)}
       />
     </div>
@@ -1203,11 +1208,13 @@ function VehicleDetail({
   vehicle,
   onClose,
   canEdit,
+  canDelete,
   onUpdated,
 }: {
   vehicle: Vehicle | null;
   onClose: () => void;
   canEdit: boolean;
+  canDelete: boolean;
   onUpdated: (v: Vehicle) => void;
 }) {
   const money = useMoney();
@@ -1221,6 +1228,8 @@ function VehicleDetail({
   const qc = useQueryClient();
   const { toast } = useToast();
   const updateVehicle = useUpdateVehicle();
+  const deleteVehicle = useDeleteVehicle();
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const { uploadFile } = useUpload();
 
   const gallery = useMemo(() => {
@@ -1551,6 +1560,35 @@ function VehicleDetail({
                   <Rotate3d className="w-4 h-4" />
                   {mode === "spin" ? "Photo" : "360°"}
                 </button>
+                {canDelete && (
+                  <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                    <AlertDialogTrigger asChild><Button variant="destructive" data-testid="delete-vehicle">Delete vehicle</Button></AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove this vehicle from inventory?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {vehicle.year} {vehicle.make} {vehicle.model} — VIN {vehicle.vin ?? "not recorded"}.
+                          This removes the vehicle from active inventory. Linked history is retained.
+                          Reserved, sold or actively held vehicles cannot be deleted.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteVehicle.isPending}>Cancel</AlertDialogCancel>
+                        <Button variant="destructive" disabled={deleteVehicle.isPending} onClick={async () => {
+                          try {
+                            await deleteVehicle.mutateAsync({ id: vehicle.id });
+                            await qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+                            setDeleteOpen(false);
+                            onClose();
+                            toast({ title: "Vehicle removed from inventory" });
+                          } catch (e) {
+                            toast({ title: "Could not delete vehicle", description: e instanceof Error ? e.message : "Please retry.", variant: "destructive" });
+                          }
+                        }}>{deleteVehicle.isPending ? "Deleting…" : "Delete vehicle"}</Button>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
                 {canEdit && (
                   <CreateRecordDialog
                     title="Edit Vehicle"

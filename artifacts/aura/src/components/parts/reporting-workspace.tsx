@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useGeneratePartsLowStockPurchaseOrders } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { downloadPartsReport } from "./parts-analysis-export";
+import { IssuanceReport } from "./issuance-report";
 
 function filterAndSortParts<T extends { sku: string; name: string }>(rows: T[], search: string, sortBy: "sku" | "name", descending: boolean) {
   return rows.filter(row => `${row.sku} ${row.name}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
@@ -31,7 +32,7 @@ function ReportError({ message }: { message: string }) {
 }
 
 export function ReportingWorkspace() {
-  const [activeView, setActiveView] = useState<"valuation" | "aging" | "replenishment">("valuation");
+  const [activeView, setActiveView] = useState<"valuation" | "aging" | "replenishment" | "issuance">("valuation");
 
   return (
     <div className="space-y-6">
@@ -40,6 +41,7 @@ export function ReportingWorkspace() {
           { id: "valuation", label: "Valuation", icon: DollarSign },
           { id: "aging", label: "Stock Aging", icon: TrendingDown },
           { id: "replenishment", label: "Replenishment", icon: TrendingUp },
+          { id: "issuance", label: "Issuance", icon: ArrowRight },
         ].map(view => (
           <Button
             key={view.id}
@@ -59,6 +61,7 @@ export function ReportingWorkspace() {
       {activeView === "valuation" && <ValuationReport />}
       {activeView === "aging" && <AgingReport />}
       {activeView === "replenishment" && <ReplenishmentReport />}
+      {activeView === "issuance" && <IssuanceReport />}
     </div>
   );
 }

@@ -8,6 +8,31 @@
 import * as zod from 'zod';
 
 
+export const GetPartsIssuanceReportQueryParams = zod.object({
+  "from": zod.date().optional(),
+  "to": zod.date().optional(),
+  "format": zod.enum(['csv']).optional()
+})
+
+export const GetPartsIssuanceReportResponse = zod.object({
+  "rows": zod.array(zod.object({
+  "id": zod.number(),
+  "issuedAt": zod.string(),
+  "sku": zod.string(),
+  "part": zod.string(),
+  "quantity": zod.number(),
+  "issuedTo": zod.string(),
+  "customer": zod.string(),
+  "jobCardId": zod.number().nullish(),
+  "technician": zod.string(),
+  "issuedBy": zod.string(),
+  "location": zod.string(),
+  "referenceType": zod.string().optional(),
+  "reference": zod.string().optional()
+}))
+})
+
+
 export const GetSalesAccountingConfigResponse = zod.object({
   "eligible": zod.boolean(),
   "vatPolicy": zod.enum(['pending']),
@@ -944,6 +969,9 @@ export const ListVehiclesQueryParams = zod.object({
   "includeDeleted": zod.coerce.boolean().optional()
 })
 
+export const listVehiclesResponseEngineDisplacementCcMin = 0;
+export const listVehiclesResponseEngineDisplacementCcMultipleOf = 1;
+
 export const listVehiclesResponseDutyFreeAmountDefault = 0;
 export const listVehiclesResponseDutyFreeAmountMin = 0;
 
@@ -960,6 +988,7 @@ export const ListVehiclesResponseItem = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(listVehiclesResponseEngineDisplacementCcMin).multipleOf(listVehiclesResponseEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -1009,6 +1038,9 @@ export const createVehicleBodyVinMax = 18;
 export const createVehicleBodyEngineNumberMin = 17;
 export const createVehicleBodyEngineNumberMax = 18;
 
+export const createVehicleBodyEngineDisplacementCcMin = 0;
+export const createVehicleBodyEngineDisplacementCcMultipleOf = 1;
+
 export const createVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 export const createVehicleBodyEngineMin = 17;
 export const createVehicleBodyEngineMax = 18;
@@ -1028,6 +1060,7 @@ export const CreateVehicleBody = zod.object({
   "year": zod.number().optional().describe('Optional for new GT Automotive (dealer 1) inventory; defaults to 2026 there. Required for other dealers.'),
   "vin": zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax).optional().describe('VIN \/ chassis number — 17 or 18 characters'),
   "engineNumber": zod.string().min(createVehicleBodyEngineNumberMin).max(createVehicleBodyEngineNumberMax).optional().describe('Engine number must be 17 or 18 characters'),
+  "engineDisplacementCc": zod.number().min(createVehicleBodyEngineDisplacementCcMin).multipleOf(createVehicleBodyEngineDisplacementCcMultipleOf).nullish(),
   "registration": zod.string().regex(createVehicleBodyRegistrationRegExp).optional().describe('3 uppercase letters followed by 1-4 digits'),
   "variant": zod.string().optional(),
   "engine": zod.string().min(createVehicleBodyEngineMin).max(createVehicleBodyEngineMax).optional().describe('Engine number — 17 or 18 characters'),
@@ -1051,6 +1084,9 @@ export const CreateVehicleBody = zod.object({
   "featured": zod.boolean().optional()
 })
 
+export const createVehicleResponseEngineDisplacementCcMin = 0;
+export const createVehicleResponseEngineDisplacementCcMultipleOf = 1;
+
 export const createVehicleResponseDutyFreeAmountDefault = 0;
 export const createVehicleResponseDutyFreeAmountMin = 0;
 
@@ -1067,6 +1103,7 @@ export const CreateVehicleResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(createVehicleResponseEngineDisplacementCcMin).multipleOf(createVehicleResponseEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -1150,6 +1187,9 @@ export const GetVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getVehicleResponseEngineDisplacementCcMin = 0;
+export const getVehicleResponseEngineDisplacementCcMultipleOf = 1;
+
 export const getVehicleResponseDutyFreeAmountDefault = 0;
 export const getVehicleResponseDutyFreeAmountMin = 0;
 
@@ -1166,6 +1206,7 @@ export const GetVehicleResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(getVehicleResponseEngineDisplacementCcMin).multipleOf(getVehicleResponseEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -1215,6 +1256,9 @@ export const updateVehicleBodyVinMax = 18;
 export const updateVehicleBodyEngineNumberMin = 17;
 export const updateVehicleBodyEngineNumberMax = 18;
 
+export const updateVehicleBodyEngineDisplacementCcMin = 0;
+export const updateVehicleBodyEngineDisplacementCcMultipleOf = 1;
+
 export const updateVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 export const updateVehicleBodyEngineMin = 17;
 export const updateVehicleBodyEngineMax = 18;
@@ -1233,6 +1277,7 @@ export const UpdateVehicleBody = zod.object({
   "year": zod.number().optional(),
   "vin": zod.string().min(updateVehicleBodyVinMin).max(updateVehicleBodyVinMax).optional().describe('VIN \/ chassis number — 17 or 18 characters'),
   "engineNumber": zod.string().min(updateVehicleBodyEngineNumberMin).max(updateVehicleBodyEngineNumberMax).optional(),
+  "engineDisplacementCc": zod.number().min(updateVehicleBodyEngineDisplacementCcMin).multipleOf(updateVehicleBodyEngineDisplacementCcMultipleOf).nullish(),
   "registration": zod.string().regex(updateVehicleBodyRegistrationRegExp).optional(),
   "variant": zod.string().optional(),
   "engine": zod.string().min(updateVehicleBodyEngineMin).max(updateVehicleBodyEngineMax).optional().describe('Engine number — 17 or 18 characters'),
@@ -1258,6 +1303,9 @@ export const UpdateVehicleBody = zod.object({
   "featured": zod.boolean().optional()
 })
 
+export const updateVehicleResponseEngineDisplacementCcMin = 0;
+export const updateVehicleResponseEngineDisplacementCcMultipleOf = 1;
+
 export const updateVehicleResponseDutyFreeAmountDefault = 0;
 export const updateVehicleResponseDutyFreeAmountMin = 0;
 
@@ -1274,6 +1322,7 @@ export const UpdateVehicleResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(updateVehicleResponseEngineDisplacementCcMin).multipleOf(updateVehicleResponseEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -1325,6 +1374,9 @@ export const RestoreVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const restoreVehicleResponseEngineDisplacementCcMin = 0;
+export const restoreVehicleResponseEngineDisplacementCcMultipleOf = 1;
+
 export const restoreVehicleResponseDutyFreeAmountDefault = 0;
 export const restoreVehicleResponseDutyFreeAmountMin = 0;
 
@@ -1341,6 +1393,7 @@ export const RestoreVehicleResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(restoreVehicleResponseEngineDisplacementCcMin).multipleOf(restoreVehicleResponseEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -15359,10 +15412,16 @@ export const GetCustomerOverviewParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneEngineDisplacementCcMin = 0;
+export const getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneEngineDisplacementCcMultipleOf = 1;
+
 export const getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneDutyFreeAmountDefault = 0;
 export const getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneDutyFreeAmountMin = 0;
 
 
+
+export const getCustomerOverviewResponseOwnedVehiclesItemEngineDisplacementCcMin = 0;
+export const getCustomerOverviewResponseOwnedVehiclesItemEngineDisplacementCcMultipleOf = 1;
 
 export const getCustomerOverviewResponseOwnedVehiclesItemDutyFreeAmountDefault = 0;
 export const getCustomerOverviewResponseOwnedVehiclesItemDutyFreeAmountMin = 0;
@@ -15501,6 +15560,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneEngineDisplacementCcMin).multipleOf(getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -15565,6 +15625,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(getCustomerOverviewResponseOwnedVehiclesItemEngineDisplacementCcMin).multipleOf(getCustomerOverviewResponseOwnedVehiclesItemEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -16100,6 +16161,9 @@ export const GetCustomerPersonaParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getCustomerPersonaResponseAiRecommendedVehicleOneEngineDisplacementCcMin = 0;
+export const getCustomerPersonaResponseAiRecommendedVehicleOneEngineDisplacementCcMultipleOf = 1;
+
 export const getCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountDefault = 0;
 export const getCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountMin = 0;
 
@@ -16137,6 +16201,7 @@ export const GetCustomerPersonaResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(getCustomerPersonaResponseAiRecommendedVehicleOneEngineDisplacementCcMin).multipleOf(getCustomerPersonaResponseAiRecommendedVehicleOneEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -16203,6 +16268,9 @@ export const UpsertCustomerPersonaBody = zod.object({
   "marketingConsent": zod.boolean().nullish()
 })
 
+export const upsertCustomerPersonaResponseAiRecommendedVehicleOneEngineDisplacementCcMin = 0;
+export const upsertCustomerPersonaResponseAiRecommendedVehicleOneEngineDisplacementCcMultipleOf = 1;
+
 export const upsertCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountDefault = 0;
 export const upsertCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountMin = 0;
 
@@ -16240,6 +16308,7 @@ export const UpsertCustomerPersonaResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(upsertCustomerPersonaResponseAiRecommendedVehicleOneEngineDisplacementCcMin).multipleOf(upsertCustomerPersonaResponseAiRecommendedVehicleOneEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
@@ -16287,6 +16356,9 @@ export const RecommendCustomerVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const recommendCustomerVehicleResponseAiRecommendedVehicleOneEngineDisplacementCcMin = 0;
+export const recommendCustomerVehicleResponseAiRecommendedVehicleOneEngineDisplacementCcMultipleOf = 1;
+
 export const recommendCustomerVehicleResponseAiRecommendedVehicleOneDutyFreeAmountDefault = 0;
 export const recommendCustomerVehicleResponseAiRecommendedVehicleOneDutyFreeAmountMin = 0;
 
@@ -16324,6 +16396,7 @@ export const RecommendCustomerVehicleResponse = zod.object({
   "year": zod.number(),
   "vin": zod.string().nullish(),
   "engineNumber": zod.string().nullish(),
+  "engineDisplacementCc": zod.number().min(recommendCustomerVehicleResponseAiRecommendedVehicleOneEngineDisplacementCcMin).multipleOf(recommendCustomerVehicleResponseAiRecommendedVehicleOneEngineDisplacementCcMultipleOf).nullish().describe('Engine displacement in cubic centimetres; 0 for pure EVs.'),
   "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),

@@ -63,6 +63,7 @@ export const vehiclesTable = pgTable("vehicles", {
   year: integer("year").notNull(),
   vin: text("vin"),
   engineNumber: text("engine_number"),
+  engineDisplacementCc: integer("engine_displacement_cc"),
   registration: text("registration"),
   variant: text("variant"),
   engine: text("engine"),
