@@ -3759,6 +3759,15 @@ export interface QuoteItem {
   /** @nullable */
   color?: string | null;
   manufacturer: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  engineDisplacementCc?: number | null;
+  /** @nullable */
+  transmission?: string | null;
+  /** @nullable */
+  fuelType?: string | null;
   /** Unit price */
   basePrice: number;
   taxLines: QuoteTaxLine[];

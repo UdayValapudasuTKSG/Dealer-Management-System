@@ -4180,6 +4180,9 @@ export const ListLeadQuotesParams = zod.object({
 
 export const listLeadQuotesResponseItemsItemPositionMin = 0;
 
+export const listLeadQuotesResponseItemsItemEngineDisplacementCcMin = 0;
+export const listLeadQuotesResponseItemsItemEngineDisplacementCcMultipleOf = 1;
+
 
 
 export const ListLeadQuotesResponseItem = zod.object({
@@ -4238,6 +4241,9 @@ export const ListLeadQuotesResponseItem = zod.object({
   "trim": zod.string().nullish(),
   "color": zod.string().nullish(),
   "manufacturer": zod.string(),
+  "engineDisplacementCc": zod.number().min(listLeadQuotesResponseItemsItemEngineDisplacementCcMin).multipleOf(listLeadQuotesResponseItemsItemEngineDisplacementCcMultipleOf).nullish(),
+  "transmission": zod.string().nullish(),
+  "fuelType": zod.string().nullish(),
   "basePrice": zod.number().describe('Unit price'),
   "taxLines": zod.array(zod.object({
   "code": zod.string(),
@@ -4282,6 +4288,9 @@ export const GenerateLeadQuoteBody = zod.object({
 
 
 export const generateLeadQuoteResponseItemsItemPositionMin = 0;
+
+export const generateLeadQuoteResponseItemsItemEngineDisplacementCcMin = 0;
+export const generateLeadQuoteResponseItemsItemEngineDisplacementCcMultipleOf = 1;
 
 
 
@@ -4341,6 +4350,9 @@ export const GenerateLeadQuoteResponse = zod.object({
   "trim": zod.string().nullish(),
   "color": zod.string().nullish(),
   "manufacturer": zod.string(),
+  "engineDisplacementCc": zod.number().min(generateLeadQuoteResponseItemsItemEngineDisplacementCcMin).multipleOf(generateLeadQuoteResponseItemsItemEngineDisplacementCcMultipleOf).nullish(),
+  "transmission": zod.string().nullish(),
+  "fuelType": zod.string().nullish(),
   "basePrice": zod.number().describe('Unit price'),
   "taxLines": zod.array(zod.object({
   "code": zod.string(),
@@ -4386,6 +4398,9 @@ export const RequestQuoteDiscountBody = zod.object({
 
 
 export const requestQuoteDiscountResponseItemsItemPositionMin = 0;
+
+export const requestQuoteDiscountResponseItemsItemEngineDisplacementCcMin = 0;
+export const requestQuoteDiscountResponseItemsItemEngineDisplacementCcMultipleOf = 1;
 
 
 
@@ -4445,6 +4460,9 @@ export const RequestQuoteDiscountResponse = zod.object({
   "trim": zod.string().nullish(),
   "color": zod.string().nullish(),
   "manufacturer": zod.string(),
+  "engineDisplacementCc": zod.number().min(requestQuoteDiscountResponseItemsItemEngineDisplacementCcMin).multipleOf(requestQuoteDiscountResponseItemsItemEngineDisplacementCcMultipleOf).nullish(),
+  "transmission": zod.string().nullish(),
+  "fuelType": zod.string().nullish(),
   "basePrice": zod.number().describe('Unit price'),
   "taxLines": zod.array(zod.object({
   "code": zod.string(),

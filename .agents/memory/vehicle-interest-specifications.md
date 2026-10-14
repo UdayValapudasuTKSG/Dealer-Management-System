@@ -14,3 +14,9 @@ Lead creation with priced vehicle interests must also generate and automatically
 **Why:** A generated-but-undelivered quote left the lead checklist looking complete while the customer received nothing.
 
 **How to apply:** Make lead-created quote generation and its outbox key idempotent, update quote/lead sent state atomically on confirmed delivery, and auto-desk negotiation from the frozen quote without projecting or reserving a VIN.
+
+Every vehicle quotation must include Make, Model, Engine Displacement, Transmission and Fuel type.
+
+**Why:** The user explicitly requires all five details on customer vehicle quotations, not just inventory screens.
+
+**How to apply:** Preserve technical details with the quote revision; do not silently enrich historical issued quotes from changing inventory. Missing historical details should be explicit, with a new revision required to capture updated specifications.

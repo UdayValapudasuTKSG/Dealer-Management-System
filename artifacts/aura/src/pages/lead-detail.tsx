@@ -2936,6 +2936,14 @@ export default function LeadDetail() {
                                       <span className="text-muted-foreground">
                                         {item.modelYear} {item.vehicleLine}
                                       </span>
+                                      <div className="mt-1 text-muted-foreground">
+                                        Make: {item.make || item.manufacturer || "Not recorded"} · Model: {item.model || item.vehicleLine}
+                                      </div>
+                                      <div className="text-muted-foreground">
+                                        Engine displacement: {item.engineDisplacementCc != null ? `${item.engineDisplacementCc} cc` : "Not recorded"}
+                                        {" · "}Transmission: {item.transmission || "Not recorded"}
+                                        {" · "}Fuel type: {item.fuelType === "EV" ? "Electric" : item.fuelType || "Not recorded"}
+                                      </div>
                                     </div>
                                     <div className="text-muted-foreground">
                                       {money.gyd(item.total)}

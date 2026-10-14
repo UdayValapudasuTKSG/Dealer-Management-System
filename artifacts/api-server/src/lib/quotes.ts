@@ -123,7 +123,7 @@ export async function generateQuoteForLead(
       }] : [];
     }
     if (!canonicalInterests.length) return null;
-    // Read inventory only for tax classification. It is not selected, locked,
+    // Read inventory for tax classification and technical specifications. It is not selected, locked,
     // held, or persisted as the requested unit.
     const inventory = await tx.select().from(vehiclesTable).where(
       eq(vehiclesTable.dealerId, currentLead.dealerId),
@@ -210,6 +210,9 @@ export async function generateQuoteForLead(
         item.trim === (next.interest.variant || currentLead.variant || null) &&
         item.color === (next.interest.color || currentLead.color || null) &&
         item.manufacturer === next.interest.make &&
+        item.engineDisplacementCc === (next.representative?.engineDisplacementCc ?? null) &&
+        item.transmission === (next.representative?.transmission ?? null) &&
+        item.fuelType === (next.representative?.powertrain ?? null) &&
         JSON.stringify(item.taxLines) === JSON.stringify(next.computed.lines) &&
         item.totalTax === next.computed.totalTax && item.total === next.computed.totalWithTax;
     });
@@ -324,6 +327,9 @@ export async function generateQuoteForLead(
        trim: item.interest.variant || currentLead.variant || null,
        color: item.interest.color || currentLead.color || null,
        manufacturer: item.interest.make, basePrice: item.interest.unitPrice,
+      engineDisplacementCc: item.representative?.engineDisplacementCc ?? null,
+      transmission: item.representative?.transmission ?? null,
+      fuelType: item.representative?.powertrain ?? null,
       taxLines: item.computed.lines, totalTax: item.computed.totalTax,
       total: item.computed.totalWithTax,
     })));
@@ -560,6 +566,7 @@ export async function quotePdfPayload(
     modelYear: quote.modelYear, trim: quote.trim, color: quote.color,
     quantity: quote.quantity, basePrice: quote.basePrice / Math.max(quote.quantity, 1),
     totalTax: quote.totalTax, total: quote.basePrice + quote.totalTax,
+    engineDisplacementCc: null, transmission: null, fuelType: null,
   }];
   // Canonical callers already hold the dealer-authorized lead.  The fallback
   // lookup keeps this shared payload safe for background callers while still
@@ -610,6 +617,8 @@ export async function quotePdfPayload(
     subtotal: money(quote.basePrice),
     quoteItems: JSON.stringify(printableItems.map((item) => ({
       model: item.vehicleLine, manufacturer: item.manufacturer,
+      engineDisplacementCc: item.engineDisplacementCc,
+      transmission: item.transmission, fuelType: item.fuelType,
       year: item.modelYear, variant: item.trim ?? "", color: item.color ?? "",
       quantity: item.quantity, unitPrice: money(item.basePrice),
       subtotal: money(item.basePrice * item.quantity), tax: money(item.totalTax),

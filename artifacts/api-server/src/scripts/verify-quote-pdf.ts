@@ -247,6 +247,9 @@ function canonicalData(): QuotePdfData {
     {
       model: MODEL_SOURCE_TEXT,
       manufacturer: "BYD",
+      engineDisplacementCc: 0,
+      transmission: "Single-speed automatic",
+      fuelType: "EV",
       year: 2026,
       variant: VARIANT_TEXT,
       color: COLOR_TEXT,
@@ -366,6 +369,12 @@ async function main(): Promise<void> {
   requireText(canonicalExtracted, VARIANT_TEXT, "canonical complete variant");
   requireText(canonicalExtracted, COLOR_TEXT, "canonical complete color");
   requireText(canonicalExtracted, "Year: 2026", "canonical complete year");
+  requireText(canonicalExtracted, "Make: BYD", "vehicle make");
+  requireText(canonicalExtracted, "Model: YUAN PRO", "vehicle model");
+  requireText(canonicalExtracted, "Engine displacement: 0 cc", "zero displacement preserved");
+  requireText(canonicalExtracted, "Transmission: Single-speed automatic", "transmission");
+  requireText(canonicalExtracted, "Fuel type: Electric", "fuel type");
+  requireText(canonicalExtracted, "Engine displacement: Not recorded", "missing specs explicit");
   requireText(
     canonicalExtracted,
     "BYD BYDfoo",

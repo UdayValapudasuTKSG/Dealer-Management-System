@@ -72,6 +72,9 @@ const bareAmount = (s: string): string => {
 type PrintableQuoteItem = {
   model: string;
   manufacturer: string;
+  engineDisplacement: string;
+  transmission: string;
+  fuelType: string;
   year: string;
   variant: string;
   color: string;
@@ -145,7 +148,14 @@ const quoteItemFromUnknown = (value: unknown): PrintableQuoteItem | null => {
   const color = textValue(item.color ?? item.colour);
   const quantity = textValue(item.quantity) || "1";
   const total = textValue(item.total ?? item.subtotal ?? item.unitPrice);
-  return { model, manufacturer, year, variant, color, quantity, total };
+  const engineDisplacement = item.engineDisplacementCc === 0
+    ? "0 cc"
+    : textValue(item.engineDisplacementCc)
+      ? `${textValue(item.engineDisplacementCc)} cc`
+      : "Not recorded";
+  const transmission = textValue(item.transmission) || "Not recorded";
+  const fuelType = textValue(item.fuelType) === "EV" ? "Electric" : textValue(item.fuelType) || "Not recorded";
+  return { model, manufacturer, year, variant, color, quantity, total, engineDisplacement, transmission, fuelType };
 };
 
 /**
@@ -422,6 +432,9 @@ export function buildQuotePdf(
       parsedItems = [{
         model: textValue(data.vehicle || data.model),
         manufacturer: textValue(data.manufacturer),
+        engineDisplacement: textValue(data.engineDisplacementCc) ? `${data.engineDisplacementCc} cc` : "Not recorded",
+        transmission: textValue(data.transmission) || "Not recorded",
+        fuelType: data.fuelType === "EV" ? "Electric" : textValue(data.fuelType) || "Not recorded",
         year: textValue(data.modelYear),
         variant: textValue(data.version),
         color: textValue(data.color),
@@ -442,6 +455,11 @@ export function buildQuotePdf(
       const modelLine = modelWithManufacturer(item.manufacturer, item.model);
       const logicalLines = [
         modelLine,
+        `Make: ${item.manufacturer || "Not recorded"}`,
+        `Model: ${item.model || "Not recorded"}`,
+        `Engine displacement: ${item.engineDisplacement}`,
+        `Transmission: ${item.transmission}`,
+        `Fuel type: ${item.fuelType}`,
         item.variant ? `Variant: ${item.variant}` : "",
         item.color ? `Color: ${item.color}` : "",
         item.year ? `Year: ${item.year}` : "",

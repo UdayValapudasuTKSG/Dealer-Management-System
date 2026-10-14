@@ -14334,6 +14334,9 @@ components:
         trim: { type: ["string", "null"] }
         color: { type: ["string", "null"] }
         manufacturer: { type: string }
+        engineDisplacementCc: { type: ["integer", "null"], minimum: 0, multipleOf: 1 }
+        transmission: { type: ["string", "null"] }
+        fuelType: { type: ["string", "null"] }
         basePrice: { type: number, description: Unit price }
         taxLines: { type: array, items: { $ref: "#/components/schemas/QuoteTaxLine" } }
         totalTax: { type: number }
