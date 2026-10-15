@@ -23,6 +23,7 @@ import {
 } from "../lib/erpnext/connection";
 import { ErpnextError } from "../lib/erpnext/client";
 import { retryErpnextSyncJob } from "../lib/erpnext/sync";
+import { isFinanceReviewHeld } from "../lib/erpnext/finance-review-hold";
 import { backfillErpnextParts } from "../lib/erpnext/parts-sync";
 import { backfillErpnext } from "../lib/erpnext/entities";
 
@@ -253,7 +254,9 @@ router.get("/erpnext/sync-jobs", async (_req, res): Promise<void> => {
     .where(eq(erpnextSyncJobsTable.dealerId, dealerId))
     .orderBy(desc(erpnextSyncJobsTable.createdAt))
     .limit(50);
-  res.json(ListErpnextSyncJobsResponse.parse(rows));
+  res.json(ListErpnextSyncJobsResponse.parse(rows.map(row => ({
+    ...row, financeReviewRequired: isFinanceReviewHeld(row.payload) || row.lastError?.startsWith("Finance review hold:") === true,
+  }))));
 });
 
 router.post("/erpnext/sync-jobs/:id/retry", async (req, res): Promise<void> => {
@@ -264,7 +267,7 @@ router.post("/erpnext/sync-jobs/:id/retry", async (req, res): Promise<void> => {
   }
   const job = await retryErpnextSyncJob(activeDealerId(res), params.data.id);
   if (!job) {
-    res.status(404).json({ error: "Sync job not found or not in a retryable state" });
+    res.status(404).json({ error: "Sync job not found, held for Finance review, or not in a retryable state" });
     return;
   }
   res.json(RetryErpnextSyncJobResponse.parse(job));

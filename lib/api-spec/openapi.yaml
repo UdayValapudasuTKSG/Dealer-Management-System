@@ -12706,6 +12706,9 @@ components:
       type: object
       required: [id, direction, doctype, operation, entityType, entityId, status, attempts, createdAt]
       properties:
+        financeReviewRequired:
+          type: boolean
+          description: Held for Finance review; ordinary Retry must not release this record.
         id: { type: integer }
         direction: { type: string }
         doctype: { type: string }

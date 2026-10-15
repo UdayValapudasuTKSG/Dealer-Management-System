@@ -26,6 +26,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - On 2026-10-15 the user reiterated that the pipeline must execute the approved financial flow, not just prepare workpapers: request source and amount, show Finance-only approve/reject, and post approved transactions to ERPNext.
   **Why:** Workpaper-only delivery did not satisfy the requested sales workflow.
   **How to apply:** Treat operational approval-to-posting as required scope, with independent expense/receipt records, rejected requests leaving books unchanged, and posted status only after confirmed ERP success. Do not call review-only scaffolding complete. Keep the dummy rollout and advance-VAT restriction; those are separate from authorization to build the execution engine.
+- The user chose to hold existing unsent CAM Motors Dummy financial jobs for Finance review before reconnecting ERPNext; this is not permission to replay the backlog.
+  **Why:** Replacing the connection credentials would otherwise let older invoices and payments bypass the requested new approval flow.
+  **How to apply:** Preserve posted documents and existing receipts. Keep legacy financial holds effective across retries and new jobs for the same entity. Do not retry failed jobs or turn a legacy receipt into a second receipt. Reconnection must not release holds; explicit Finance review and posting reconciliation are required.
 - Registration, fuel and PDI billing is chosen per expense, defaulting to dealer-paid; a separate customer charge requires Finance approval.
   **Why:** The user explicitly selected per-expense billing rather than treating all costs as dealer expenses or automatically included in the vehicle price.
   **How to apply:** Preserve the dealer expense and any customer charge as separate linked transactions. Do not increase the customer balance merely because an expense was submitted.

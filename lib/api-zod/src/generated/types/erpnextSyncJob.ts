@@ -8,6 +8,8 @@
 import type { ErpnextSyncJobStatus } from './erpnextSyncJobStatus';
 
 export interface ErpnextSyncJob {
+  /** Held for Finance review; ordinary Retry must not release this record. */
+  financeReviewRequired?: boolean;
   id: number;
   direction: string;
   doctype: string;

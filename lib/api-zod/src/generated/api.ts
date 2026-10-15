@@ -19938,6 +19938,7 @@ export const BackfillErpnextResponse = zod.object({
  * @summary Recent ERPNext sync jobs for the active dealership
  */
 export const ListErpnextSyncJobsResponseItem = zod.object({
+  "financeReviewRequired": zod.boolean().optional().describe('Held for Finance review; ordinary Retry must not release this record.'),
   "id": zod.number(),
   "direction": zod.string(),
   "doctype": zod.string(),
@@ -19963,6 +19964,7 @@ export const RetryErpnextSyncJobParams = zod.object({
 })
 
 export const RetryErpnextSyncJobResponse = zod.object({
+  "financeReviewRequired": zod.boolean().optional().describe('Held for Finance review; ordinary Retry must not release this record.'),
   "id": zod.number(),
   "direction": zod.string(),
   "doctype": zod.string(),

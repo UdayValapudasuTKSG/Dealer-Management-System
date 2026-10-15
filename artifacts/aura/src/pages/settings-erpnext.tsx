@@ -686,7 +686,7 @@ export default function SettingsErpnext() {
                           className={cn("text-[10px] uppercase", STATUS_STYLE[j.status])}
                           title={j.lastError ?? undefined}
                         >
-                          {j.status === "dead" ? "dead letter" : j.status}
+                          {j.financeReviewRequired ? "Finance review required" : j.status === "dead" ? "dead letter" : j.status}
                         </Badge>
                         {j.lastError && (j.status === "failed" || j.status === "dead") && (
                           <div className="mt-1 text-[11px] text-red-400/80 max-w-[260px] truncate" title={j.lastError}>
@@ -699,7 +699,7 @@ export default function SettingsErpnext() {
                         {formatGuyanaDateTime(j.createdAt)}
                       </td>
                       <td className="px-5 py-3 text-right">
-                        {(j.status === "failed" || j.status === "dead") && (
+                        {!j.financeReviewRequired && (j.status === "failed" || j.status === "dead") && (
                           <button
                             onClick={() => retryJob.mutate({ id: j.id })}
                             disabled={retryJob.isPending}

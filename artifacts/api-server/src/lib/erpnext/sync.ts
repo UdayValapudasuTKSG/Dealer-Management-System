@@ -1,4 +1,5 @@
 import { SalesAccountingHoldError } from "../sales-accounting-hold";
+import { FinanceReviewHoldError } from "./finance-review-hold";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   db,
@@ -135,6 +136,14 @@ async function genericPush(job: ErpnextSyncJob): Promise<{ docName: string | nul
 async function processJob(job: ErpnextSyncJob): Promise<void> {
   const attempts = job.attempts + 1;
   try {
+    // An updated/re-enqueued copy of the same entity may not bypass its hold.
+    const [held] = await db.select({ id: erpnextSyncJobsTable.id }).from(erpnextSyncJobsTable).where(and(
+      eq(erpnextSyncJobsTable.dealerId, job.dealerId),
+      eq(erpnextSyncJobsTable.entityType, job.entityType),
+      eq(erpnextSyncJobsTable.entityId, job.entityId),
+      sql`${erpnextSyncJobsTable.payload} ? 'financeReviewHold'`,
+    )).limit(1);
+    if (held) throw new FinanceReviewHoldError();
     const handler = outboundHandlers.get(job.doctype) ?? genericPush;
     const { docName } = await handler(job);
     if (docName) {
@@ -159,6 +168,12 @@ async function processJob(job: ErpnextSyncJob): Promise<void> {
       })
       .where(eq(erpnextSyncJobsTable.id, job.id));
   } catch (err) {
+    if (err instanceof FinanceReviewHoldError) {
+      await db.update(erpnextSyncJobsTable).set({
+        status: "dead", lastError: err.message, nextAttemptAt: null, updatedAt: new Date(),
+      }).where(eq(erpnextSyncJobsTable.id, job.id));
+      return; // Preserve attempts, payload, remote reference and completedAt.
+    }
     if (err instanceof SalesAccountingHoldError) {
       await db.update(erpnextSyncJobsTable).set({
         status: "queued", lastError: err.message, nextAttemptAt: new Date(Date.now() + UNCONFIGURED_RETRY_MS), updatedAt: new Date(),
@@ -206,6 +221,13 @@ export async function retryErpnextSyncJob(
         eq(erpnextSyncJobsTable.id, jobId),
         eq(erpnextSyncJobsTable.dealerId, dealerId),
         inArray(erpnextSyncJobsTable.status, ["failed", "dead"]),
+        sql`not exists (
+          select 1 from erpnext_sync_jobs held
+          where held.dealer_id = ${erpnextSyncJobsTable.dealerId}
+            and held.entity_type = ${erpnextSyncJobsTable.entityType}
+            and held.entity_id = ${erpnextSyncJobsTable.entityId}
+            and held.payload ? 'financeReviewHold'
+        )`,
       ),
     )
     .returning();
