@@ -5,6 +5,35 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export type SalesAccountingConfigInputCustomerChargesItemCategory = typeof SalesAccountingConfigInputCustomerChargesItemCategory[keyof typeof SalesAccountingConfigInputCustomerChargesItemCategory];
+
+
+export const SalesAccountingConfigInputCustomerChargesItemCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type SalesAccountingConfigInputCustomerChargesItemTaxTreatment = typeof SalesAccountingConfigInputCustomerChargesItemTaxTreatment[keyof typeof SalesAccountingConfigInputCustomerChargesItemTaxTreatment];
+
+
+export const SalesAccountingConfigInputCustomerChargesItemTaxTreatment = {
+  pending: 'pending',
+  taxable: 'taxable',
+  exempt: 'exempt',
+  zero_rated: 'zero_rated',
+} as const;
+
+export type SalesAccountingConfigInputCustomerChargesItem = {
+  category: SalesAccountingConfigInputCustomerChargesItemCategory;
+  incomeAccount: string;
+  taxTreatment: SalesAccountingConfigInputCustomerChargesItemTaxTreatment;
+  vatRate: number;
+  amountIncludesVat: boolean;
+  approved: boolean;
+  approvalReference: string;
+};
+
 export type SalesAccountingConfigInputAccountsItem = {
   key: string;
   account: string;
@@ -38,11 +67,20 @@ export type SalesAccountingConfigInputModelsItem = {
 };
 
 export interface SalesAccountingConfigInput {
+  customerCharges?: SalesAccountingConfigInputCustomerChargesItem[];
   revision: number;
   accounts: SalesAccountingConfigInputAccountsItem[];
   sources: SalesAccountingConfigInputSourcesItem[];
   models: SalesAccountingConfigInputModelsItem[];
 }
+
+export type SalesAccountingEntryInputBillingTreatment = typeof SalesAccountingEntryInputBillingTreatment[keyof typeof SalesAccountingEntryInputBillingTreatment];
+
+
+export const SalesAccountingEntryInputBillingTreatment = {
+  dealer_paid: 'dealer_paid',
+  customer_billed: 'customer_billed',
+} as const;
 
 export type SalesAccountingEntryInputStage = typeof SalesAccountingEntryInputStage[keyof typeof SalesAccountingEntryInputStage];
 
@@ -61,6 +99,8 @@ export const SalesAccountingEntryInputStage = {
 } as const;
 
 export interface SalesAccountingEntryInput {
+  billingTreatment?: SalesAccountingEntryInputBillingTreatment;
+  customerChargeAmount?: number;
   stage: SalesAccountingEntryInputStage;
   date: string;
   amount: number;
@@ -12865,6 +12905,35 @@ export type GetPartsIssuanceReport200Two = {
   rows: GetPartsIssuanceReport200TwoRowsItem[];
 };
 
+export type GetSalesAccountingConfig200CustomerChargesItemCategory = typeof GetSalesAccountingConfig200CustomerChargesItemCategory[keyof typeof GetSalesAccountingConfig200CustomerChargesItemCategory];
+
+
+export const GetSalesAccountingConfig200CustomerChargesItemCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type GetSalesAccountingConfig200CustomerChargesItemTaxTreatment = typeof GetSalesAccountingConfig200CustomerChargesItemTaxTreatment[keyof typeof GetSalesAccountingConfig200CustomerChargesItemTaxTreatment];
+
+
+export const GetSalesAccountingConfig200CustomerChargesItemTaxTreatment = {
+  pending: 'pending',
+  taxable: 'taxable',
+  exempt: 'exempt',
+  zero_rated: 'zero_rated',
+} as const;
+
+export type GetSalesAccountingConfig200CustomerChargesItem = {
+  category: GetSalesAccountingConfig200CustomerChargesItemCategory;
+  incomeAccount: string;
+  taxTreatment: GetSalesAccountingConfig200CustomerChargesItemTaxTreatment;
+  vatRate: number;
+  amountIncludesVat: boolean;
+  approved: boolean;
+  approvalReference: string;
+};
+
 export type GetSalesAccountingConfig200VatPolicy = typeof GetSalesAccountingConfig200VatPolicy[keyof typeof GetSalesAccountingConfig200VatPolicy];
 
 
@@ -12919,6 +12988,7 @@ export type GetSalesAccountingConfig200Validation = {
 };
 
 export type GetSalesAccountingConfig200 = {
+  customerCharges?: GetSalesAccountingConfig200CustomerChargesItem[];
   eligible: boolean;
   vatPolicy: GetSalesAccountingConfig200VatPolicy;
   revision: number;
@@ -12927,6 +12997,35 @@ export type GetSalesAccountingConfig200 = {
   models: GetSalesAccountingConfig200ModelsItem[];
   accountRoles: GetSalesAccountingConfig200AccountRolesItem[];
   validation: GetSalesAccountingConfig200Validation;
+};
+
+export type SaveSalesAccountingConfig200CustomerChargesItemCategory = typeof SaveSalesAccountingConfig200CustomerChargesItemCategory[keyof typeof SaveSalesAccountingConfig200CustomerChargesItemCategory];
+
+
+export const SaveSalesAccountingConfig200CustomerChargesItemCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type SaveSalesAccountingConfig200CustomerChargesItemTaxTreatment = typeof SaveSalesAccountingConfig200CustomerChargesItemTaxTreatment[keyof typeof SaveSalesAccountingConfig200CustomerChargesItemTaxTreatment];
+
+
+export const SaveSalesAccountingConfig200CustomerChargesItemTaxTreatment = {
+  pending: 'pending',
+  taxable: 'taxable',
+  exempt: 'exempt',
+  zero_rated: 'zero_rated',
+} as const;
+
+export type SaveSalesAccountingConfig200CustomerChargesItem = {
+  category: SaveSalesAccountingConfig200CustomerChargesItemCategory;
+  incomeAccount: string;
+  taxTreatment: SaveSalesAccountingConfig200CustomerChargesItemTaxTreatment;
+  vatRate: number;
+  amountIncludesVat: boolean;
+  approved: boolean;
+  approvalReference: string;
 };
 
 export type SaveSalesAccountingConfig200VatPolicy = typeof SaveSalesAccountingConfig200VatPolicy[keyof typeof SaveSalesAccountingConfig200VatPolicy];
@@ -12983,6 +13082,7 @@ export type SaveSalesAccountingConfig200Validation = {
 };
 
 export type SaveSalesAccountingConfig200 = {
+  customerCharges?: SaveSalesAccountingConfig200CustomerChargesItem[];
   eligible: boolean;
   vatPolicy: SaveSalesAccountingConfig200VatPolicy;
   revision: number;
@@ -12991,6 +13091,35 @@ export type SaveSalesAccountingConfig200 = {
   models: SaveSalesAccountingConfig200ModelsItem[];
   accountRoles: SaveSalesAccountingConfig200AccountRolesItem[];
   validation: SaveSalesAccountingConfig200Validation;
+};
+
+export type ValidateSalesAccountingConfig200CustomerChargesItemCategory = typeof ValidateSalesAccountingConfig200CustomerChargesItemCategory[keyof typeof ValidateSalesAccountingConfig200CustomerChargesItemCategory];
+
+
+export const ValidateSalesAccountingConfig200CustomerChargesItemCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type ValidateSalesAccountingConfig200CustomerChargesItemTaxTreatment = typeof ValidateSalesAccountingConfig200CustomerChargesItemTaxTreatment[keyof typeof ValidateSalesAccountingConfig200CustomerChargesItemTaxTreatment];
+
+
+export const ValidateSalesAccountingConfig200CustomerChargesItemTaxTreatment = {
+  pending: 'pending',
+  taxable: 'taxable',
+  exempt: 'exempt',
+  zero_rated: 'zero_rated',
+} as const;
+
+export type ValidateSalesAccountingConfig200CustomerChargesItem = {
+  category: ValidateSalesAccountingConfig200CustomerChargesItemCategory;
+  incomeAccount: string;
+  taxTreatment: ValidateSalesAccountingConfig200CustomerChargesItemTaxTreatment;
+  vatRate: number;
+  amountIncludesVat: boolean;
+  approved: boolean;
+  approvalReference: string;
 };
 
 export type ValidateSalesAccountingConfig200VatPolicy = typeof ValidateSalesAccountingConfig200VatPolicy[keyof typeof ValidateSalesAccountingConfig200VatPolicy];
@@ -13047,6 +13176,7 @@ export type ValidateSalesAccountingConfig200Validation = {
 };
 
 export type ValidateSalesAccountingConfig200 = {
+  customerCharges?: ValidateSalesAccountingConfig200CustomerChargesItem[];
   eligible: boolean;
   vatPolicy: ValidateSalesAccountingConfig200VatPolicy;
   revision: number;
@@ -13075,6 +13205,35 @@ export type GetSalesAccountingWorkflow200Deal = {
   enrolled: boolean;
   vehicle?: string;
   vin?: string;
+};
+
+export type GetSalesAccountingWorkflow200ConfigCustomerChargesItemCategory = typeof GetSalesAccountingWorkflow200ConfigCustomerChargesItemCategory[keyof typeof GetSalesAccountingWorkflow200ConfigCustomerChargesItemCategory];
+
+
+export const GetSalesAccountingWorkflow200ConfigCustomerChargesItemCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type GetSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment = typeof GetSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment[keyof typeof GetSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment];
+
+
+export const GetSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment = {
+  pending: 'pending',
+  taxable: 'taxable',
+  exempt: 'exempt',
+  zero_rated: 'zero_rated',
+} as const;
+
+export type GetSalesAccountingWorkflow200ConfigCustomerChargesItem = {
+  category: GetSalesAccountingWorkflow200ConfigCustomerChargesItemCategory;
+  incomeAccount: string;
+  taxTreatment: GetSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment;
+  vatRate: number;
+  amountIncludesVat: boolean;
+  approved: boolean;
+  approvalReference: string;
 };
 
 export type GetSalesAccountingWorkflow200ConfigVatPolicy = typeof GetSalesAccountingWorkflow200ConfigVatPolicy[keyof typeof GetSalesAccountingWorkflow200ConfigVatPolicy];
@@ -13131,6 +13290,7 @@ export type GetSalesAccountingWorkflow200ConfigValidation = {
 };
 
 export type GetSalesAccountingWorkflow200Config = {
+  customerCharges?: GetSalesAccountingWorkflow200ConfigCustomerChargesItem[];
   eligible: boolean;
   vatPolicy: GetSalesAccountingWorkflow200ConfigVatPolicy;
   revision: number;
@@ -13140,6 +13300,14 @@ export type GetSalesAccountingWorkflow200Config = {
   accountRoles: GetSalesAccountingWorkflow200ConfigAccountRolesItem[];
   validation: GetSalesAccountingWorkflow200ConfigValidation;
 };
+
+export type GetSalesAccountingWorkflow200EntriesItemInputBillingTreatment = typeof GetSalesAccountingWorkflow200EntriesItemInputBillingTreatment[keyof typeof GetSalesAccountingWorkflow200EntriesItemInputBillingTreatment];
+
+
+export const GetSalesAccountingWorkflow200EntriesItemInputBillingTreatment = {
+  dealer_paid: 'dealer_paid',
+  customer_billed: 'customer_billed',
+} as const;
 
 export type GetSalesAccountingWorkflow200EntriesItemInputStage = typeof GetSalesAccountingWorkflow200EntriesItemInputStage[keyof typeof GetSalesAccountingWorkflow200EntriesItemInputStage];
 
@@ -13158,6 +13326,8 @@ export const GetSalesAccountingWorkflow200EntriesItemInputStage = {
 } as const;
 
 export type GetSalesAccountingWorkflow200EntriesItemInput = {
+  billingTreatment?: GetSalesAccountingWorkflow200EntriesItemInputBillingTreatment;
+  customerChargeAmount?: number;
   stage: GetSalesAccountingWorkflow200EntriesItemInputStage;
   date: string;
   amount: number;
@@ -13219,6 +13389,35 @@ export type StartSalesAccountingWorkflow200Deal = {
   vin?: string;
 };
 
+export type StartSalesAccountingWorkflow200ConfigCustomerChargesItemCategory = typeof StartSalesAccountingWorkflow200ConfigCustomerChargesItemCategory[keyof typeof StartSalesAccountingWorkflow200ConfigCustomerChargesItemCategory];
+
+
+export const StartSalesAccountingWorkflow200ConfigCustomerChargesItemCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type StartSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment = typeof StartSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment[keyof typeof StartSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment];
+
+
+export const StartSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment = {
+  pending: 'pending',
+  taxable: 'taxable',
+  exempt: 'exempt',
+  zero_rated: 'zero_rated',
+} as const;
+
+export type StartSalesAccountingWorkflow200ConfigCustomerChargesItem = {
+  category: StartSalesAccountingWorkflow200ConfigCustomerChargesItemCategory;
+  incomeAccount: string;
+  taxTreatment: StartSalesAccountingWorkflow200ConfigCustomerChargesItemTaxTreatment;
+  vatRate: number;
+  amountIncludesVat: boolean;
+  approved: boolean;
+  approvalReference: string;
+};
+
 export type StartSalesAccountingWorkflow200ConfigVatPolicy = typeof StartSalesAccountingWorkflow200ConfigVatPolicy[keyof typeof StartSalesAccountingWorkflow200ConfigVatPolicy];
 
 
@@ -13273,6 +13472,7 @@ export type StartSalesAccountingWorkflow200ConfigValidation = {
 };
 
 export type StartSalesAccountingWorkflow200Config = {
+  customerCharges?: StartSalesAccountingWorkflow200ConfigCustomerChargesItem[];
   eligible: boolean;
   vatPolicy: StartSalesAccountingWorkflow200ConfigVatPolicy;
   revision: number;
@@ -13282,6 +13482,14 @@ export type StartSalesAccountingWorkflow200Config = {
   accountRoles: StartSalesAccountingWorkflow200ConfigAccountRolesItem[];
   validation: StartSalesAccountingWorkflow200ConfigValidation;
 };
+
+export type StartSalesAccountingWorkflow200EntriesItemInputBillingTreatment = typeof StartSalesAccountingWorkflow200EntriesItemInputBillingTreatment[keyof typeof StartSalesAccountingWorkflow200EntriesItemInputBillingTreatment];
+
+
+export const StartSalesAccountingWorkflow200EntriesItemInputBillingTreatment = {
+  dealer_paid: 'dealer_paid',
+  customer_billed: 'customer_billed',
+} as const;
 
 export type StartSalesAccountingWorkflow200EntriesItemInputStage = typeof StartSalesAccountingWorkflow200EntriesItemInputStage[keyof typeof StartSalesAccountingWorkflow200EntriesItemInputStage];
 
@@ -13300,6 +13508,8 @@ export const StartSalesAccountingWorkflow200EntriesItemInputStage = {
 } as const;
 
 export type StartSalesAccountingWorkflow200EntriesItemInput = {
+  billingTreatment?: StartSalesAccountingWorkflow200EntriesItemInputBillingTreatment;
+  customerChargeAmount?: number;
   stage: StartSalesAccountingWorkflow200EntriesItemInputStage;
   date: string;
   amount: number;
@@ -13361,6 +13571,35 @@ export type SaveSalesAccountingEntry200Deal = {
   vin?: string;
 };
 
+export type SaveSalesAccountingEntry200ConfigCustomerChargesItemCategory = typeof SaveSalesAccountingEntry200ConfigCustomerChargesItemCategory[keyof typeof SaveSalesAccountingEntry200ConfigCustomerChargesItemCategory];
+
+
+export const SaveSalesAccountingEntry200ConfigCustomerChargesItemCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type SaveSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment = typeof SaveSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment[keyof typeof SaveSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment];
+
+
+export const SaveSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment = {
+  pending: 'pending',
+  taxable: 'taxable',
+  exempt: 'exempt',
+  zero_rated: 'zero_rated',
+} as const;
+
+export type SaveSalesAccountingEntry200ConfigCustomerChargesItem = {
+  category: SaveSalesAccountingEntry200ConfigCustomerChargesItemCategory;
+  incomeAccount: string;
+  taxTreatment: SaveSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment;
+  vatRate: number;
+  amountIncludesVat: boolean;
+  approved: boolean;
+  approvalReference: string;
+};
+
 export type SaveSalesAccountingEntry200ConfigVatPolicy = typeof SaveSalesAccountingEntry200ConfigVatPolicy[keyof typeof SaveSalesAccountingEntry200ConfigVatPolicy];
 
 
@@ -13415,6 +13654,7 @@ export type SaveSalesAccountingEntry200ConfigValidation = {
 };
 
 export type SaveSalesAccountingEntry200Config = {
+  customerCharges?: SaveSalesAccountingEntry200ConfigCustomerChargesItem[];
   eligible: boolean;
   vatPolicy: SaveSalesAccountingEntry200ConfigVatPolicy;
   revision: number;
@@ -13424,6 +13664,14 @@ export type SaveSalesAccountingEntry200Config = {
   accountRoles: SaveSalesAccountingEntry200ConfigAccountRolesItem[];
   validation: SaveSalesAccountingEntry200ConfigValidation;
 };
+
+export type SaveSalesAccountingEntry200EntriesItemInputBillingTreatment = typeof SaveSalesAccountingEntry200EntriesItemInputBillingTreatment[keyof typeof SaveSalesAccountingEntry200EntriesItemInputBillingTreatment];
+
+
+export const SaveSalesAccountingEntry200EntriesItemInputBillingTreatment = {
+  dealer_paid: 'dealer_paid',
+  customer_billed: 'customer_billed',
+} as const;
 
 export type SaveSalesAccountingEntry200EntriesItemInputStage = typeof SaveSalesAccountingEntry200EntriesItemInputStage[keyof typeof SaveSalesAccountingEntry200EntriesItemInputStage];
 
@@ -13442,6 +13690,8 @@ export const SaveSalesAccountingEntry200EntriesItemInputStage = {
 } as const;
 
 export type SaveSalesAccountingEntry200EntriesItemInput = {
+  billingTreatment?: SaveSalesAccountingEntry200EntriesItemInputBillingTreatment;
+  customerChargeAmount?: number;
   stage: SaveSalesAccountingEntry200EntriesItemInputStage;
   date: string;
   amount: number;
@@ -13503,6 +13753,35 @@ export type ReviewSalesAccountingEntry200Deal = {
   vin?: string;
 };
 
+export type ReviewSalesAccountingEntry200ConfigCustomerChargesItemCategory = typeof ReviewSalesAccountingEntry200ConfigCustomerChargesItemCategory[keyof typeof ReviewSalesAccountingEntry200ConfigCustomerChargesItemCategory];
+
+
+export const ReviewSalesAccountingEntry200ConfigCustomerChargesItemCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type ReviewSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment = typeof ReviewSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment[keyof typeof ReviewSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment];
+
+
+export const ReviewSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment = {
+  pending: 'pending',
+  taxable: 'taxable',
+  exempt: 'exempt',
+  zero_rated: 'zero_rated',
+} as const;
+
+export type ReviewSalesAccountingEntry200ConfigCustomerChargesItem = {
+  category: ReviewSalesAccountingEntry200ConfigCustomerChargesItemCategory;
+  incomeAccount: string;
+  taxTreatment: ReviewSalesAccountingEntry200ConfigCustomerChargesItemTaxTreatment;
+  vatRate: number;
+  amountIncludesVat: boolean;
+  approved: boolean;
+  approvalReference: string;
+};
+
 export type ReviewSalesAccountingEntry200ConfigVatPolicy = typeof ReviewSalesAccountingEntry200ConfigVatPolicy[keyof typeof ReviewSalesAccountingEntry200ConfigVatPolicy];
 
 
@@ -13557,6 +13836,7 @@ export type ReviewSalesAccountingEntry200ConfigValidation = {
 };
 
 export type ReviewSalesAccountingEntry200Config = {
+  customerCharges?: ReviewSalesAccountingEntry200ConfigCustomerChargesItem[];
   eligible: boolean;
   vatPolicy: ReviewSalesAccountingEntry200ConfigVatPolicy;
   revision: number;
@@ -13566,6 +13846,14 @@ export type ReviewSalesAccountingEntry200Config = {
   accountRoles: ReviewSalesAccountingEntry200ConfigAccountRolesItem[];
   validation: ReviewSalesAccountingEntry200ConfigValidation;
 };
+
+export type ReviewSalesAccountingEntry200EntriesItemInputBillingTreatment = typeof ReviewSalesAccountingEntry200EntriesItemInputBillingTreatment[keyof typeof ReviewSalesAccountingEntry200EntriesItemInputBillingTreatment];
+
+
+export const ReviewSalesAccountingEntry200EntriesItemInputBillingTreatment = {
+  dealer_paid: 'dealer_paid',
+  customer_billed: 'customer_billed',
+} as const;
 
 export type ReviewSalesAccountingEntry200EntriesItemInputStage = typeof ReviewSalesAccountingEntry200EntriesItemInputStage[keyof typeof ReviewSalesAccountingEntry200EntriesItemInputStage];
 
@@ -13584,6 +13872,8 @@ export const ReviewSalesAccountingEntry200EntriesItemInputStage = {
 } as const;
 
 export type ReviewSalesAccountingEntry200EntriesItemInput = {
+  billingTreatment?: ReviewSalesAccountingEntry200EntriesItemInputBillingTreatment;
+  customerChargeAmount?: number;
   stage: ReviewSalesAccountingEntry200EntriesItemInputStage;
   date: string;
   amount: number;

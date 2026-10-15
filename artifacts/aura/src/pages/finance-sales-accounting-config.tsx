@@ -27,6 +27,11 @@ const MODEL_LABEL: Record<string, string> = { income: "Income", dutyFreeIncome: 
 function fromConfig(c: GetSalesAccountingConfig200): Form {
   const acc = new Map(c.accounts.map((a) => [a.key, a.account]));
   return {
+    customerCharges: (["registration", "fuel", "detailing"] as const).map(category =>
+      c.customerCharges?.find(r => r.category === category) ?? {
+        category, incomeAccount: "", taxTreatment: "pending" as const, vatRate: 0,
+        amountIncludesVat: false, approved: false, approvalReference: "",
+      }),
     accounts: c.accountRoles.map((r) => ({ key: r.key, account: acc.get(r.key) ?? "" })),
     sources: c.sources.map((s) => ({ ...s })),
     models: c.models.map((m) => ({ ...m })),
@@ -81,6 +86,7 @@ function ConfigWorkspace() {
     save.mutate({ data: { ...form, revision: baseRev } }, {
       onSuccess: (c) => {
         qc.setQueryData(getGetSalesAccountingConfigQueryKey(), c);
+        void qc.invalidateQueries({ predicate: q => q.queryKey.some(k => typeof k === "string" && k.includes("/sales-accounting/deals")) });
         initRev.current = c.revision; setBaseRev(c.revision); setForm(fromConfig(c));
         toast({ title: `Mappings saved · revision ${c.revision}`, description: "Run ERP validation to verify account names." });
       },
@@ -162,6 +168,29 @@ function ConfigWorkspace() {
               );
             })}
           </div>
+        </section>
+
+        <section className="glass-panel rounded-2xl p-5 space-y-3">
+          <h2 className="font-semibold">Customer-billed expense rules</h2>
+          <p className="text-xs text-muted-foreground">Dealer-paid is the default. Configure customer charges separately for each category. Approval requires Finance approve permission; saving changes resets ERP validation and existing workpapers must be reviewed again. This does not enable posting.</p>
+          {form.customerCharges?.map((rule, i) => {
+            const change = (patch: Partial<typeof rule>) => setForm(f => f && ({ ...f,
+              customerCharges: f.customerCharges?.map((r, j) => j === i ? { ...r, ...patch, approved: false } : r),
+            }));
+            return <div key={rule.category} className="rounded-xl border p-3 space-y-2">
+              <h3 className="text-sm font-medium">{rule.category === "detailing" ? "Detailing & PDI" : rule.category === "fuel" ? "Fuel" : "Registration"}</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs">Customer-charge income account<input className={fieldCls} value={rule.incomeAccount} disabled={!editable} onChange={e => change({ incomeAccount: e.target.value })} placeholder="Exact ERPNext account name" /></label>
+                <label className="text-xs">VAT treatment<select className={fieldCls} value={rule.taxTreatment} disabled={!editable} onChange={e => change({ taxTreatment: e.target.value as typeof rule.taxTreatment, vatRate: 0 })}>
+                  <option value="pending">Not approved / pending</option><option value="taxable">Taxable</option><option value="exempt">Exempt</option><option value="zero_rated">Zero-rated</option>
+                </select></label>
+                <label className="text-xs">VAT rate (%)<input className={fieldCls} type="number" min="0" max="100" value={rule.vatRate} disabled={!editable || rule.taxTreatment !== "taxable"} onChange={e => change({ vatRate: Number(e.target.value) })} /></label>
+                <label className="text-xs">Finance approval reference<input className={fieldCls} value={rule.approvalReference} disabled={!editable} onChange={e => change({ approvalReference: e.target.value })} /></label>
+              </div>
+              <label className="flex gap-2 text-xs"><input type="checkbox" checked={rule.amountIncludesVat} disabled={!editable} onChange={e => change({ amountIncludesVat: e.target.checked })} />Entered customer amount includes VAT</label>
+              <label className="flex gap-2 text-xs"><input type="checkbox" checked={rule.approved} disabled={!editable || !can("finance", "approve")} onChange={e => setForm(f => f && ({ ...f, customerCharges: f.customerCharges?.map((r, j) => i === j ? { ...r, approved: e.target.checked } : r) }))} />Finance-approved rule (saved with Save mappings)</label>
+            </div>;
+          })}
         </section>
 
         <section className="glass-panel rounded-2xl p-5 space-y-3">

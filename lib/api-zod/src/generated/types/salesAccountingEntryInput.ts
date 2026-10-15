@@ -5,9 +5,12 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { SalesAccountingEntryInputBillingTreatment } from './salesAccountingEntryInputBillingTreatment';
 import type { SalesAccountingEntryInputStage } from './salesAccountingEntryInputStage';
 
 export interface SalesAccountingEntryInput {
+  billingTreatment?: SalesAccountingEntryInputBillingTreatment;
+  customerChargeAmount?: number;
   stage: SalesAccountingEntryInputStage;
   date: string;
   amount: number;

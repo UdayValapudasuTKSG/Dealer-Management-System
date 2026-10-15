@@ -7,12 +7,14 @@
  */
 import type { ValidateSalesAccountingConfig200AccountRolesItem } from './validateSalesAccountingConfig200AccountRolesItem';
 import type { ValidateSalesAccountingConfig200AccountsItem } from './validateSalesAccountingConfig200AccountsItem';
+import type { ValidateSalesAccountingConfig200CustomerChargesItem } from './validateSalesAccountingConfig200CustomerChargesItem';
 import type { ValidateSalesAccountingConfig200ModelsItem } from './validateSalesAccountingConfig200ModelsItem';
 import type { ValidateSalesAccountingConfig200SourcesItem } from './validateSalesAccountingConfig200SourcesItem';
 import type { ValidateSalesAccountingConfig200Validation } from './validateSalesAccountingConfig200Validation';
 import type { ValidateSalesAccountingConfig200VatPolicy } from './validateSalesAccountingConfig200VatPolicy';
 
 export type ValidateSalesAccountingConfig200 = {
+  customerCharges?: ValidateSalesAccountingConfig200CustomerChargesItem[];
   eligible: boolean;
   vatPolicy: ValidateSalesAccountingConfig200VatPolicy;
   revision: number;

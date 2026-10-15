@@ -5,9 +5,12 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { GetSalesAccountingWorkflow200EntriesItemInputBillingTreatment } from './getSalesAccountingWorkflow200EntriesItemInputBillingTreatment';
 import type { GetSalesAccountingWorkflow200EntriesItemInputStage } from './getSalesAccountingWorkflow200EntriesItemInputStage';
 
 export type GetSalesAccountingWorkflow200EntriesItemInput = {
+  billingTreatment?: GetSalesAccountingWorkflow200EntriesItemInputBillingTreatment;
+  customerChargeAmount?: number;
   stage: GetSalesAccountingWorkflow200EntriesItemInputStage;
   date: string;
   amount: number;

@@ -120,6 +120,17 @@ review:
             schema:
               $ref: "#/schemas/SalesAccountingWorkflow"
 schemas:
+  CustomerExpenseChargeRule:
+    type: object
+    required: [category, incomeAccount, taxTreatment, vatRate, amountIncludesVat, approved, approvalReference]
+    properties:
+      category: { type: string, enum: [registration, fuel, detailing] }
+      incomeAccount: { type: string }
+      taxTreatment: { type: string, enum: [pending, taxable, exempt, zero_rated] }
+      vatRate: { type: number }
+      amountIncludesVat: { type: boolean }
+      approved: { type: boolean }
+      approvalReference: { type: string }
   SalesAccountingConfigInput:
     type: object
     required: [accounts, sources, models, revision]
@@ -184,6 +195,10 @@ schemas:
     type: object
     required: [eligible, vatPolicy, revision, accounts, sources, models, accountRoles, validation]
     properties:
+      customerCharges:
+        type: array
+        items:
+          $ref: "#/schemas/CustomerExpenseChargeRule"
       eligible: { type: boolean }
       vatPolicy: { type: string, enum: [pending] }
       revision: { type: integer }
@@ -220,6 +235,8 @@ schemas:
     type: object
     required: [stage, date, amount, revision]
     properties:
+      billingTreatment: { type: string, enum: [dealer_paid, customer_billed] }
+      customerChargeAmount: { type: number }
       stage: { type: string, enum: [VS-01, VS-02, VS-03, VS-04, VS-05, VS-06, VS-07, VS-08, VS-09, VS-10] }
       date: { type: string }
       amount: { type: number }

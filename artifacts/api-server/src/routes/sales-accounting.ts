@@ -14,6 +14,12 @@ import { fieldAccessFor } from "../lib/field-permissions";
 const router: IRouter = Router();
 const accountName = z.string().trim().max(180);
 const configSchema = z.object({
+  customerCharges: z.array(z.object({
+    category: z.enum(["registration", "fuel", "detailing"]), incomeAccount: accountName,
+    taxTreatment: z.enum(["pending", "taxable", "exempt", "zero_rated"]),
+    vatRate: z.number().finite().min(0).max(100), amountIncludesVat: z.boolean(),
+    approved: z.boolean(), approvalReference: z.string().trim().max(500),
+  }).strict()).max(3).optional(),
   revision: z.number().int().nonnegative(),
   accounts: z.array(z.object({ key: z.string(), account: accountName })).max(30),
   sources: z.array(z.object({ id: z.string().trim().min(1).max(60), label: z.string().trim().min(1).max(120),
@@ -23,6 +29,8 @@ const configSchema = z.object({
 }).strict();
 const money = z.number().finite().min(0).max(1e12).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.001, "Use at most two decimal places");
 const inputSchema = z.object({
+  billingTreatment: z.enum(["dealer_paid", "customer_billed"]).optional(),
+  customerChargeAmount: money.optional(),
   stage: z.enum(["VS-01", "VS-02", "VS-03", "VS-04", "VS-05", "VS-06", "VS-07", "VS-08", "VS-09", "VS-10"]),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v, "Invalid date"),
   amount: money, revision: z.number().int().nonnegative(),
@@ -106,8 +114,14 @@ router.put("/sales-accounting/config", async (req, res) => {
   const parsed = configSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { revision, ...config } = parsed.data;
+  for (const rule of config.customerCharges ?? []) {
+    if (rule.approved && (!rule.incomeAccount || !rule.approvalReference || rule.taxTreatment === "pending" ||
+      (rule.taxTreatment === "taxable" ? rule.vatRate <= 0 : rule.vatRate !== 0))) {
+      failure("Approved customer-charge rules require an income account, approval reference and explicit valid VAT treatment.");
+    }
+  }
   if (config.accounts.some(a => !ACCOUNT_ROLES.some(r => r.key === a.key))) failure("Unknown account role", 400);
-  for (const keys of [config.accounts.map(a => a.key), config.sources.map(s => s.id),
+  for (const keys of [(config.customerCharges ?? []).map(r => r.category), config.accounts.map(a => a.key), config.sources.map(s => s.id),
     config.models.map(m => `${normalizeModelKey(m.make)}|${normalizeModelKey(m.model)}`)]) {
     if (keys.length !== new Set(keys).size) failure("Duplicate account role, source ID or vehicle model", 400);
   }
@@ -116,6 +130,14 @@ router.put("/sales-accounting/config", async (req, res) => {
     await tx.execute(sql`select pg_advisory_xact_lock(76043, ${dealerId})`);
     const [before] = await tx.select().from(settings).where(eq(settings.dealerId, dealerId));
     if ((before?.revision ?? 0) !== revision) failure("Configuration changed. Reload before saving.", 409);
+    if (config.customerCharges === undefined) config.customerCharges = before?.config.customerCharges;
+    for (const rule of config.customerCharges ?? []) {
+      const previous = before?.config.customerCharges?.find(r => r.category === rule.category);
+      if (rule.approved && JSON.stringify(rule) !== JSON.stringify(previous) &&
+        !res.locals.user!.permissions.some(p => p.module === "finance" && p.category === "approve")) {
+        failure("Finance approve permission is required to approve or change approved customer-charge rules.", 403);
+      }
+    }
     await tx.insert(settings).values({ dealerId, config, updatedBy: res.locals.user!.id })
       .onConflictDoUpdate({ target: settings.dealerId, set: { config, revision: revision + 1, validation: null, updatedBy: res.locals.user!.id, updatedAt: new Date() } });
     await tx.insert(auditLogsTable).values({ dealerId, actorUserId: res.locals.user!.id, action: "update", module: "finance",
@@ -222,9 +244,13 @@ router.post("/sales-accounting/deals/:dealId/review", async (req, res) => {
     await tx.execute(sql`select pg_advisory_xact_lock(76043, ${dealerId})`);
     const [entry] = await tx.select().from(entries).where(and(eq(entries.dealerId, dealerId), eq(entries.dealId, dealId), eq(entries.stage, input.stage)));
     if (!entry) failure("Workpaper not found", 404);
+    if (entry.updatedBy === res.locals.user!.id) failure("A different Finance approver must review this workpaper.", 403);
     if (entry.revision !== input.revision) failure("Workpaper changed. Reload before reviewing.", 409);
     const [config] = await tx.select().from(settings).where(eq(settings.dealerId, dealerId));
     if (entry.configRevision !== (config?.revision ?? 0)) failure("GL configuration changed. Save the workpaper again.");
+    if (SALES_STAGES.find(s => s.id === entry.stage)?.posts && config?.validation?.state !== "valid") {
+      failure("ERPNext account validation must be valid before Finance reviews this workpaper.");
+    }
     if (!entry.input.reference?.trim()) failure("Supporting reference is required before review");
     const reviewBlockers = entry.blockers.filter(b => !b.startsWith("ERPNext posting is held:"));
     if (reviewBlockers.length) failure(reviewBlockers.join(" "));

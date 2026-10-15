@@ -69,6 +69,23 @@ export function buildSalesPreview(
       if (!["registration", "fuel", "detailing"].includes(input.expenseType ?? "")) blockers.push("Select a pre-delivery expense type.");
       line(account(input.expenseType ?? ""), input.amount, 0, "Pre-delivery expense");
       line(sourceAccount(), 0, input.amount, "Funding source / supplier payable");
+      if (input.billingTreatment === "customer_billed") {
+        const rule = config.customerCharges?.find(r => r.category === input.expenseType);
+        const charge = input.customerChargeAmount ?? 0;
+        if (!Number.isFinite(charge) || charge <= 0) blockers.push("Enter a customer charge greater than zero.");
+        if (!rule?.approved || !rule.incomeAccount || !rule.approvalReference || rule.taxTreatment === "pending" ||
+          !Number.isFinite(rule.vatRate) || rule.vatRate < 0 || rule.vatRate > 100 ||
+          (rule.taxTreatment === "taxable" ? rule.vatRate <= 0 : rule.vatRate !== 0)) {
+          blockers.push("Finance must configure and approve this category's customer-charge income account and VAT treatment.");
+        } else if (Number.isFinite(charge) && charge > 0) {
+          const rate = rule.taxTreatment === "taxable" ? rule.vatRate : 0;
+          const net = money(rule.amountIncludesVat ? charge / (1 + rate / 100) : charge);
+          const tax = rule.amountIncludesVat ? money(charge - net) : money(net * rate / 100);
+          line(account("receivables"), money(net + tax), 0, "Separate customer charge — not yet invoiced");
+          line(rule.incomeAccount, 0, net, "Customer-charge income");
+          if (tax) line(account("vatOutput"), 0, tax, "Customer-charge VAT");
+        }
+      }
       break;
     case "VS-06": {
       const discount = input.discount ?? 0;

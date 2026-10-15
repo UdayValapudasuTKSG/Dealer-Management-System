@@ -138,6 +138,7 @@ import { isHeldByCallCentre } from "@/hooks/use-call-centre";
 import { Headset } from "lucide-react";
 import { TestDriveCard } from "@/components/lead/test-drive-card";
 import { useAuthz } from "@/lib/auth";
+import { LeadSalesFinance } from "./finance-sales-accounting";
 import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { InvitationRow } from "@/pages/feedback-forms";
@@ -2067,6 +2068,10 @@ export default function LeadDetail() {
                         outstandingBalances={outstandingBalances}
                       />
                     </div>
+                  )}
+
+                  {linkedDeal && can("finance", "view") && (
+                    <LeadSalesFinance dealId={linkedDeal.id} />
                   )}
 
                   {linkedDeal && (

@@ -26,6 +26,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - Registration, fuel and PDI billing is chosen per expense, defaulting to dealer-paid; a separate customer charge requires Finance approval.
   **Why:** The user explicitly selected per-expense billing rather than treating all costs as dealer expenses or automatically included in the vehicle price.
   **How to apply:** Preserve the dealer expense and any customer charge as separate linked transactions. Do not increase the customer balance merely because an expense was submitted.
+- Finance will configure and approve customer-charge GL accounts and VAT treatment per expense category before posting; no default tax exemption or vehicle-tax inheritance is authorized.
+  **Why:** The user selected configuration-before-posting because the workflow document defines dealer costs but not the tax treatment of customer recharges.
+  **How to apply:** Keep unconfigured categories blocked; explicitly distinguish pending, taxable, exempt and zero-rated, including inclusive/exclusive amounts. Configuration approval alone does not authorize advance VAT or enable the financial execution engine.
 - The user supplied the expanded master account definitions directly in the connected ERPNext test company. Use the live account list to resolve model/brand accounts rather than requiring the missing standalone master PDF again.
   **Why:** The workflow PDF had only ranges, but the user subsequently populated the actual ledgers. Corresponding sales, stock and COGS accounts do not universally share matching numeric suffixes.
   **How to apply:** Validate explicit model/variant-to-account mappings against the live chart, including duty-free variants; never derive a stock or COGS account by replacing an income-account prefix. Revalidate saved AURA account names after chart changes.

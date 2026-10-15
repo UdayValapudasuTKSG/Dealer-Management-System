@@ -1,11 +1,14 @@
 import { pgTable, integer, serial, text, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 
 export type SalesAccountingConfigData = {
+  customerCharges?: { category: "registration" | "fuel" | "detailing"; incomeAccount: string; taxTreatment: "pending" | "taxable" | "exempt" | "zero_rated"; vatRate: number; amountIncludesVat: boolean; approved: boolean; approvalReference: string }[];
   accounts: { key: string; account: string }[];
   sources: { id: string; label: string; kind: "bank" | "cash" | "float" | "supplier"; account: string }[];
   models: { make: string; model: string; income: string; dutyFreeIncome: string; inventory: string; cogs: string; discount: string }[];
 };
 export type SalesAccountingInput = {
+  billingTreatment?: "dealer_paid" | "customer_billed";
+  customerChargeAmount?: number;
   stage: string;
   date: string;
   amount: number;

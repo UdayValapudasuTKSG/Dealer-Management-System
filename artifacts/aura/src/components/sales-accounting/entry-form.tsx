@@ -25,6 +25,8 @@ function toDraft(stage: string, e?: GetSalesAccountingWorkflow200EntriesItem): D
     amount: s(i?.amount),
     sourceId: s(i?.sourceId),
     expenseType: s(i?.expenseType),
+    billingTreatment: i?.billingTreatment ?? "dealer_paid",
+    customerChargeAmount: s(i?.customerChargeAmount),
     payerType: s(i?.payerType),
     reference: s(i?.reference),
     notes: s(i?.notes),
@@ -69,6 +71,7 @@ export function EntryForm({
 
   const has = (list: string[]) => list.includes(stage);
   const disabled = !canEdit || save.isPending;
+  const chargeRule = workflow.config.customerCharges?.find(r => r.category === d.expenseType);
 
   const submit = () => {
     const data: SalesAccountingEntryInput = {
@@ -80,7 +83,11 @@ export function EntryForm({
       notes: d.notes || undefined,
     };
     if (has(SOURCE_STAGES)) data.sourceId = d.sourceId || undefined;
-    if (stage === "VS-05") data.expenseType = d.expenseType || undefined;
+    if (stage === "VS-05") {
+      data.expenseType = d.expenseType || undefined;
+      data.billingTreatment = d.billingTreatment === "customer_billed" ? "customer_billed" : "dealer_paid";
+      if (data.billingTreatment === "customer_billed") data.customerChargeAmount = num(d.customerChargeAmount);
+    }
     if (stage === "VS-06") {
       data.invoiceId = num(d.invoiceId);
       data.discount = num(d.discount);
@@ -142,6 +149,21 @@ export function EntryForm({
             </select>
           </L>
         )}
+        {stage === "VS-05" && <>
+          <L label="Who bears this expense?"><select className={fieldCls} value={d.billingTreatment} disabled={disabled} onChange={e => set("billingTreatment", e.target.value)}>
+            <option value="dealer_paid">Dealer-paid — no customer charge</option>
+            <option value="customer_billed">Request separate customer charge</option>
+          </select></L>
+          {d.billingTreatment === "customer_billed" && <>
+            <L label="Customer charge (GYD)">{input("customerChargeAmount", "number", "0.00")}</L>
+            <p className="text-xs sm:col-span-2">
+              {chargeRule?.approved
+                ? `Category rule: ${chargeRule.taxTreatment === "taxable" ? `${chargeRule.vatRate}% VAT` : chargeRule.taxTreatment === "zero_rated" ? "Zero-rated" : "Exempt"} · Amount ${chargeRule.amountIncludesVat ? "includes" : "excludes"} VAT.`
+                : "Blocked: Finance has not approved this category's customer-charge rule."}
+            </p>
+            <p className="text-xs text-muted-foreground sm:col-span-2">The cost above remains a dealer expense. This separate customer charge requires an approved category rule and validated GL mappings. VAT-inclusive/exclusive treatment follows that rule. Saving never changes the customer's invoice or balance.</p>
+          </>}
+        </>}
         {stage === "VS-09" && (
           <L label="Payer">
             <select data-testid="select-payer" value={d.payerType} disabled={disabled} onChange={(e) => set("payerType", e.target.value)} className={fieldCls}>

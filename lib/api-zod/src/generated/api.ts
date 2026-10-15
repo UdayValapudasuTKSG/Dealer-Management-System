@@ -34,6 +34,15 @@ export const GetPartsIssuanceReportResponse = zod.object({
 
 
 export const GetSalesAccountingConfigResponse = zod.object({
+  "customerCharges": zod.array(zod.object({
+  "category": zod.enum(['registration', 'fuel', 'detailing']),
+  "incomeAccount": zod.string(),
+  "taxTreatment": zod.enum(['pending', 'taxable', 'exempt', 'zero_rated']),
+  "vatRate": zod.number(),
+  "amountIncludesVat": zod.boolean(),
+  "approved": zod.boolean(),
+  "approvalReference": zod.string()
+})).optional(),
   "eligible": zod.boolean(),
   "vatPolicy": zod.enum(['pending']),
   "revision": zod.number(),
@@ -72,6 +81,15 @@ export const GetSalesAccountingConfigResponse = zod.object({
 
 
 export const SaveSalesAccountingConfigBody = zod.object({
+  "customerCharges": zod.array(zod.object({
+  "category": zod.enum(['registration', 'fuel', 'detailing']),
+  "incomeAccount": zod.string(),
+  "taxTreatment": zod.enum(['pending', 'taxable', 'exempt', 'zero_rated']),
+  "vatRate": zod.number(),
+  "amountIncludesVat": zod.boolean(),
+  "approved": zod.boolean(),
+  "approvalReference": zod.string()
+})).optional(),
   "revision": zod.number(),
   "accounts": zod.array(zod.object({
   "key": zod.string(),
@@ -95,6 +113,15 @@ export const SaveSalesAccountingConfigBody = zod.object({
 })
 
 export const SaveSalesAccountingConfigResponse = zod.object({
+  "customerCharges": zod.array(zod.object({
+  "category": zod.enum(['registration', 'fuel', 'detailing']),
+  "incomeAccount": zod.string(),
+  "taxTreatment": zod.enum(['pending', 'taxable', 'exempt', 'zero_rated']),
+  "vatRate": zod.number(),
+  "amountIncludesVat": zod.boolean(),
+  "approved": zod.boolean(),
+  "approvalReference": zod.string()
+})).optional(),
   "eligible": zod.boolean(),
   "vatPolicy": zod.enum(['pending']),
   "revision": zod.number(),
@@ -133,6 +160,15 @@ export const SaveSalesAccountingConfigResponse = zod.object({
 
 
 export const ValidateSalesAccountingConfigResponse = zod.object({
+  "customerCharges": zod.array(zod.object({
+  "category": zod.enum(['registration', 'fuel', 'detailing']),
+  "incomeAccount": zod.string(),
+  "taxTreatment": zod.enum(['pending', 'taxable', 'exempt', 'zero_rated']),
+  "vatRate": zod.number(),
+  "amountIncludesVat": zod.boolean(),
+  "approved": zod.boolean(),
+  "approvalReference": zod.string()
+})).optional(),
   "eligible": zod.boolean(),
   "vatPolicy": zod.enum(['pending']),
   "revision": zod.number(),
@@ -197,6 +233,15 @@ export const GetSalesAccountingWorkflowResponse = zod.object({
   "vin": zod.string().optional()
 }),
   "config": zod.object({
+  "customerCharges": zod.array(zod.object({
+  "category": zod.enum(['registration', 'fuel', 'detailing']),
+  "incomeAccount": zod.string(),
+  "taxTreatment": zod.enum(['pending', 'taxable', 'exempt', 'zero_rated']),
+  "vatRate": zod.number(),
+  "amountIncludesVat": zod.boolean(),
+  "approved": zod.boolean(),
+  "approvalReference": zod.string()
+})).optional(),
   "eligible": zod.boolean(),
   "vatPolicy": zod.enum(['pending']),
   "revision": zod.number(),
@@ -236,6 +281,8 @@ export const GetSalesAccountingWorkflowResponse = zod.object({
   "id": zod.number(),
   "stage": zod.string(),
   "input": zod.object({
+  "billingTreatment": zod.enum(['dealer_paid', 'customer_billed']).optional(),
+  "customerChargeAmount": zod.number().optional(),
   "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
   "date": zod.string(),
   "amount": zod.number(),
@@ -289,6 +336,15 @@ export const StartSalesAccountingWorkflowResponse = zod.object({
   "vin": zod.string().optional()
 }),
   "config": zod.object({
+  "customerCharges": zod.array(zod.object({
+  "category": zod.enum(['registration', 'fuel', 'detailing']),
+  "incomeAccount": zod.string(),
+  "taxTreatment": zod.enum(['pending', 'taxable', 'exempt', 'zero_rated']),
+  "vatRate": zod.number(),
+  "amountIncludesVat": zod.boolean(),
+  "approved": zod.boolean(),
+  "approvalReference": zod.string()
+})).optional(),
   "eligible": zod.boolean(),
   "vatPolicy": zod.enum(['pending']),
   "revision": zod.number(),
@@ -328,6 +384,8 @@ export const StartSalesAccountingWorkflowResponse = zod.object({
   "id": zod.number(),
   "stage": zod.string(),
   "input": zod.object({
+  "billingTreatment": zod.enum(['dealer_paid', 'customer_billed']).optional(),
+  "customerChargeAmount": zod.number().optional(),
   "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
   "date": zod.string(),
   "amount": zod.number(),
@@ -371,6 +429,8 @@ export const SaveSalesAccountingEntryParams = zod.object({
 })
 
 export const SaveSalesAccountingEntryBody = zod.object({
+  "billingTreatment": zod.enum(['dealer_paid', 'customer_billed']).optional(),
+  "customerChargeAmount": zod.number().optional(),
   "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
   "date": zod.string(),
   "amount": zod.number(),
@@ -399,6 +459,15 @@ export const SaveSalesAccountingEntryResponse = zod.object({
   "vin": zod.string().optional()
 }),
   "config": zod.object({
+  "customerCharges": zod.array(zod.object({
+  "category": zod.enum(['registration', 'fuel', 'detailing']),
+  "incomeAccount": zod.string(),
+  "taxTreatment": zod.enum(['pending', 'taxable', 'exempt', 'zero_rated']),
+  "vatRate": zod.number(),
+  "amountIncludesVat": zod.boolean(),
+  "approved": zod.boolean(),
+  "approvalReference": zod.string()
+})).optional(),
   "eligible": zod.boolean(),
   "vatPolicy": zod.enum(['pending']),
   "revision": zod.number(),
@@ -438,6 +507,8 @@ export const SaveSalesAccountingEntryResponse = zod.object({
   "id": zod.number(),
   "stage": zod.string(),
   "input": zod.object({
+  "billingTreatment": zod.enum(['dealer_paid', 'customer_billed']).optional(),
+  "customerChargeAmount": zod.number().optional(),
   "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
   "date": zod.string(),
   "amount": zod.number(),
@@ -496,6 +567,15 @@ export const ReviewSalesAccountingEntryResponse = zod.object({
   "vin": zod.string().optional()
 }),
   "config": zod.object({
+  "customerCharges": zod.array(zod.object({
+  "category": zod.enum(['registration', 'fuel', 'detailing']),
+  "incomeAccount": zod.string(),
+  "taxTreatment": zod.enum(['pending', 'taxable', 'exempt', 'zero_rated']),
+  "vatRate": zod.number(),
+  "amountIncludesVat": zod.boolean(),
+  "approved": zod.boolean(),
+  "approvalReference": zod.string()
+})).optional(),
   "eligible": zod.boolean(),
   "vatPolicy": zod.enum(['pending']),
   "revision": zod.number(),
@@ -535,6 +615,8 @@ export const ReviewSalesAccountingEntryResponse = zod.object({
   "id": zod.number(),
   "stage": zod.string(),
   "input": zod.object({
+  "billingTreatment": zod.enum(['dealer_paid', 'customer_billed']).optional(),
+  "customerChargeAmount": zod.number().optional(),
   "stage": zod.enum(['VS-01', 'VS-02', 'VS-03', 'VS-04', 'VS-05', 'VS-06', 'VS-07', 'VS-08', 'VS-09', 'VS-10']),
   "date": zod.string(),
   "amount": zod.number(),

@@ -125,6 +125,19 @@ function ErrorRetry({ msg, onRetry }: { msg: string; onRetry: () => void }) {
   );
 }
 
+export function LeadSalesFinance({ dealId }: { dealId: number }) {
+  const { can, activeDealer } = useAuthz();
+  const config = useGetSalesAccountingConfig();
+  if (config.isLoading) return <p className="text-sm text-muted-foreground">Loading sales finance…</p>;
+  if (config.isError) return <ErrorRetry msg={apiErrorMessage(config.error)} onRetry={() => config.refetch()} />;
+  if (!config.data?.eligible) return null;
+  return <section className="space-y-3" aria-label="Sales finance workpapers">
+    <div className="flex justify-between items-center"><h2 className="font-semibold">Sales Finance</h2><Link href="/finance/sales-accounting/config" className="text-sm underline">Account & tax settings</Link></div>
+    <PreparationBanner />
+    <DealWorkpaper key={`${activeDealer?.dealerId}:${dealId}`} dealId={dealId} canEdit={can("finance", "edit")} canApprove={can("finance", "approve")} />
+  </section>;
+}
+
 function DealWorkpaper({ dealId, canEdit, canApprove }: { dealId: number; canEdit: boolean; canApprove: boolean }) {
   const wf = useGetSalesAccountingWorkflow(dealId, { query: { queryKey: getGetSalesAccountingWorkflowQueryKey(dealId), enabled: !!dealId } });
   if (wf.isLoading) return <div className="h-96 rounded-2xl bg-white/[0.05] animate-pulse" />;

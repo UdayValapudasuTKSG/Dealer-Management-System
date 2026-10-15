@@ -12208,6 +12208,10 @@ components:
       type: object
       required: [accounts, sources, models, revision]
       properties:
+        customerCharges:
+          type: array
+          items:
+            $ref: "./sales-accounting.yaml#/schemas/CustomerExpenseChargeRule"
         revision: { type: integer }
         accounts:
           type: array
@@ -12225,6 +12229,8 @@ components:
       type: object
       required: [stage, date, amount, revision]
       properties:
+        billingTreatment: { type: string, enum: [dealer_paid, customer_billed] }
+        customerChargeAmount: { type: number }
         stage: { type: string, enum: [VS-01, VS-02, VS-03, VS-04, VS-05, VS-06, VS-07, VS-08, VS-09, VS-10] }
         date: { type: string }
         amount: { type: number }

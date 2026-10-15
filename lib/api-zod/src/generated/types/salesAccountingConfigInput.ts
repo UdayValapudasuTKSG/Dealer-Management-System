@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SalesAccountingConfigInputAccountsItem } from './salesAccountingConfigInputAccountsItem';
+import type { SalesAccountingConfigInputCustomerChargesItem } from './salesAccountingConfigInputCustomerChargesItem';
 import type { SalesAccountingConfigInputModelsItem } from './salesAccountingConfigInputModelsItem';
 import type { SalesAccountingConfigInputSourcesItem } from './salesAccountingConfigInputSourcesItem';
 
 export interface SalesAccountingConfigInput {
+  customerCharges?: SalesAccountingConfigInputCustomerChargesItem[];
   revision: number;
   accounts: SalesAccountingConfigInputAccountsItem[];
   sources: SalesAccountingConfigInputSourcesItem[];

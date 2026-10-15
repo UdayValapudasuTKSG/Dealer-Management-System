@@ -7,12 +7,14 @@
  */
 import type { ReviewSalesAccountingEntry200ConfigAccountRolesItem } from './reviewSalesAccountingEntry200ConfigAccountRolesItem';
 import type { ReviewSalesAccountingEntry200ConfigAccountsItem } from './reviewSalesAccountingEntry200ConfigAccountsItem';
+import type { ReviewSalesAccountingEntry200ConfigCustomerChargesItem } from './reviewSalesAccountingEntry200ConfigCustomerChargesItem';
 import type { ReviewSalesAccountingEntry200ConfigModelsItem } from './reviewSalesAccountingEntry200ConfigModelsItem';
 import type { ReviewSalesAccountingEntry200ConfigSourcesItem } from './reviewSalesAccountingEntry200ConfigSourcesItem';
 import type { ReviewSalesAccountingEntry200ConfigValidation } from './reviewSalesAccountingEntry200ConfigValidation';
 import type { ReviewSalesAccountingEntry200ConfigVatPolicy } from './reviewSalesAccountingEntry200ConfigVatPolicy';
 
 export type ReviewSalesAccountingEntry200Config = {
+  customerCharges?: ReviewSalesAccountingEntry200ConfigCustomerChargesItem[];
   eligible: boolean;
   vatPolicy: ReviewSalesAccountingEntry200ConfigVatPolicy;
   revision: number;

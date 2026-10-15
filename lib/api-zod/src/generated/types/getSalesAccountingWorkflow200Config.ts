@@ -7,12 +7,14 @@
  */
 import type { GetSalesAccountingWorkflow200ConfigAccountRolesItem } from './getSalesAccountingWorkflow200ConfigAccountRolesItem';
 import type { GetSalesAccountingWorkflow200ConfigAccountsItem } from './getSalesAccountingWorkflow200ConfigAccountsItem';
+import type { GetSalesAccountingWorkflow200ConfigCustomerChargesItem } from './getSalesAccountingWorkflow200ConfigCustomerChargesItem';
 import type { GetSalesAccountingWorkflow200ConfigModelsItem } from './getSalesAccountingWorkflow200ConfigModelsItem';
 import type { GetSalesAccountingWorkflow200ConfigSourcesItem } from './getSalesAccountingWorkflow200ConfigSourcesItem';
 import type { GetSalesAccountingWorkflow200ConfigValidation } from './getSalesAccountingWorkflow200ConfigValidation';
 import type { GetSalesAccountingWorkflow200ConfigVatPolicy } from './getSalesAccountingWorkflow200ConfigVatPolicy';
 
 export type GetSalesAccountingWorkflow200Config = {
+  customerCharges?: GetSalesAccountingWorkflow200ConfigCustomerChargesItem[];
   eligible: boolean;
   vatPolicy: GetSalesAccountingWorkflow200ConfigVatPolicy;
   revision: number;

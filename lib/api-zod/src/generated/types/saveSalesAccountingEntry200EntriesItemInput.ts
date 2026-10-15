@@ -5,9 +5,12 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { SaveSalesAccountingEntry200EntriesItemInputBillingTreatment } from './saveSalesAccountingEntry200EntriesItemInputBillingTreatment';
 import type { SaveSalesAccountingEntry200EntriesItemInputStage } from './saveSalesAccountingEntry200EntriesItemInputStage';
 
 export type SaveSalesAccountingEntry200EntriesItemInput = {
+  billingTreatment?: SaveSalesAccountingEntry200EntriesItemInputBillingTreatment;
+  customerChargeAmount?: number;
   stage: SaveSalesAccountingEntry200EntriesItemInputStage;
   date: string;
   amount: number;

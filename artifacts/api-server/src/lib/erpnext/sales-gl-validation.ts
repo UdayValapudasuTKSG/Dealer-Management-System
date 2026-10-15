@@ -32,6 +32,9 @@ export function registerSalesGlValidation() {
         }
       }
       const cache = new Map<string, { company?: string; account_currency?: string; is_group?: number; disabled?: number; root_type?: string; account_type?: string }>();
+      for (const rule of row.config.customerCharges ?? []) {
+        if (rule.incomeAccount) checks.push({ label: `${rule.category} customer-charge income`, name: rule.incomeAccount, root: "Income" });
+      }
       for (const check of checks) {
         if (!check.name) { errors.push(`${check.label}: no account configured.`); continue; }
         try {
