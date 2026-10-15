@@ -12,7 +12,7 @@ Deals have NO manual stage control anywhere in the UI (by design). The only path
 
 **Why:** the deal PATCH route enforces one-step transitions, but no client sends stage patches; orchestration owns progression. Testing agents repeatedly wasted cycles looking for a stage picker on /deals or the lead rail.
 
-**How to apply:** to drive a deal to Delivered in tests, go through /finance (create app → sync to disbursed) then /deliveries (advance all 9 steps; PDI PATCH body key is `items`, steps need registrationNumber / appointmentAt / signatureName / feedbackRating).
+**How to apply:** Use the applicable finance/commitment orchestration, then complete the current ordered delivery checks. Read the current delivery-step definitions rather than assuming a fixed step count; new steps have been added since the original test guidance.
 
 ## Reopening steps (Aug 2026)
 POST /deliveries/:id/revert sets a completed/skipped step back to pending (pointer = earliest pending). Blocked once delivery.status=completed — handover side effects are irreversible. Design rules:
