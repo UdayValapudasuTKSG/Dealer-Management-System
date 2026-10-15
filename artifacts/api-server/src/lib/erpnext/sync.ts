@@ -233,9 +233,21 @@ export async function processQueue(dealerId?: number): Promise<void> {
           dealerId === undefined
             ? undefined
             : eq(erpnextSyncJobsTable.dealerId, dealerId),
+          // Filter BEFORE LIMIT: thousands of older jobs for disconnected
+          // dealers otherwise consume every batch without doing any work.
+          // Leave those jobs intact; enabling a connection makes them eligible.
+          sql`exists (
+            select 1 from erpnext_connections connection
+            where connection.dealer_id = ${erpnextSyncJobsTable.dealerId}
+              and connection.enabled = true
+          )`,
         ),
       )
-      .orderBy(asc(erpnextSyncJobsTable.createdAt))
+      .orderBy(
+        sql`case when ${erpnextSyncJobsTable.doctype} = 'AURA Sales GL Validation' then 0 else 1 end`,
+        asc(erpnextSyncJobsTable.createdAt),
+        asc(erpnextSyncJobsTable.id),
+      )
       .limit(BATCH_SIZE);
 
     // Per-dealer connection gate, checked once per batch.

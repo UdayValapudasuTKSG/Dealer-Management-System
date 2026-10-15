@@ -5,6 +5,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 
 - All ERPNext I/O goes through the durable sync-job queue and per-DocType handler registries (outbound + inbound) — never a direct ERPNext call inside a request path. **Why:** ERPNext may be unconfigured/unreachable and must never block or break AURA.
 - Jobs for a dealer without an enabled connection are parked and re-checked later WITHOUT consuming retry attempts; only real attempt failures count toward dead-letter. Non-retryable errors (auth, 404, non-JSON body) dead-letter immediately.
+- Exclude disconnected dealers before applying the queue batch limit; read-only GL validation must not wait behind the normal sync backlog.
+  **Why:** Thousands of unconnectable old jobs repeatedly filled batches, leaving connected-dealer validation unattempted for over a day. Per-job parking after selection does not prevent starvation.
+  **How to apply:** Preserve parked jobs for reconnection, gate candidates in SQL, and verify priority with a backlog containing multiple dealerships.
 - SSRF policy: the GM-supplied site URL is fetched with the API token attached, so it must be HTTPS, public-host-only (DNS re-resolved and private/metadata/CGNAT/ULA ranges rejected before EVERY fetch, not just at save), with redirects disabled. Dev stub servers need `ERPNEXT_ALLOW_PRIVATE_URLS=1` (non-prod only).
 - Inbound webhooks authenticate via a per-dealer shared secret header with timing-safe compare; the ERPNext webhook body template must include `doctype`/`name`/`event` — routing depends on it, unhandled DocTypes are recorded as "skipped".
 - Secrets exposure: API secret never returned; API key masked; webhook shared secret readable by GM/super-admin only (they must paste it into ERPNext). Connection writes are GM-only.
@@ -17,6 +20,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 
 ## Environment/company mapping
 ## Workflow document versus master accounts
+- The user wants finance inputs and manager approvals inside sales lead details: payment type, source, amount, registration/fuel/PDI costs, and customer-versus-financier balances.
+  **Why:** Finance should control the sale from its pipeline record rather than maintaining disconnected workpapers.
+  **How to apply:** Separate receipts from expenses, keep transaction-level approval and ERP posting status distinct, and retain the dummy-only rollout and pending advance-VAT restriction until explicitly changed.
 - The user supplied the expanded master account definitions directly in the connected ERPNext test company. Use the live account list to resolve model/brand accounts rather than requiring the missing standalone master PDF again.
   **Why:** The workflow PDF had only ranges, but the user subsequently populated the actual ledgers. Corresponding sales, stock and COGS accounts do not universally share matching numeric suffixes.
   **How to apply:** Validate explicit model/variant-to-account mappings against the live chart, including duty-free variants; never derive a stock or COGS account by replacing an income-account prefix. Revalidate saved AURA account names after chart changes.
