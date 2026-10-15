@@ -808,7 +808,10 @@ const PATH_MODULES: Record<string, RouteRule> = {
   },
   "sales-accounting": {
     module: "finance",
-    category: (req) => req.method === "GET" ? "view" : /\/review\/?$/.test(req.path) ? "approve" : "edit",
+    // Every POST/PUT maps explicitly: decisions, retries and workpaper review
+    // need finance:approve; request submission and config need finance:edit.
+    category: (req) => req.method === "GET" ? "view"
+      : /\/(review|decision|retry)\/?$/.test(req.path) ? "approve" : "edit",
   },
   "service-orders": {
     module: "service",

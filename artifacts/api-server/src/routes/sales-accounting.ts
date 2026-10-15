@@ -3,13 +3,14 @@ import { z } from "zod";
 import { and, eq, desc, sql, inArray } from "drizzle-orm";
 import {
   db, dealersTable, dealsTable, vehiclesTable, invoicesTable, paymentsTable, dealItemsTable, quotesTable,
-  erpnextRefsTable, erpnextSyncJobsTable, auditLogsTable, normalizeModelKey,
+  erpnextRefsTable, erpnextSyncJobsTable, erpnextConnectionsTable, auditLogsTable, normalizeModelKey,
   salesAccountingSettingsTable as settings, salesAccountingWorkflowsTable as workflows,
   salesAccountingEntriesTable as entries, type SalesAccountingInput,
 } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
 import { buildSalesPreview, EMPTY_SALES_CONFIG, SALES_STAGES, ACCOUNT_ROLES } from "../lib/sales-accounting-policy";
 import { fieldAccessFor } from "../lib/field-permissions";
+import { createRequest, decideRequest, retryRequest, dealFinanceSummary, listQueue, presentRequests, isPilotDealer, type Actor } from "../lib/sales-finance-requests";
 
 const router: IRouter = Router();
 const accountName = z.string().trim().max(180);
@@ -44,12 +45,8 @@ const inputSchema = z.object({
 function failure(message: string, status = 422): never {
   throw Object.assign(new Error(message), { status });
 }
-async function eligible(dealerId: number) {
-  const [dealer] = await db.select({ name: dealersTable.name }).from(dealersTable).where(eq(dealersTable.id, dealerId));
-  // Production scope is the explicitly approved dealer, not any renamed dealer.
-  return (process.env.NODE_ENV !== "production" || dealerId === 2) &&
-    dealer?.name.trim().toLowerCase() === "cam motors dummy";
-}
+// Production scope is the explicitly approved dealer, not any renamed dealer.
+const eligible = isPilotDealer;
 async function configResponse(dealerId: number) {
   const [row] = await db.select().from(settings).where(eq(settings.dealerId, dealerId));
   return { eligible: await eligible(dealerId), vatPolicy: "pending", revision: row?.revision ?? 0,
@@ -149,6 +146,11 @@ router.put("/sales-accounting/config", async (req, res) => {
 
 router.post("/sales-accounting/validate", async (_req, res) => {
   const dealerId = activeDealerId(res);
+  // Refuse upfront rather than queueing a check no worker can run. Never
+  // reconnects or unpauses; an already-queued state stays until retried.
+  const [conn] = await db.select({ enabled: erpnextConnectionsTable.enabled }).from(erpnextConnectionsTable).where(eq(erpnextConnectionsTable.dealerId, dealerId));
+  if (!conn) { res.status(409).json({ error: "ERPNext is not connected for this dealership. Ask an administrator to connect it in Settings → ERPNext, then run validation again." }); return; }
+  if (!conn.enabled) { res.status(409).json({ error: "The ERPNext connection is paused. Validation was not queued. Resume the connection in Settings → ERPNext when Finance approves, then run validation again." }); return; }
   await db.transaction(async tx => {
     const [row] = await tx.select().from(settings).where(eq(settings.dealerId, dealerId)).for("update");
     if (!row) failure("Save the configuration first");
@@ -280,6 +282,58 @@ router.post("/sales-accounting/deals/:dealId/review", async (req, res) => {
   });
   res.json(await workflowResponse(dealerId, dealId));
 });
+// ————————————————————————————— Operational sales finance requests ——
+const decimal = z.string().trim().regex(/^\d{1,12}(\.\d{1,2})?$/, "Use a positive amount with at most two decimals");
+const requestSchema = z.object({
+  kind: z.enum(["invoice", "payment", "expense"]),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  amount: decimal,
+  invoiceId: z.number().int().positive().optional(),
+  legacyPaymentId: z.number().int().positive().optional(),
+  category: z.enum(["registration", "fuel", "detailing"]).optional(),
+  paymentMethod: z.enum(["cash", "bank_transfer", "cheque", "card", "mobile_money"]).optional(),
+  sourceId: z.string().trim().max(60).optional(),
+  payerType: z.enum(["customer", "financier"]).optional(),
+  reference: z.string().trim().min(1).max(250),
+  evidence: z.string().trim().max(1000).optional(),
+  billingTreatment: z.enum(["dealer_paid", "customer_billed"]).optional(),
+  customerCharge: decimal.optional(),
+}).strict();
+const decisionSchema = z.object({ decision: z.enum(["approve", "reject"]), reason: z.string().trim().max(1000).optional() }).strict();
+function actorFrom(res: import("express").Response): Actor {
+  const u = res.locals.user!;
+  const has = (c: string) => u.permissions.some(p => p.module === "finance" && p.category === c);
+  return { id: u.id, name: u.name ?? u.email ?? `User #${u.id}`, canEdit: has("edit"), canApprove: has("approve") };
+}
+router.get("/sales-accounting/deals/:dealId/requests", async (req, res) => {
+  const dealerId = activeDealerId(res), dealId = z.coerce.number().int().positive().parse(req.params.dealId);
+  if (!(await eligible(dealerId))) failure("Workflow unavailable for this dealership", 404);
+  res.json(await dealFinanceSummary(dealerId, dealId));
+});
+router.post("/sales-accounting/deals/:dealId/requests", async (req, res) => {
+  const dealerId = activeDealerId(res), dealId = z.coerce.number().int().positive().parse(req.params.dealId);
+  const body = requestSchema.parse(req.body);
+  await createRequest(dealerId, dealId, actorFrom(res), body);
+  res.status(201).json(await dealFinanceSummary(dealerId, dealId));
+});
+router.get("/sales-accounting/requests", async (req, res) => {
+  const dealerId = activeDealerId(res);
+  if (!(await eligible(dealerId))) { res.json([]); return; }
+  const status = z.enum(["pending", "approved", "posting", "posted", "rejected", "failed", "blocked"]).optional().parse(req.query.status || undefined);
+  res.json(await listQueue(dealerId, status));
+});
+router.post("/sales-accounting/requests/:requestId/decision", async (req, res) => {
+  const dealerId = activeDealerId(res), id = z.coerce.number().int().positive().parse(req.params.requestId);
+  const body = decisionSchema.parse(req.body);
+  const row = await decideRequest(dealerId, id, actorFrom(res), body.decision, body.reason);
+  res.json((await presentRequests(dealerId, [row]))[0]);
+});
+router.post("/sales-accounting/requests/:requestId/retry", async (req, res) => {
+  const dealerId = activeDealerId(res), id = z.coerce.number().int().positive().parse(req.params.requestId);
+  const row = await retryRequest(dealerId, id, actorFrom(res));
+  res.json((await presentRequests(dealerId, [row]))[0]);
+});
+
 router.use("/sales-accounting", (err: unknown, _req: unknown, res: import("express").Response, next: import("express").NextFunction) => {
   if (err instanceof z.ZodError) { res.status(400).json({ error: err.message }); return; }
   if (err instanceof Error && "status" in err && typeof err.status === "number") { res.status(err.status).json({ error: err.message }); return; }

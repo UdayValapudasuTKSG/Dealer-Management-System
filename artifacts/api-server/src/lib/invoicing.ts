@@ -20,6 +20,7 @@ import {
 import { computeTaxes, ensureDealerTaxes } from "./taxes";
 import { ensureAccountForLead } from "./accounts";
 import { logger } from "./logger";
+import { isPilotSalesInvoice } from "./sales-finance-boundary";
 import { suppressesCustomerCommunications } from "./delivery-import-provenance";
 import { enqueueEmail, enqueueWhatsapp, notifyUsers } from "./email";
 import { generalManagers } from "./notify-matrix";
@@ -237,6 +238,9 @@ export async function applyPartsDepositCredit(
   }
   const prior = await tx.execute(sql`SELECT id FROM parts_deposit_allocations WHERE dealer_id=${args.dealerId} AND invoice_id=${args.invoiceId}`);
   if (prior.rows.length) throw Object.assign(new Error("Deposit credit already applied"), { status: 409 });
+  if (await isPilotSalesInvoice(tx, target)) {
+    throw Object.assign(new Error("Sales finance pilot: deposit credits on vehicle sales go through the Sales Finance desk"), { status: 409 });
+  }
   const totals = await tx.select({ invoiceId: paymentsTable.invoiceId, paid: sql<number>`coalesce(sum(${paymentsTable.amount}),0)::float` })
     .from(paymentsTable).where(and(eq(paymentsTable.dealerId, args.dealerId), inArray(paymentsTable.invoiceId, [deposit.id, target.id])))
     .groupBy(paymentsTable.invoiceId);
@@ -274,6 +278,9 @@ export type ApplyPaymentArgs = {
   /** L9: refund_release gate id — stamped on the ledger row inside the tx;
    * a partial unique index guarantees at most one refund per gate. */
   gateId?: number | null;
+  /** false only for Finance-approved sales-finance requests, whose own durable
+   * posting job creates the Payment Entry (prevents a second legacy job). */
+  erpSync?: boolean;
 };
 
 /**
@@ -288,7 +295,8 @@ export class PaymentGuardError extends Error {
       | "reversal_exceeds_paid"
       | "overpayment"
       | "duplicate_reference"
-      | "refund_already_recorded",
+      | "refund_already_recorded"
+      | "sales_finance_approval_required",
     public extra: Record<string, unknown> = {},
   ) {
     super(code);
@@ -330,6 +338,14 @@ export async function applyPayment(args: ApplyPaymentArgs) {
       .for("update");
     if (!locked || locked.status === "void") {
       throw new PaymentGuardError("invoice_void");
+    }
+    // Sales finance pilot boundary: every receipt path (Finance form, booking
+    // conversion, financing gates, imports) is refused for enrolled deals.
+    // Only the approved sales-finance posting (erpSync:false) may record one.
+    // Dealer-wide for pilot SALES invoices, enrolled or not; service/parts
+    // invoices and other dealers are unaffected.
+    if (args.erpSync !== false && await isPilotSalesInvoice(tx, locked)) {
+      throw new PaymentGuardError("sales_finance_approval_required");
     }
     const isReversal = args.amount < 0;
     if (locked.status === "paid" && !isReversal) {
@@ -519,7 +535,7 @@ export async function applyPayment(args: ApplyPaymentArgs) {
 
   // ERPNext accounting sync: post the ledger row as a Payment Entry
   // allocated against the mapped Sales Invoice (refunds post as Pay).
-  queuePaymentSync(invoice.dealerId, result.payment.id);
+  if (args.erpSync !== false) queuePaymentSync(invoice.dealerId, result.payment.id);
 
   // Post-commit: first full settlement of a reservation invoice soft-locks
   // one matching VIN per requested deal-item unit (all-or-nothing; its own

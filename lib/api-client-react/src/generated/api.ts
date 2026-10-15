@@ -320,6 +320,7 @@ import type {
   ListPlatformAuditParams,
   ListReviewsParams,
   ListSalesAccountingDeals200Item,
+  ListSalesFinanceRequestsParams,
   ListServiceInvoicesParams,
   ListServiceOrdersParams,
   ListTasksParams,
@@ -444,6 +445,10 @@ import type {
   SalesAccountingConfigInput,
   SalesAccountingEntryInput,
   SalesAccountingReviewInput,
+  SalesFinanceDecisionInput,
+  SalesFinanceDesk,
+  SalesFinanceRequest,
+  SalesFinanceRequestInput,
   SalesPerformance,
   SaveSalesAccountingConfig200,
   SaveSalesAccountingEntry200,
@@ -1090,6 +1095,352 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getStartSalesAccountingWorkflowMutationOptions(options));
+    }
+
+export const getGetSalesFinanceDeskUrl = (dealId: number,) => {
+
+
+
+
+  return `/api/sales-accounting/deals/${dealId}/requests`
+}
+
+export const getSalesFinanceDesk = async (dealId: number, options?: RequestInit): Promise<SalesFinanceDesk> => {
+
+  return customFetch<SalesFinanceDesk>(getGetSalesFinanceDeskUrl(dealId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSalesFinanceDeskQueryKey = (dealId: number,) => {
+    return [
+    `/api/sales-accounting/deals/${dealId}/requests`
+    ] as const;
+    }
+
+
+export const getGetSalesFinanceDeskQueryOptions = <TData = Awaited<ReturnType<typeof getSalesFinanceDesk>>, TError = ErrorType<unknown>>(dealId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSalesFinanceDesk>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSalesFinanceDeskQueryKey(dealId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalesFinanceDesk>>> = ({ signal }) => getSalesFinanceDesk(dealId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: dealId !== null && dealId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSalesFinanceDesk>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSalesFinanceDeskQueryResult = NonNullable<Awaited<ReturnType<typeof getSalesFinanceDesk>>>
+export type GetSalesFinanceDeskQueryError = ErrorType<unknown>
+
+
+
+export function useGetSalesFinanceDesk<TData = Awaited<ReturnType<typeof getSalesFinanceDesk>>, TError = ErrorType<unknown>>(
+ dealId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSalesFinanceDesk>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSalesFinanceDeskQueryOptions(dealId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateSalesFinanceRequestUrl = (dealId: number,) => {
+
+
+
+
+  return `/api/sales-accounting/deals/${dealId}/requests`
+}
+
+export const createSalesFinanceRequest = async (dealId: number,
+    salesFinanceRequestInput: SalesFinanceRequestInput, options?: RequestInit): Promise<SalesFinanceDesk> => {
+
+  return customFetch<SalesFinanceDesk>(getCreateSalesFinanceRequestUrl(dealId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(salesFinanceRequestInput)
+  }
+);}
+
+
+
+
+
+export const getCreateSalesFinanceRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSalesFinanceRequest>>, TError,{dealId: number;data: BodyType<SalesFinanceRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSalesFinanceRequest>>, TError,{dealId: number;data: BodyType<SalesFinanceRequestInput>}, TContext> => {
+
+const mutationKey = ['createSalesFinanceRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSalesFinanceRequest>>, {dealId: number;data: BodyType<SalesFinanceRequestInput>}> = (props) => {
+          const {dealId,data} = props ?? {};
+
+          return  createSalesFinanceRequest(dealId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSalesFinanceRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createSalesFinanceRequest>>>
+    export type CreateSalesFinanceRequestMutationBody = BodyType<SalesFinanceRequestInput>
+    export type CreateSalesFinanceRequestMutationError = ErrorType<unknown>
+
+    export const useCreateSalesFinanceRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSalesFinanceRequest>>, TError,{dealId: number;data: BodyType<SalesFinanceRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSalesFinanceRequest>>,
+        TError,
+        {dealId: number;data: BodyType<SalesFinanceRequestInput>},
+        TContext
+      > => {
+      return useMutation(getCreateSalesFinanceRequestMutationOptions(options));
+    }
+
+export const getListSalesFinanceRequestsUrl = (params?: ListSalesFinanceRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/sales-accounting/requests?${stringifiedParams}` : `/api/sales-accounting/requests`
+}
+
+export const listSalesFinanceRequests = async (params?: ListSalesFinanceRequestsParams, options?: RequestInit): Promise<SalesFinanceRequest[]> => {
+
+  return customFetch<SalesFinanceRequest[]>(getListSalesFinanceRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSalesFinanceRequestsQueryKey = (params?: ListSalesFinanceRequestsParams,) => {
+    return [
+    `/api/sales-accounting/requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListSalesFinanceRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listSalesFinanceRequests>>, TError = ErrorType<unknown>>(params?: ListSalesFinanceRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSalesFinanceRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSalesFinanceRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSalesFinanceRequests>>> = ({ signal }) => listSalesFinanceRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSalesFinanceRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSalesFinanceRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listSalesFinanceRequests>>>
+export type ListSalesFinanceRequestsQueryError = ErrorType<unknown>
+
+
+
+export function useListSalesFinanceRequests<TData = Awaited<ReturnType<typeof listSalesFinanceRequests>>, TError = ErrorType<unknown>>(
+ params?: ListSalesFinanceRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSalesFinanceRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSalesFinanceRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecideSalesFinanceRequestUrl = (requestId: number,) => {
+
+
+
+
+  return `/api/sales-accounting/requests/${requestId}/decision`
+}
+
+export const decideSalesFinanceRequest = async (requestId: number,
+    salesFinanceDecisionInput: SalesFinanceDecisionInput, options?: RequestInit): Promise<SalesFinanceRequest> => {
+
+  return customFetch<SalesFinanceRequest>(getDecideSalesFinanceRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(salesFinanceDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getDecideSalesFinanceRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideSalesFinanceRequest>>, TError,{requestId: number;data: BodyType<SalesFinanceDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideSalesFinanceRequest>>, TError,{requestId: number;data: BodyType<SalesFinanceDecisionInput>}, TContext> => {
+
+const mutationKey = ['decideSalesFinanceRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideSalesFinanceRequest>>, {requestId: number;data: BodyType<SalesFinanceDecisionInput>}> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  decideSalesFinanceRequest(requestId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideSalesFinanceRequestMutationResult = NonNullable<Awaited<ReturnType<typeof decideSalesFinanceRequest>>>
+    export type DecideSalesFinanceRequestMutationBody = BodyType<SalesFinanceDecisionInput>
+    export type DecideSalesFinanceRequestMutationError = ErrorType<unknown>
+
+    export const useDecideSalesFinanceRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideSalesFinanceRequest>>, TError,{requestId: number;data: BodyType<SalesFinanceDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideSalesFinanceRequest>>,
+        TError,
+        {requestId: number;data: BodyType<SalesFinanceDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getDecideSalesFinanceRequestMutationOptions(options));
+    }
+
+export const getRetrySalesFinanceRequestUrl = (requestId: number,) => {
+
+
+
+
+  return `/api/sales-accounting/requests/${requestId}/retry`
+}
+
+export const retrySalesFinanceRequest = async (requestId: number, options?: RequestInit): Promise<SalesFinanceRequest> => {
+
+  return customFetch<SalesFinanceRequest>(getRetrySalesFinanceRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetrySalesFinanceRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retrySalesFinanceRequest>>, TError,{requestId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retrySalesFinanceRequest>>, TError,{requestId: number}, TContext> => {
+
+const mutationKey = ['retrySalesFinanceRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retrySalesFinanceRequest>>, {requestId: number}> = (props) => {
+          const {requestId} = props ?? {};
+
+          return  retrySalesFinanceRequest(requestId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetrySalesFinanceRequestMutationResult = NonNullable<Awaited<ReturnType<typeof retrySalesFinanceRequest>>>
+
+    export type RetrySalesFinanceRequestMutationError = ErrorType<unknown>
+
+    export const useRetrySalesFinanceRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retrySalesFinanceRequest>>, TError,{requestId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retrySalesFinanceRequest>>,
+        TError,
+        {requestId: number},
+        TContext
+      > => {
+      return useMutation(getRetrySalesFinanceRequestMutationOptions(options));
     }
 
 export const getSaveSalesAccountingEntryUrl = (dealId: number,) => {

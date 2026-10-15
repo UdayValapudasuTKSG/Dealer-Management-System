@@ -424,6 +424,393 @@ export const StartSalesAccountingWorkflowResponse = zod.object({
 })
 
 
+export const GetSalesFinanceDeskParams = zod.object({
+  "dealId": zod.coerce.number()
+})
+
+export const GetSalesFinanceDeskResponse = zod.object({
+  "deal": zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "stage": zod.string(),
+  "enrolled": zod.boolean(),
+  "vehicle": zod.string(),
+  "vin": zod.string()
+}),
+  "totals": zod.object({
+  "invoicedCents": zod.number(),
+  "paidCents": zod.number(),
+  "outstandingCents": zod.number(),
+  "pendingInvoiceCents": zod.number(),
+  "pendingPaymentCents": zod.number(),
+  "pendingExpenseCents": zod.number(),
+  "postedExpenseCents": zod.number()
+}),
+  "invoices": zod.array(zod.object({
+  "id": zod.number(),
+  "invoiceNumber": zod.string(),
+  "kind": zod.string(),
+  "status": zod.string(),
+  "amountCents": zod.number(),
+  "paidCents": zod.number(),
+  "erpPosted": zod.boolean()
+})),
+  "payments": zod.array(zod.object({
+  "id": zod.number(),
+  "invoiceId": zod.number(),
+  "amountCents": zod.number(),
+  "method": zod.string(),
+  "reference": zod.string()
+})),
+  "requests": zod.array(zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "invoiceId": zod.number().nullish(),
+  "kind": zod.enum(['invoice', 'payment', 'expense']),
+  "category": zod.string().nullish(),
+  "date": zod.string(),
+  "amountCents": zod.number(),
+  "paymentMethod": zod.string().nullish(),
+  "sourceId": zod.string().nullish(),
+  "sourceLabel": zod.string().nullish(),
+  "sourceKind": zod.string().nullish(),
+  "payerType": zod.string().nullish(),
+  "reference": zod.string(),
+  "evidence": zod.string().nullish(),
+  "billingTreatment": zod.string().nullish(),
+  "customerChargeCents": zod.number().nullish(),
+  "legacyPaymentId": zod.number().nullish(),
+  "invoiceNumber": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "stale": zod.boolean(),
+  "configRevision": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'posting', 'posted', 'rejected', 'failed', 'blocked']),
+  "requestedBy": zod.number(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.string(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedByName": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "paymentId": zod.number().nullish(),
+  "chargeInvoiceId": zod.number().nullish(),
+  "erpJobId": zod.number().nullish(),
+  "erpDoctype": zod.string().nullish(),
+  "erpDocName": zod.string().nullish(),
+  "erpRemoteKey": zod.string().nullish(),
+  "postAttempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "postedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "id": zod.number(),
+  "action": zod.string(),
+  "summary": zod.string(),
+  "actorName": zod.string(),
+  "at": zod.string()
+}))
+}))
+})
+
+
+export const CreateSalesFinanceRequestParams = zod.object({
+  "dealId": zod.coerce.number()
+})
+
+export const CreateSalesFinanceRequestBody = zod.object({
+  "kind": zod.enum(['invoice', 'payment', 'expense']),
+  "date": zod.string(),
+  "amount": zod.string().describe('Exact decimal, max two places'),
+  "invoiceId": zod.number().optional(),
+  "legacyPaymentId": zod.number().optional(),
+  "category": zod.enum(['registration', 'fuel', 'detailing']).optional(),
+  "paymentMethod": zod.enum(['cash', 'bank_transfer', 'cheque', 'card', 'mobile_money']).optional(),
+  "sourceId": zod.string().optional(),
+  "payerType": zod.enum(['customer', 'financier']).optional(),
+  "reference": zod.string(),
+  "evidence": zod.string().optional(),
+  "billingTreatment": zod.enum(['dealer_paid', 'customer_billed']).optional(),
+  "customerCharge": zod.string().optional()
+})
+
+export const CreateSalesFinanceRequestResponse = zod.object({
+  "deal": zod.object({
+  "id": zod.number(),
+  "customerName": zod.string(),
+  "stage": zod.string(),
+  "enrolled": zod.boolean(),
+  "vehicle": zod.string(),
+  "vin": zod.string()
+}),
+  "totals": zod.object({
+  "invoicedCents": zod.number(),
+  "paidCents": zod.number(),
+  "outstandingCents": zod.number(),
+  "pendingInvoiceCents": zod.number(),
+  "pendingPaymentCents": zod.number(),
+  "pendingExpenseCents": zod.number(),
+  "postedExpenseCents": zod.number()
+}),
+  "invoices": zod.array(zod.object({
+  "id": zod.number(),
+  "invoiceNumber": zod.string(),
+  "kind": zod.string(),
+  "status": zod.string(),
+  "amountCents": zod.number(),
+  "paidCents": zod.number(),
+  "erpPosted": zod.boolean()
+})),
+  "payments": zod.array(zod.object({
+  "id": zod.number(),
+  "invoiceId": zod.number(),
+  "amountCents": zod.number(),
+  "method": zod.string(),
+  "reference": zod.string()
+})),
+  "requests": zod.array(zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "invoiceId": zod.number().nullish(),
+  "kind": zod.enum(['invoice', 'payment', 'expense']),
+  "category": zod.string().nullish(),
+  "date": zod.string(),
+  "amountCents": zod.number(),
+  "paymentMethod": zod.string().nullish(),
+  "sourceId": zod.string().nullish(),
+  "sourceLabel": zod.string().nullish(),
+  "sourceKind": zod.string().nullish(),
+  "payerType": zod.string().nullish(),
+  "reference": zod.string(),
+  "evidence": zod.string().nullish(),
+  "billingTreatment": zod.string().nullish(),
+  "customerChargeCents": zod.number().nullish(),
+  "legacyPaymentId": zod.number().nullish(),
+  "invoiceNumber": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "stale": zod.boolean(),
+  "configRevision": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'posting', 'posted', 'rejected', 'failed', 'blocked']),
+  "requestedBy": zod.number(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.string(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedByName": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "paymentId": zod.number().nullish(),
+  "chargeInvoiceId": zod.number().nullish(),
+  "erpJobId": zod.number().nullish(),
+  "erpDoctype": zod.string().nullish(),
+  "erpDocName": zod.string().nullish(),
+  "erpRemoteKey": zod.string().nullish(),
+  "postAttempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "postedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "id": zod.number(),
+  "action": zod.string(),
+  "summary": zod.string(),
+  "actorName": zod.string(),
+  "at": zod.string()
+}))
+}))
+})
+
+
+export const ListSalesFinanceRequestsQueryParams = zod.object({
+  "status": zod.enum(['pending', 'approved', 'posting', 'posted', 'rejected', 'failed', 'blocked']).optional()
+})
+
+export const ListSalesFinanceRequestsResponseItem = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "invoiceId": zod.number().nullish(),
+  "kind": zod.enum(['invoice', 'payment', 'expense']),
+  "category": zod.string().nullish(),
+  "date": zod.string(),
+  "amountCents": zod.number(),
+  "paymentMethod": zod.string().nullish(),
+  "sourceId": zod.string().nullish(),
+  "sourceLabel": zod.string().nullish(),
+  "sourceKind": zod.string().nullish(),
+  "payerType": zod.string().nullish(),
+  "reference": zod.string(),
+  "evidence": zod.string().nullish(),
+  "billingTreatment": zod.string().nullish(),
+  "customerChargeCents": zod.number().nullish(),
+  "legacyPaymentId": zod.number().nullish(),
+  "invoiceNumber": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "stale": zod.boolean(),
+  "configRevision": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'posting', 'posted', 'rejected', 'failed', 'blocked']),
+  "requestedBy": zod.number(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.string(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedByName": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "paymentId": zod.number().nullish(),
+  "chargeInvoiceId": zod.number().nullish(),
+  "erpJobId": zod.number().nullish(),
+  "erpDoctype": zod.string().nullish(),
+  "erpDocName": zod.string().nullish(),
+  "erpRemoteKey": zod.string().nullish(),
+  "postAttempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "postedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "id": zod.number(),
+  "action": zod.string(),
+  "summary": zod.string(),
+  "actorName": zod.string(),
+  "at": zod.string()
+}))
+})
+export const ListSalesFinanceRequestsResponse = zod.array(ListSalesFinanceRequestsResponseItem)
+
+
+export const DecideSalesFinanceRequestParams = zod.object({
+  "requestId": zod.coerce.number()
+})
+
+export const DecideSalesFinanceRequestBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "reason": zod.string().optional()
+})
+
+export const DecideSalesFinanceRequestResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "invoiceId": zod.number().nullish(),
+  "kind": zod.enum(['invoice', 'payment', 'expense']),
+  "category": zod.string().nullish(),
+  "date": zod.string(),
+  "amountCents": zod.number(),
+  "paymentMethod": zod.string().nullish(),
+  "sourceId": zod.string().nullish(),
+  "sourceLabel": zod.string().nullish(),
+  "sourceKind": zod.string().nullish(),
+  "payerType": zod.string().nullish(),
+  "reference": zod.string(),
+  "evidence": zod.string().nullish(),
+  "billingTreatment": zod.string().nullish(),
+  "customerChargeCents": zod.number().nullish(),
+  "legacyPaymentId": zod.number().nullish(),
+  "invoiceNumber": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "stale": zod.boolean(),
+  "configRevision": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'posting', 'posted', 'rejected', 'failed', 'blocked']),
+  "requestedBy": zod.number(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.string(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedByName": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "paymentId": zod.number().nullish(),
+  "chargeInvoiceId": zod.number().nullish(),
+  "erpJobId": zod.number().nullish(),
+  "erpDoctype": zod.string().nullish(),
+  "erpDocName": zod.string().nullish(),
+  "erpRemoteKey": zod.string().nullish(),
+  "postAttempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "postedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "id": zod.number(),
+  "action": zod.string(),
+  "summary": zod.string(),
+  "actorName": zod.string(),
+  "at": zod.string()
+}))
+})
+
+
+export const RetrySalesFinanceRequestParams = zod.object({
+  "requestId": zod.coerce.number()
+})
+
+export const RetrySalesFinanceRequestResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "invoiceId": zod.number().nullish(),
+  "kind": zod.enum(['invoice', 'payment', 'expense']),
+  "category": zod.string().nullish(),
+  "date": zod.string(),
+  "amountCents": zod.number(),
+  "paymentMethod": zod.string().nullish(),
+  "sourceId": zod.string().nullish(),
+  "sourceLabel": zod.string().nullish(),
+  "sourceKind": zod.string().nullish(),
+  "payerType": zod.string().nullish(),
+  "reference": zod.string(),
+  "evidence": zod.string().nullish(),
+  "billingTreatment": zod.string().nullish(),
+  "customerChargeCents": zod.number().nullish(),
+  "legacyPaymentId": zod.number().nullish(),
+  "invoiceNumber": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "account": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "purpose": zod.string()
+})),
+  "blockers": zod.array(zod.string()),
+  "stale": zod.boolean(),
+  "configRevision": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'posting', 'posted', 'rejected', 'failed', 'blocked']),
+  "requestedBy": zod.number(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.string(),
+  "reviewedBy": zod.number().nullish(),
+  "reviewedByName": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "paymentId": zod.number().nullish(),
+  "chargeInvoiceId": zod.number().nullish(),
+  "erpJobId": zod.number().nullish(),
+  "erpDoctype": zod.string().nullish(),
+  "erpDocName": zod.string().nullish(),
+  "erpRemoteKey": zod.string().nullish(),
+  "postAttempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "postedAt": zod.string().nullish(),
+  "audit": zod.array(zod.object({
+  "id": zod.number(),
+  "action": zod.string(),
+  "summary": zod.string(),
+  "actorName": zod.string(),
+  "at": zod.string()
+}))
+})
+
+
 export const SaveSalesAccountingEntryParams = zod.object({
   "dealId": zod.coerce.number()
 })

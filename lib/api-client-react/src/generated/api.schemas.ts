@@ -118,6 +118,206 @@ export interface SalesAccountingEntryInput {
   costEvidence?: string;
 }
 
+export type SalesFinanceRequestStatus = typeof SalesFinanceRequestStatus[keyof typeof SalesFinanceRequestStatus];
+
+
+export const SalesFinanceRequestStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  posting: 'posting',
+  posted: 'posted',
+  rejected: 'rejected',
+  failed: 'failed',
+  blocked: 'blocked',
+} as const;
+
+export type SalesFinanceRequestInputKind = typeof SalesFinanceRequestInputKind[keyof typeof SalesFinanceRequestInputKind];
+
+
+export const SalesFinanceRequestInputKind = {
+  invoice: 'invoice',
+  payment: 'payment',
+  expense: 'expense',
+} as const;
+
+export type SalesFinanceRequestInputCategory = typeof SalesFinanceRequestInputCategory[keyof typeof SalesFinanceRequestInputCategory];
+
+
+export const SalesFinanceRequestInputCategory = {
+  registration: 'registration',
+  fuel: 'fuel',
+  detailing: 'detailing',
+} as const;
+
+export type SalesFinanceRequestInputPaymentMethod = typeof SalesFinanceRequestInputPaymentMethod[keyof typeof SalesFinanceRequestInputPaymentMethod];
+
+
+export const SalesFinanceRequestInputPaymentMethod = {
+  cash: 'cash',
+  bank_transfer: 'bank_transfer',
+  cheque: 'cheque',
+  card: 'card',
+  mobile_money: 'mobile_money',
+} as const;
+
+export type SalesFinanceRequestInputPayerType = typeof SalesFinanceRequestInputPayerType[keyof typeof SalesFinanceRequestInputPayerType];
+
+
+export const SalesFinanceRequestInputPayerType = {
+  customer: 'customer',
+  financier: 'financier',
+} as const;
+
+export type SalesFinanceRequestInputBillingTreatment = typeof SalesFinanceRequestInputBillingTreatment[keyof typeof SalesFinanceRequestInputBillingTreatment];
+
+
+export const SalesFinanceRequestInputBillingTreatment = {
+  dealer_paid: 'dealer_paid',
+  customer_billed: 'customer_billed',
+} as const;
+
+export interface SalesFinanceRequestInput {
+  kind: SalesFinanceRequestInputKind;
+  date: string;
+  /** Exact decimal, max two places */
+  amount: string;
+  invoiceId?: number;
+  legacyPaymentId?: number;
+  category?: SalesFinanceRequestInputCategory;
+  paymentMethod?: SalesFinanceRequestInputPaymentMethod;
+  sourceId?: string;
+  payerType?: SalesFinanceRequestInputPayerType;
+  reference: string;
+  evidence?: string;
+  billingTreatment?: SalesFinanceRequestInputBillingTreatment;
+  customerCharge?: string;
+}
+
+export type SalesFinanceDecisionInputDecision = typeof SalesFinanceDecisionInputDecision[keyof typeof SalesFinanceDecisionInputDecision];
+
+
+export const SalesFinanceDecisionInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface SalesFinanceDecisionInput {
+  decision: SalesFinanceDecisionInputDecision;
+  reason?: string;
+}
+
+export interface SalesFinanceGlLine {
+  account: string;
+  debit: number;
+  credit: number;
+  purpose: string;
+}
+
+export interface SalesFinanceAuditEntry {
+  id: number;
+  action: string;
+  summary: string;
+  actorName: string;
+  at: string;
+}
+
+export type SalesFinanceRequestKind = typeof SalesFinanceRequestKind[keyof typeof SalesFinanceRequestKind];
+
+
+export const SalesFinanceRequestKind = {
+  invoice: 'invoice',
+  payment: 'payment',
+  expense: 'expense',
+} as const;
+
+export interface SalesFinanceRequest {
+  id: number;
+  dealId: number;
+  invoiceId?: number | null;
+  kind: SalesFinanceRequestKind;
+  category?: string | null;
+  date: string;
+  amountCents: number;
+  paymentMethod?: string | null;
+  sourceId?: string | null;
+  sourceLabel?: string | null;
+  sourceKind?: string | null;
+  payerType?: string | null;
+  reference: string;
+  evidence?: string | null;
+  billingTreatment?: string | null;
+  customerChargeCents?: number | null;
+  legacyPaymentId?: number | null;
+  invoiceNumber?: string | null;
+  lines: SalesFinanceGlLine[];
+  blockers: string[];
+  stale: boolean;
+  configRevision: number;
+  status: SalesFinanceRequestStatus;
+  requestedBy: number;
+  requestedByName?: string | null;
+  requestedAt: string;
+  reviewedBy?: number | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
+  paymentId?: number | null;
+  chargeInvoiceId?: number | null;
+  erpJobId?: number | null;
+  erpDoctype?: string | null;
+  erpDocName?: string | null;
+  erpRemoteKey?: string | null;
+  postAttempts: number;
+  lastError?: string | null;
+  postedAt?: string | null;
+  audit: SalesFinanceAuditEntry[];
+}
+
+export interface SalesFinanceDeskInvoice {
+  id: number;
+  invoiceNumber: string;
+  kind: string;
+  status: string;
+  amountCents: number;
+  paidCents: number;
+  erpPosted: boolean;
+}
+
+export interface SalesFinanceDeskPayment {
+  id: number;
+  invoiceId: number;
+  amountCents: number;
+  method: string;
+  reference: string;
+}
+
+export interface SalesFinanceTotals {
+  invoicedCents: number;
+  paidCents: number;
+  outstandingCents: number;
+  pendingInvoiceCents: number;
+  pendingPaymentCents: number;
+  pendingExpenseCents: number;
+  postedExpenseCents: number;
+}
+
+export interface SalesFinanceDeskDeal {
+  id: number;
+  customerName: string;
+  stage: string;
+  enrolled: boolean;
+  vehicle: string;
+  vin: string;
+}
+
+export interface SalesFinanceDesk {
+  deal: SalesFinanceDeskDeal;
+  totals: SalesFinanceTotals;
+  invoices: SalesFinanceDeskInvoice[];
+  payments: SalesFinanceDeskPayment[];
+  requests: SalesFinanceRequest[];
+}
+
 export interface SalesAccountingReviewInput {
   stage: string;
   revision: number;
@@ -13561,6 +13761,10 @@ export type StartSalesAccountingWorkflow200 = {
   entries: StartSalesAccountingWorkflow200EntriesItem[];
   stages: StartSalesAccountingWorkflow200StagesItem[];
   notice: string;
+};
+
+export type ListSalesFinanceRequestsParams = {
+status?: SalesFinanceRequestStatus;
 };
 
 export type SaveSalesAccountingEntry200Deal = {

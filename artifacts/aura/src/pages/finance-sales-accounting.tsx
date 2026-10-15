@@ -6,6 +6,9 @@ import {
   useListSalesAccountingDeals,
   useGetSalesAccountingWorkflow,
   useStartSalesAccountingWorkflow,
+  useListSalesFinanceRequests,
+  getListSalesFinanceRequestsQueryKey,
+  getGetSalesFinanceDeskQueryKey,
   getGetSalesAccountingWorkflowQueryKey,
   getListSalesAccountingDealsQueryKey,
   type GetSalesAccountingWorkflow200,
@@ -17,7 +20,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, FileStack, Loader2, Settings2, RotateCcw, ExternalLink } from "lucide-react";
+import { ArrowLeft, FileStack, Loader2, Settings2, RotateCcw, ExternalLink, Inbox } from "lucide-react";
+import { SalesFinanceDeskPanel, RequestStatusChip } from "@/components/sales-accounting/finance-desk";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthz } from "@/lib/auth";
 import { useMoney } from "@/lib/format";
@@ -49,8 +53,8 @@ function Workspace() {
   const hero = (
     <PageHero
       eyebrow="Finance Desk · Pilot"
-      title="Sales Accounting Workpapers"
-      subtitle="Document each vehicle sale, its funding sources and balanced GL lines — reviewed, never posted."
+      title="Sales Finance Approvals"
+      subtitle="Requests from the pipeline, approved by Finance, posted to ERPNext once — with the exact DR/CR on every line."
       className="pb-3"
       action={
         <div className="flex gap-2">
@@ -80,9 +84,12 @@ function Workspace() {
     <>
       {hero}
       <Page className="pt-0 space-y-4">
-        <PreparationBanner>
-          <p className="text-xs text-amber-400">Advance VAT policy: {config.data.vatPolicy}. Mapping validation: {config.data.validation.state}.</p>
-        </PreparationBanner>
+        <div className="flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full border border-red-500/30 bg-red-500/[0.06] px-3 py-1 text-red-300">Advance VAT: {config.data.vatPolicy} · deposit postings blocked</span>
+          <span className={`rounded-full border px-3 py-1 ${config.data.validation.state === "valid" ? "border-emerald-500/30 text-emerald-400" : "border-amber-500/30 text-amber-400"}`}>ERPNext mapping validation: {config.data.validation.state}</span>
+          <span className="rounded-full border border-white/10 px-3 py-1 text-muted-foreground">Pilot: CAM Motors Dummy only</span>
+        </div>
+        <ApprovalQueue onOpen={setDealId} />
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
           <aside className="glass-panel rounded-2xl p-2 h-fit lg:sticky lg:top-4">
             <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Deals</div>
@@ -104,10 +111,10 @@ function Workspace() {
             {dealId == null ? (
               <div className="glass-panel rounded-2xl p-12 text-center">
                 <FileStack className="mx-auto mb-3 h-8 w-8 text-primary/70" />
-                <p className="text-sm text-muted-foreground">Pick a deal to open its ten-stage workpaper binder.</p>
+                <p className="text-sm text-muted-foreground">Pick a deal, or a request from the queue, to open its finance desk.</p>
               </div>
             ) : (
-              <DealWorkpaper key={dealId} dealId={dealId} canEdit={canEdit} canApprove={canApprove} />
+              <DealDesk key={dealId} dealId={dealId} canEdit={canEdit} canApprove={canApprove} />
             )}
           </section>
         </div>
@@ -128,21 +135,78 @@ function ErrorRetry({ msg, onRetry }: { msg: string; onRetry: () => void }) {
 export function LeadSalesFinance({ dealId }: { dealId: number }) {
   const { can, activeDealer } = useAuthz();
   const config = useGetSalesAccountingConfig();
-  if (config.isLoading) return <p className="text-sm text-muted-foreground">Loading sales finance…</p>;
+  if (config.isLoading) return <div className="h-24 rounded-2xl bg-white/[0.05] animate-pulse" />;
   if (config.isError) return <ErrorRetry msg={apiErrorMessage(config.error)} onRetry={() => config.refetch()} />;
   if (!config.data?.eligible) return null;
-  return <section className="space-y-3" aria-label="Sales finance workpapers">
-    <div className="flex justify-between items-center"><h2 className="font-semibold">Sales Finance</h2><Link href="/finance/sales-accounting/config" className="text-sm underline">Account & tax settings</Link></div>
-    <PreparationBanner />
-    <DealWorkpaper key={`${activeDealer?.dealerId}:${dealId}`} dealId={dealId} canEdit={can("finance", "edit")} canApprove={can("finance", "approve")} />
+  return <section className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5 space-y-4" aria-label="Sales finance desk" data-testid="lead-sales-finance">
+    <div className="flex flex-wrap justify-between items-center gap-2">
+      <div>
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Sales Finance Desk · Deal #{dealId}</div>
+        <p className="text-xs text-muted-foreground">Request invoices, receipts and registration / fuel / PDI costs here. Finance approves; ERPNext posting follows.</p>
+      </div>
+      <Link href="/finance/sales-accounting/config" className="text-xs underline text-muted-foreground hover:text-foreground">Account & tax mappings</Link>
+    </div>
+    <DealDesk key={`${activeDealer?.dealerId}:${dealId}`} dealId={dealId} canEdit={can("finance", "edit")} canApprove={can("finance", "approve")} />
   </section>;
 }
 
-function DealWorkpaper({ dealId, canEdit, canApprove }: { dealId: number; canEdit: boolean; canApprove: boolean }) {
+/** Operational desk, with the earlier preparation binder kept as history. */
+function DealDesk({ dealId, canEdit, canApprove }: { dealId: number; canEdit: boolean; canApprove: boolean }) {
+  const { me } = useAuthz();
   const wf = useGetSalesAccountingWorkflow(dealId, { query: { queryKey: getGetSalesAccountingWorkflowQueryKey(dealId), enabled: !!dealId } });
-  if (wf.isLoading) return <div className="h-96 rounded-2xl bg-white/[0.05] animate-pulse" />;
+  const [showHistory, setShowHistory] = useState(false);
+  if (wf.isLoading) return <div className="h-64 rounded-2xl bg-white/[0.05] animate-pulse" />;
   if (wf.isError || !wf.data) return <ErrorRetry msg={apiErrorMessage(wf.error)} onRetry={() => wf.refetch()} />;
-  return <Binder wf={wf.data} canEdit={canEdit} canApprove={canApprove} />;
+  if (!wf.data.deal.enrolled) return <EnrolCard dealId={dealId} canEdit={canEdit} />;
+  return (
+    <div className="space-y-4">
+      <SalesFinanceDeskPanel dealId={dealId} canEdit={canEdit} canApprove={canApprove} meId={(me as { id?: number } | undefined)?.id} />
+      <div className="border-t border-white/10 pt-3">
+        <button onClick={() => setShowHistory((v) => !v)} className="text-xs text-muted-foreground underline hover:text-foreground" data-testid="button-toggle-workpapers">
+          {showHistory ? "Hide" : "Show"} preparation workpapers (history, never posted)
+        </button>
+        {showHistory && <div className="mt-3 space-y-3"><PreparationBanner /><Binder wf={wf.data} canEdit={canEdit} canApprove={canApprove} /></div>}
+      </div>
+    </div>
+  );
+}
+
+function ApprovalQueue({ onOpen }: { onOpen: (dealId: number) => void }) {
+  const money = useMoney();
+  const [status, setStatus] = useState<"pending" | "failed" | "approved" | "posted">("pending");
+  const q = useListSalesFinanceRequests({ status }, { query: { queryKey: getListSalesFinanceRequestsQueryKey({ status }), refetchInterval: 15_000, refetchOnWindowFocus: true } });
+  return (
+    <div className="glass-panel rounded-2xl p-4 space-y-3" data-testid="approval-queue">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2"><Inbox className="h-4 w-4 text-primary" /><h2 className="text-sm font-semibold tracking-tight">Approval queue</h2></div>
+        <div className="flex rounded-full border border-white/10 p-0.5 text-xs">
+          {(["pending", "failed", "approved", "posted"] as const).map((s) => (
+            <button key={s} onClick={() => setStatus(s)} data-testid={`queue-${s}`}
+              className={`rounded-full px-3 py-1 capitalize transition-colors ${status === s ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+              {s === "approved" ? "Queued" : s}
+            </button>
+          ))}
+        </div>
+      </div>
+      {q.isLoading && <div className="h-12 rounded-xl bg-white/[0.05] animate-pulse" />}
+      {q.isError && <ErrorRetry msg={apiErrorMessage(q.error)} onRetry={() => q.refetch()} />}
+      {q.data && q.data.length === 0 && <p className="py-3 text-center text-xs text-muted-foreground">Nothing {status === "approved" ? "queued" : status} right now.</p>}
+      {q.data && q.data.length > 0 && (
+        <ul className="divide-y divide-white/5">
+          {q.data.slice(0, 12).map((r) => (
+            <li key={r.id}>
+              <button onClick={() => onOpen(r.dealId)} className="flex w-full items-center gap-3 px-1 py-2 text-left hover:bg-white/[0.03] rounded-lg" data-testid={`queue-item-${r.id}`}>
+                <span className="font-mono text-[11px] text-muted-foreground">#{r.id}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">Deal #{r.dealId} · {r.kind}{r.category ? ` · ${r.category}` : ""} · {r.requestedByName ?? "user"}</span>
+                <RequestStatusChip status={r.status} />
+                <span className="font-mono text-sm">{money.gyd(r.amountCents / 100)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function Binder({ wf, canEdit, canApprove }: { wf: GetSalesAccountingWorkflow200; canEdit: boolean; canApprove: boolean }) {
@@ -227,6 +291,7 @@ function EnrolCard({ dealId, canEdit }: { dealId: number; canEdit: boolean }) {
         setOpen(false);
         qc.invalidateQueries({ queryKey: getGetSalesAccountingWorkflowQueryKey(dealId) });
         qc.invalidateQueries({ queryKey: getListSalesAccountingDealsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetSalesFinanceDeskQueryKey(dealId) });
         toast({ title: "Deal enrolled for preparation", description: "Legacy ERP financial sync is now held for this deal." });
       },
       onError: (err) => {
@@ -237,7 +302,11 @@ function EnrolCard({ dealId, canEdit }: { dealId: number; canEdit: boolean }) {
   return (
     <div className="glass-panel rounded-2xl p-6 space-y-3">
       <h3 className="font-semibold tracking-tight">Not enrolled</h3>
-      <p className="text-sm text-muted-foreground">Enrol this deal to start its preparation workpapers. Only this deal is affected.</p>
+      <div className="space-y-2 text-sm text-muted-foreground">
+          <p>At this dealership every vehicle-sale receipt and ERPNext posting needs Finance approval. Until this deal is enrolled, the old payment form refuses it and legacy ERPNext sync holds its documents, so nothing is posted.</p>
+          <p><b className="text-foreground">Clean deals only.</b> Enrolment is allowed for single-vehicle deals that are not delivered or cancelled and have no recorded receipts or attempted ERPNext postings. Historical deals are never moved in; their held documents stay with Finance review.</p>
+          <p>After enrolment, request each invoice, receipt and registration / fuel / PDI cost here; a different Finance approver approves before anything is recorded or posted.</p>
+        </div>
       <Button data-testid="button-enrol" className="rounded-full" disabled={!canEdit || start.isPending} onClick={() => setOpen(true)}>Enrol deal #{dealId}</Button>
       {!canEdit && <p className="text-[11px] text-muted-foreground">Requires finance:edit.</p>}
       <AlertDialog open={open} onOpenChange={(o) => !start.isPending && setOpen(o)}>
@@ -247,7 +316,7 @@ function EnrolCard({ dealId, canEdit }: { dealId: number; canEdit: boolean }) {
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>This affects the selected deal only. Its legacy ERP financial sync will be held while enrolled.</p>
-                <p>Nothing will post to the books, and no invoices, payments or VIN holds will be created.</p>
+                <p>Enrolment itself posts nothing and creates no invoices, payments or VIN holds. Later postings happen only through approved requests.</p>
                 <p>The server will refuse enrollment if this deal already has past payments or ERP sync activity.</p>
               </div>
             </AlertDialogDescription>

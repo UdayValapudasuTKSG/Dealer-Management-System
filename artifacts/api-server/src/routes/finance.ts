@@ -1,3 +1,4 @@
+import { isPilotEnrolledInvoice, requiresSalesFinanceApproval, salesFinanceInvoiceFreeze } from "../lib/sales-finance-requests";
 import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
 import multer from "multer";
@@ -732,6 +733,10 @@ router.post("/invoices", idempotent("invoices.create"), async (req, res): Promis
 });
 
 router.patch("/invoices/:id", async (req, res): Promise<void> => {
+  // Share the submission/decision lock so a PATCH that checked "not frozen"
+  // cannot race a newly submitted request and change its approval basis.
+  await db.transaction(async (lockTx) => {
+  await lockTx.execute(sql`select pg_advisory_xact_lock(76044, ${activeDealerId(res)})`);
   const params = UpdateInvoiceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -740,6 +745,13 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   const parsed = UpdateInvoiceBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  // Sales finance pilot: an invoice with a submitted/approved/posted request
+  // is frozen so its amount, tax and party cannot drift from the approval.
+  const frozenBy = await salesFinanceInvoiceFreeze(activeDealerId(res), params.data.id);
+  if (frozenBy) {
+    res.status(409).json({ error: "sales_finance_invoice_frozen", unmet: [`Invoice is locked by sales finance request #${frozenBy}. Reject that request before editing.`] });
     return;
   }
   // Void guard (L6): an invoice with applied funds cannot be voided
@@ -792,6 +804,7 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
     queueInvoiceSync(invoice.dealerId, invoice.id, "cancel");
   }
   res.json(UpdateInvoiceResponse.parse(invoice));
+  });
 });
 
 router.get("/payments", async (_req, res): Promise<void> => {
@@ -892,6 +905,15 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
     res.status(409).json({ error: "invoice_void" });
     return;
   }
+  // Sales finance pilot: enrolled deals record receipts only through an
+  // approved sales-finance request (separate requester/approver + posting).
+  if (await requiresSalesFinanceApproval(invoice)) {
+    const enrolled = await isPilotEnrolledInvoice(activeDealerId(res), invoice.dealId);
+    res.status(409).json({ error: "sales_finance_approval_required", unmet: [enrolled
+      ? "This deal is in the sales finance pilot. Submit the payment as a request on the lead's Sales Finance desk; Finance approval records and posts it."
+      : "Vehicle-sale receipts at this dealership need Finance approval. Enrol the deal on the lead's Sales Finance desk (clean deals only), then submit the payment as a request."] });
+    return;
+  }
   const isReversal = parsed.data.amount < 0;
   if (invoice.status === "paid" && !isReversal) {
     res.status(409).json({ error: "invoice_already_paid" });
@@ -948,6 +970,9 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
         case "invoice_void":
         case "invoice_already_paid":
           res.status(409).json({ error: err.code });
+          return;
+        case "sales_finance_approval_required":
+          res.status(409).json({ error: err.code, unmet: ["Submit this receipt on the deal's Sales Finance desk."] });
           return;
         case "reversal_exceeds_paid":
           res.status(422).json({ error: err.code, ...err.extra });

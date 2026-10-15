@@ -1,4 +1,5 @@
 import { withSalesAccountingHold } from "../sales-accounting-hold";
+import { authorizedJournalAccounts, authorizedPostingDate, authorizedSalesInvoiceFields, type AuthorizedPosting } from "./authorized-payload";
 import { and, eq } from "drizzle-orm";
 import {
   db,
@@ -293,6 +294,7 @@ async function resolveInvoiceIncomeAccount(
 
 async function handleSalesInvoiceJob(
   job: ErpnextSyncJob,
+  auth?: AuthorizedPosting,
 ): Promise<{ docName: string | null }> {
   const conn = await requireConnection(job.dealerId);
   const client = clientFor(conn);
@@ -333,11 +335,15 @@ async function handleSalesInvoiceJob(
     );
   }
 
-  const resolved = await resolveInvoiceIncomeAccount(
-    job.dealerId,
-    invoice,
-    conn.incomeAccount,
-  );
+  // Approved sales-finance requests carry an immutable, Finance-authorized
+  // account snapshot; it wins over live mappings so later edits never change
+  // what was approved.
+  // Only the guarded wrapper passes `auth`; job payloads are never trusted.
+  if (auth && !auth.incomeAccount) throw configError("Approved snapshot has no income account for this invoice");
+  const resolved = auth
+    ? { account: auth.incomeAccount!, source: "authorized-snapshot" as const, modelKey: null }
+    : await resolveInvoiceIncomeAccount(job.dealerId, invoice, conn.incomeAccount);
+  const taxAccount = auth ? auth.vatOutput ?? conn.taxAccount : conn.taxAccount;
   if (!resolved.account) {
     throw configError(
       "Set the income account in Settings → ERPNext (accounting mapping) or a vehicle-model GL code before invoices can sync",
@@ -349,7 +355,7 @@ async function handleSalesInvoiceJob(
     );
   }
   const taxLines = invoice.taxLines ?? [];
-  if (taxLines.length > 0 && !conn.taxAccount) {
+  if (taxLines.length > 0 && !taxAccount) {
     throw configError(
       "Set the tax account in Settings → ERPNext (accounting mapping) — this invoice carries tax lines",
     );
@@ -375,7 +381,7 @@ async function handleSalesInvoiceJob(
   const taxTotal =
     Math.round(taxLines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
   const base = Math.round((invoice.amount - taxTotal) * 100) / 100;
-  const postingDate = invoice.createdAt.toISOString().slice(0, 10);
+  const postingDate = authorizedPostingDate(auth, invoice.createdAt);
   const dueDate = normalizeErpnextDueDate(invoice.dueDate, postingDate);
 
   const itemCode = await ensureSalesItem(client);
@@ -385,6 +391,7 @@ async function handleSalesInvoiceJob(
     currency: "GYD",
     set_posting_time: 1,
     posting_date: postingDate,
+    ...(auth ? authorizedSalesInvoiceFields(auth) : {}),
     ...(dueDate ? { due_date: dueDate } : {}),
     remarks,
     items: [
@@ -402,7 +409,7 @@ async function handleSalesInvoiceJob(
     ],
     taxes: taxLines.map((tl) => ({
       charge_type: "Actual",
-      account_head: conn.taxAccount,
+      account_head: taxAccount,
       description: `${tl.name} (${tl.code})`,
       tax_amount: tl.amount,
     })),
@@ -432,6 +439,7 @@ async function handleSalesInvoiceJob(
 
 async function handlePaymentEntryJob(
   job: ErpnextSyncJob,
+  auth?: AuthorizedPosting,
 ): Promise<{ docName: string | null }> {
   const conn = await requireConnection(job.dealerId);
   const client = clientFor(conn);
@@ -493,7 +501,9 @@ async function handlePaymentEntryJob(
       "Run the ERPNext connection test in Settings → ERPNext first so AURA learns the ERPNext company",
     );
   }
-  if (!conn.receivableAccount || !conn.settlementAccount) {
+  const receivableAccount = auth ? auth.receivable : conn.receivableAccount;
+  const settlementAccount = auth ? auth.paidTo : conn.settlementAccount;
+  if (!receivableAccount || !settlementAccount) {
     throw configError(
       "Set the receivable and settlement accounts in Settings → ERPNext (accounting mapping) before payments can sync",
     );
@@ -502,7 +512,7 @@ async function handlePaymentEntryJob(
   const isRefund = payment.amount < 0;
   const absAmount = Math.abs(payment.amount);
   const mode = conn.paymentModes?.[payment.method];
-  const postingDate = payment.createdAt.toISOString().slice(0, 10);
+  const postingDate = authorizedPostingDate(auth, payment.createdAt);
 
   const created = await client.insertDoc("Payment Entry", {
     // Refunds flow money back to the customer (Pay); receipts are Receive.
@@ -511,8 +521,8 @@ async function handlePaymentEntryJob(
     party_type: "Customer",
     party: customer,
     // Ledger legs: receipts move receivable → settlement; refunds reverse.
-    paid_from: isRefund ? conn.settlementAccount : conn.receivableAccount,
-    paid_to: isRefund ? conn.receivableAccount : conn.settlementAccount,
+    paid_from: isRefund ? settlementAccount : receivableAccount,
+    paid_to: isRefund ? receivableAccount : settlementAccount,
     posting_date: postingDate,
     paid_amount: absAmount,
     received_amount: absAmount,
@@ -536,6 +546,82 @@ async function handlePaymentEntryJob(
   await saveErpnextRef(job.dealerId, "payment", payment.id, "Payment Entry", created.name);
   await client.submitDoc("Payment Entry", created.name);
   return { docName: created.name };
+}
+
+// ——————————————————————————————— Authorized sales-finance postings ——
+// Entry points used ONLY by the approved sales-finance request handler. They
+// reuse the Sales Invoice / Payment Entry handlers (deterministic remarks
+// reconciliation, ref persisted before submit) instead of naive journals.
+
+/** Wrappers are callable only from a claimed sales-finance posting job; all
+ * accounts/dates come from the guarded lookup, never from the caller. */
+async function authorize(job: ErpnextSyncJob, entity: { type: string; id: number }): Promise<AuthorizedPosting> {
+  if (job.doctype !== "AURA Sales Finance Posting" || job.entityType !== "sales_finance_request") {
+    throw new ErpnextError("Authorized postings must come from a sales finance posting job", 422, "http");
+  }
+  const { assertAuthorizedPosting } = await import("../sales-finance-requests");
+  return assertAuthorizedPosting(job.dealerId, job.entityId, entity);
+}
+function sameAccount(label: string, expected: string | null, given: string | null) {
+  if ((expected ?? "") !== (given ?? "")) throw new ErpnextError(`${label} does not match the approved snapshot`, 422, "http");
+}
+
+export async function postAuthorizedSalesInvoice(
+  job: ErpnextSyncJob, invoiceId: number, accounts: { incomeAccount: string; taxAccount: string | null },
+): Promise<string | null> {
+  const auth = await authorize(job, { type: "invoice", id: invoiceId });
+  sameAccount("Income account", auth.incomeAccount, accounts.incomeAccount);
+  sameAccount("Tax account", auth.vatOutput, accounts.taxAccount);
+  const r = await handleSalesInvoiceJob({ ...job, entityType: "invoice", entityId: invoiceId, payload: { action: "create" } }, auth);
+  return r.docName;
+}
+
+export async function postAuthorizedPaymentEntry(
+  job: ErpnextSyncJob, paymentId: number, accounts: { paidTo: string; receivable: string },
+): Promise<string | null> {
+  const auth = await authorize(job, { type: "payment", id: paymentId });
+  sameAccount("Paid-to account", auth.paidTo, accounts.paidTo);
+  sameAccount("Receivable account", auth.receivable, accounts.receivable);
+  const r = await handlePaymentEntryJob({ ...job, entityType: "payment", entityId: paymentId, payload: {} }, auth);
+  return r.docName;
+}
+
+/** Balanced Journal Entry for dealer-paid expenses (bank/cash/float sources
+ * only — no party rows). `remoteKey` is the deterministic reconcile key. */
+export async function postAuthorizedJournal(
+  dealerId: number, requestId: number, remoteKey: string, postingDate: string,
+  lines: { account: string; debit: number; credit: number; purpose: string }[],
+): Promise<string> {
+  const { assertAuthorizedPosting, remoteKey: keyFor } = await import("../sales-finance-requests");
+  const auth = await assertAuthorizedPosting(dealerId, requestId, { type: "sales_finance_request", id: requestId });
+  if (remoteKey !== keyFor({ dealerId, id: requestId })) throw new ErpnextError("Journal key does not match the request", 422, "http");
+  if (postingDate !== auth.date) throw new ErpnextError("Journal date does not match the approved request date", 422, "http");
+  const norm = (ls: typeof lines) => ls.map((l) => `${l.account}|${Math.round(l.debit * 100)}|${Math.round(l.credit * 100)}`).join(";");
+  if (norm(lines) !== norm(auth.journalLines)) throw new ErpnextError("Journal lines do not match the approved snapshot", 422, "http");
+  const conn = await requireConnection(dealerId);
+  const client = clientFor(conn);
+  const existing = await getErpnextRef(dealerId, "sales_finance_request", requestId, "Journal Entry");
+  if (existing) { await ensureSubmitted(client, "Journal Entry", existing); return existing; }
+  if (!conn.companyName) throw configError("Run the ERPNext connection test first so AURA learns the ERPNext company");
+  // Orphan reconcile: deterministic key AND this dealer's company only.
+  const rows = await client.listDocs<{ name: string }>("Journal Entry", {
+    filters: [["Journal Entry", "user_remark", "=", remoteKey], ["Journal Entry", "company", "=", conn.companyName],
+      ["Journal Entry", "docstatus", "!=", 2]], fields: ["name"], limit: 1 });
+  if (rows[0]) {
+    await saveErpnextRef(dealerId, "sales_finance_request", requestId, "Journal Entry", rows[0].name);
+    await ensureSubmitted(client, "Journal Entry", rows[0].name);
+    return rows[0].name;
+  }
+  // Resolve the configured company's default cost center (no hardcoding);
+  // fail before creating anything if it is missing.
+  const company = await client.getDoc<{ cost_center?: string | null }>("Company", conn.companyName);
+  const accounts = authorizedJournalAccounts(auth, company.cost_center);
+  const created = await client.insertDoc("Journal Entry", {
+    voucher_type: "Journal Entry", company: conn.companyName, posting_date: auth.date, user_remark: remoteKey, accounts,
+  });
+  await saveErpnextRef(dealerId, "sales_finance_request", requestId, "Journal Entry", created.name);
+  await client.submitDoc("Journal Entry", created.name);
+  return created.name;
 }
 
 // ———————————————————————————————————————————————— Customers (inbound) ——

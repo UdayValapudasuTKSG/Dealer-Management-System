@@ -142,6 +142,95 @@ paths:
     $ref: "./sales-accounting.yaml#/deals"
   /sales-accounting/deals/{dealId}:
     $ref: "./sales-accounting.yaml#/workflow"
+  /sales-accounting/deals/{dealId}/requests:
+    parameters:
+      - in: path
+        name: dealId
+        required: true
+        schema: { type: integer }
+    get:
+      operationId: getSalesFinanceDesk
+      tags: [finance]
+      responses:
+        "200":
+          description: Deal finance totals (real local records), pending approvals and request history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesFinanceDesk"
+    post:
+      operationId: createSalesFinanceRequest
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesFinanceRequestInput"
+      responses:
+        "201":
+          description: Request submitted (pending or policy-blocked)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesFinanceDesk"
+  /sales-accounting/requests:
+    get:
+      operationId: listSalesFinanceRequests
+      tags: [finance]
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            $ref: "#/components/schemas/SalesFinanceRequestStatus"
+      responses:
+        "200":
+          description: Dealer-scoped finance approval queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesFinanceRequest"
+  /sales-accounting/requests/{requestId}/decision:
+    parameters:
+      - in: path
+        name: requestId
+        required: true
+        schema: { type: integer }
+    post:
+      operationId: decideSalesFinanceRequest
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesFinanceDecisionInput"
+      responses:
+        "200":
+          description: Approved (durable posting queued) or rejected (no financial effect)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesFinanceRequest"
+  /sales-accounting/requests/{requestId}/retry:
+    parameters:
+      - in: path
+        name: requestId
+        required: true
+        schema: { type: integer }
+    post:
+      operationId: retrySalesFinanceRequest
+      tags: [finance]
+      responses:
+        "200":
+          description: Failed posting re-queued with the same deterministic remote keys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesFinanceRequest"
   /sales-accounting/deals/{dealId}/entries:
     parameters:
       - in: path
@@ -12246,6 +12335,155 @@ components:
         vat: { type: number }
         cost: { type: number }
         costEvidence: { type: string }
+    SalesFinanceRequestStatus:
+      type: string
+      enum: [pending, approved, posting, posted, rejected, failed, blocked]
+    SalesFinanceRequestInput:
+      type: object
+      required: [kind, date, amount, reference]
+      properties:
+        kind: { type: string, enum: [invoice, payment, expense] }
+        date: { type: string }
+        amount: { type: string, description: "Exact decimal, max two places" }
+        invoiceId: { type: integer }
+        legacyPaymentId: { type: integer }
+        category: { type: string, enum: [registration, fuel, detailing] }
+        paymentMethod: { type: string, enum: [cash, bank_transfer, cheque, card, mobile_money] }
+        sourceId: { type: string }
+        payerType: { type: string, enum: [customer, financier] }
+        reference: { type: string }
+        evidence: { type: string }
+        billingTreatment: { type: string, enum: [dealer_paid, customer_billed] }
+        customerCharge: { type: string }
+    SalesFinanceDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        reason: { type: string }
+    SalesFinanceGlLine:
+      type: object
+      required: [account, debit, credit, purpose]
+      properties:
+        account: { type: string }
+        debit: { type: number }
+        credit: { type: number }
+        purpose: { type: string }
+    SalesFinanceAuditEntry:
+      type: object
+      required: [id, action, summary, actorName, at]
+      properties:
+        id: { type: integer }
+        action: { type: string }
+        summary: { type: string }
+        actorName: { type: string }
+        at: { type: string }
+    SalesFinanceRequest:
+      type: object
+      required: [id, dealId, kind, date, amountCents, reference, lines, blockers, stale, configRevision, status, requestedBy, requestedAt, postAttempts, audit]
+      properties:
+        id: { type: integer }
+        dealId: { type: integer }
+        invoiceId: { type: integer, nullable: true }
+        kind: { type: string, enum: [invoice, payment, expense] }
+        category: { type: string, nullable: true }
+        date: { type: string }
+        amountCents: { type: integer }
+        paymentMethod: { type: string, nullable: true }
+        sourceId: { type: string, nullable: true }
+        sourceLabel: { type: string, nullable: true }
+        sourceKind: { type: string, nullable: true }
+        payerType: { type: string, nullable: true }
+        reference: { type: string }
+        evidence: { type: string, nullable: true }
+        billingTreatment: { type: string, nullable: true }
+        customerChargeCents: { type: integer, nullable: true }
+        legacyPaymentId: { type: integer, nullable: true }
+        invoiceNumber: { type: string, nullable: true }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/SalesFinanceGlLine" }
+        blockers:
+          type: array
+          items: { type: string }
+        stale: { type: boolean }
+        configRevision: { type: integer }
+        status: { $ref: "#/components/schemas/SalesFinanceRequestStatus" }
+        requestedBy: { type: integer }
+        requestedByName: { type: string, nullable: true }
+        requestedAt: { type: string }
+        reviewedBy: { type: integer, nullable: true }
+        reviewedByName: { type: string, nullable: true }
+        reviewedAt: { type: string, nullable: true }
+        rejectionReason: { type: string, nullable: true }
+        paymentId: { type: integer, nullable: true }
+        chargeInvoiceId: { type: integer, nullable: true }
+        erpJobId: { type: integer, nullable: true }
+        erpDoctype: { type: string, nullable: true }
+        erpDocName: { type: string, nullable: true }
+        erpRemoteKey: { type: string, nullable: true }
+        postAttempts: { type: integer }
+        lastError: { type: string, nullable: true }
+        postedAt: { type: string, nullable: true }
+        audit:
+          type: array
+          items: { $ref: "#/components/schemas/SalesFinanceAuditEntry" }
+    SalesFinanceDeskInvoice:
+      type: object
+      required: [id, invoiceNumber, kind, status, amountCents, paidCents, erpPosted]
+      properties:
+        id: { type: integer }
+        invoiceNumber: { type: string }
+        kind: { type: string }
+        status: { type: string }
+        amountCents: { type: integer }
+        paidCents: { type: integer }
+        erpPosted: { type: boolean }
+    SalesFinanceDeskPayment:
+      type: object
+      required: [id, invoiceId, amountCents, method, reference]
+      properties:
+        id: { type: integer }
+        invoiceId: { type: integer }
+        amountCents: { type: integer }
+        method: { type: string }
+        reference: { type: string }
+    SalesFinanceTotals:
+      type: object
+      required: [invoicedCents, paidCents, outstandingCents, pendingInvoiceCents, pendingPaymentCents, pendingExpenseCents, postedExpenseCents]
+      properties:
+        invoicedCents: { type: integer }
+        paidCents: { type: integer }
+        outstandingCents: { type: integer }
+        pendingInvoiceCents: { type: integer }
+        pendingPaymentCents: { type: integer }
+        pendingExpenseCents: { type: integer }
+        postedExpenseCents: { type: integer }
+    SalesFinanceDeskDeal:
+      type: object
+      required: [id, customerName, stage, enrolled, vehicle, vin]
+      properties:
+        id: { type: integer }
+        customerName: { type: string }
+        stage: { type: string }
+        enrolled: { type: boolean }
+        vehicle: { type: string }
+        vin: { type: string }
+    SalesFinanceDesk:
+      type: object
+      required: [deal, totals, invoices, payments, requests]
+      properties:
+        deal: { $ref: "#/components/schemas/SalesFinanceDeskDeal" }
+        totals: { $ref: "#/components/schemas/SalesFinanceTotals" }
+        invoices:
+          type: array
+          items: { $ref: "#/components/schemas/SalesFinanceDeskInvoice" }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/SalesFinanceDeskPayment" }
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/SalesFinanceRequest" }
     SalesAccountingReviewInput:
       type: object
       required: [stage, revision]

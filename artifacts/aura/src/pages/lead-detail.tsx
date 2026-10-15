@@ -138,6 +138,8 @@ import { isHeldByCallCentre } from "@/hooks/use-call-centre";
 import { Headset } from "lucide-react";
 import { TestDriveCard } from "@/components/lead/test-drive-card";
 import { useAuthz } from "@/lib/auth";
+import { useListSalesAccountingDeals, getListSalesAccountingDealsQueryKey } from "@workspace/api-client-react";
+import { SALES_FINANCE_COMPOSE_EVENT } from "@/components/sales-accounting/finance-desk";
 import { LeadSalesFinance } from "./finance-sales-accounting";
 import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -1083,7 +1085,34 @@ export default function LeadDetail() {
   const canFinance = can("finance", "create");
   // Quick finance actions against the lead's linked deal (header CTAs).
   const [invoiceDeal, setInvoiceDeal] = useState<Deal | null>(null);
-  const [paymentDeal, setPaymentDeal] = useState<Deal | null>(null);
+  const [paymentDeal, setPaymentDealRaw] = useState<Deal | null>(null);
+  // Sales finance pilot: enrolled deals record receipts only through the
+  // approval desk, so the quick Payment action opens a desk request instead
+  // of the legacy form (which the server refuses with 409 for these deals).
+  const pilotDeals = useListSalesAccountingDeals({
+    query: { queryKey: getListSalesAccountingDealsQueryKey(), enabled: can("finance", "view"), retry: false, staleTime: 30_000 },
+  });
+  // The list is non-empty only for the pilot dealership; there EVERY sales
+  // deal (enrolled or not) takes receipts through the desk.
+  const pilotDealMap = useMemo(
+    () => new Map((pilotDeals.data ?? []).map((d) => [d.id, d.enrolled] as const)),
+    [pilotDeals.data],
+  );
+  const setPaymentDeal = (deal: Deal | null) => {
+    if (deal && pilotDealMap.has(deal.id)) {
+      const enrolled = pilotDealMap.get(deal.id);
+      setTab("overview");
+      window.setTimeout(() => {
+        document.querySelector('[data-testid="lead-sales-finance"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (enrolled) window.dispatchEvent(new CustomEvent(SALES_FINANCE_COMPOSE_EVENT, { detail: { dealId: deal.id, kind: "payment" } }));
+      }, 150);
+      toast(enrolled
+        ? { title: "Payment goes through Finance approval", description: "Submit the receipt as a request; it is recorded and posted only after a different Finance approver approves it." }
+        : { title: "Enrol this deal to take payments", description: "Vehicle-sale receipts at this dealership need Finance approval. Enrol the deal on the Sales Finance desk below, then submit the payment as a request." });
+      return;
+    }
+    setPaymentDealRaw(deal);
+  };
 
   const createDeal = useCreateDeal({
     mutation: {

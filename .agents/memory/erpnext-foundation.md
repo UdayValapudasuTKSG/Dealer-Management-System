@@ -17,6 +17,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - Every customer-write path must bump `updatedAt` and enqueue outbound sync, or inbound last-write-wins overwrites newer AURA data.
 - ERPNext allocations/amounts are non-negative; direction lives in payment_type ("Pay" for refunds).
 - Remote-create + local-ref is a crash window: persist the ref before submit and reconcile orphans by a deterministic remarks key before creating financial docs, or retries duplicate them.
+- Serialize the whole remote create/reference/submit operation, including expense journals, not only local receipt creation.
+  **Why:** Local payment deduplication can pass while concurrent workers still create duplicate ERP documents before either saves the remote reference.
+  **How to apply:** Keep posting serialization compatible with the dealer hold/enrolment lock; verify concurrent runs invoke the remote creation path only once.
 
 ## Environment/company mapping
 ## Workflow document versus master accounts
@@ -25,7 +28,7 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
   **How to apply:** Separate receipts from expenses, keep transaction-level approval and ERP posting status distinct, and retain the dummy-only rollout and pending advance-VAT restriction until explicitly changed.
 - On 2026-10-15 the user reiterated that the pipeline must execute the approved financial flow, not just prepare workpapers: request source and amount, show Finance-only approve/reject, and post approved transactions to ERPNext.
   **Why:** Workpaper-only delivery did not satisfy the requested sales workflow.
-  **How to apply:** Treat operational approval-to-posting as required scope, with independent expense/receipt records, rejected requests leaving books unchanged, and posted status only after confirmed ERP success. Do not call review-only scaffolding complete. Keep the dummy rollout and advance-VAT restriction; those are separate from authorization to build the execution engine.
+  **How to apply:** Treat operational approval-to-posting as required scope, with independent expense/receipt records, rejected requests leaving books unchanged, and posted status only after confirmed ERP success. Do not call review-only scaffolding complete. An unenrolled pilot sale must not bypass approval through legacy payment or sync paths. Keep the dummy rollout and advance-VAT restriction; those are separate from authorization to build the execution engine.
 - The user chose to hold existing unsent CAM Motors Dummy financial jobs for Finance review before reconnecting ERPNext; this is not permission to replay the backlog.
   **Why:** Replacing the connection credentials would otherwise let older invoices and payments bypass the requested new approval flow.
   **How to apply:** Preserve posted documents and existing receipts. Keep legacy financial holds effective across retries and new jobs for the same entity. Do not retry failed jobs or turn a legacy receipt into a second receipt. Reconnection must not release holds; explicit Finance review and posting reconciliation are required.
