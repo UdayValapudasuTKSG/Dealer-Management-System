@@ -23,12 +23,15 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - The user wants finance inputs and manager approvals inside sales lead details: payment type, source, amount, registration/fuel/PDI costs, and customer-versus-financier balances.
   **Why:** Finance should control the sale from its pipeline record rather than maintaining disconnected workpapers.
   **How to apply:** Separate receipts from expenses, keep transaction-level approval and ERP posting status distinct, and retain the dummy-only rollout and pending advance-VAT restriction until explicitly changed.
+- On 2026-10-15 the user reiterated that the pipeline must execute the approved financial flow, not just prepare workpapers: request source and amount, show Finance-only approve/reject, and post approved transactions to ERPNext.
+  **Why:** Workpaper-only delivery did not satisfy the requested sales workflow.
+  **How to apply:** Treat operational approval-to-posting as required scope, with independent expense/receipt records, rejected requests leaving books unchanged, and posted status only after confirmed ERP success. Do not call review-only scaffolding complete. Keep the dummy rollout and advance-VAT restriction; those are separate from authorization to build the execution engine.
 - Registration, fuel and PDI billing is chosen per expense, defaulting to dealer-paid; a separate customer charge requires Finance approval.
   **Why:** The user explicitly selected per-expense billing rather than treating all costs as dealer expenses or automatically included in the vehicle price.
   **How to apply:** Preserve the dealer expense and any customer charge as separate linked transactions. Do not increase the customer balance merely because an expense was submitted.
 - Finance will configure and approve customer-charge GL accounts and VAT treatment per expense category before posting; no default tax exemption or vehicle-tax inheritance is authorized.
   **Why:** The user selected configuration-before-posting because the workflow document defines dealer costs but not the tax treatment of customer recharges.
-  **How to apply:** Keep unconfigured categories blocked; explicitly distinguish pending, taxable, exempt and zero-rated, including inclusive/exclusive amounts. Configuration approval alone does not authorize advance VAT or enable the financial execution engine.
+  **How to apply:** Keep unconfigured categories blocked; explicitly distinguish pending, taxable, exempt and zero-rated, including inclusive/exclusive amounts. Configuration approval alone does not authorize advance VAT or replace transaction-level Finance approval.
 - The user supplied the expanded master account definitions directly in the connected ERPNext test company. Use the live account list to resolve model/brand accounts rather than requiring the missing standalone master PDF again.
   **Why:** The workflow PDF had only ranges, but the user subsequently populated the actual ledgers. Corresponding sales, stock and COGS accounts do not universally share matching numeric suffixes.
   **How to apply:** Validate explicit model/variant-to-account mappings against the live chart, including duty-free variants; never derive a stock or COGS account by replacing an income-account prefix. Revalidate saved AURA account names after chart changes.
