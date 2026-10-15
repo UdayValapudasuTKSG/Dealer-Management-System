@@ -23,6 +23,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - The user wants finance inputs and manager approvals inside sales lead details: payment type, source, amount, registration/fuel/PDI costs, and customer-versus-financier balances.
   **Why:** Finance should control the sale from its pipeline record rather than maintaining disconnected workpapers.
   **How to apply:** Separate receipts from expenses, keep transaction-level approval and ERP posting status distinct, and retain the dummy-only rollout and pending advance-VAT restriction until explicitly changed.
+- Registration, fuel and PDI billing is chosen per expense, defaulting to dealer-paid; a separate customer charge requires Finance approval.
+  **Why:** The user explicitly selected per-expense billing rather than treating all costs as dealer expenses or automatically included in the vehicle price.
+  **How to apply:** Preserve the dealer expense and any customer charge as separate linked transactions. Do not increase the customer balance merely because an expense was submitted.
 - The user supplied the expanded master account definitions directly in the connected ERPNext test company. Use the live account list to resolve model/brand accounts rather than requiring the missing standalone master PDF again.
   **Why:** The workflow PDF had only ranges, but the user subsequently populated the actual ledgers. Corresponding sales, stock and COGS accounts do not universally share matching numeric suffixes.
   **How to apply:** Validate explicit model/variant-to-account mappings against the live chart, including duty-free variants; never derive a stock or COGS account by replacing an income-account prefix. Revalidate saved AURA account names after chart changes.
