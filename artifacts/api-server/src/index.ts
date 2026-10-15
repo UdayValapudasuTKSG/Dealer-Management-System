@@ -1,4 +1,6 @@
 import app from "./app";
+import { db } from "@workspace/db";
+import { initializeSalesFinanceRollout } from "./lib/sales-finance-boundary";
 import { logger } from "./lib/logger";
 import { startEmailWorker } from "./lib/email";
 import { startGmailIntakeWorker } from "./lib/gmail-intake";
@@ -32,6 +34,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+await initializeSalesFinanceRollout(db);
 app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");

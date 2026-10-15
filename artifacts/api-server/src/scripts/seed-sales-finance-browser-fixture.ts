@@ -14,7 +14,7 @@ const {
 } = await import("@workspace/db");
 const { eq, inArray } = await import("drizzle-orm");
 
-const DEALER = "CAM Motors Dummy (dev fixture browser)";
+const DEALER = "Sales Finance (dev fixture browser)";
 const PERSONAS = [
   { email: "sfr-requester@aura-fixture.invalid", name: "Rhea Persaud (SFR requester)", role: "SFR Fixture Requester", perms: ["view", "create", "edit"] },
   { email: "sfr-approver@aura-fixture.invalid", name: "Devon Bacchus (SFR approver)", role: "SFR Fixture Approver", perms: ["view", "create", "edit", "approve"] },

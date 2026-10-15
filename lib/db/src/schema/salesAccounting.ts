@@ -26,6 +26,12 @@ export type SalesAccountingInput = {
 };
 export type SalesAccountingLine = { account: string; debit: number; credit: number; purpose: string };
 
+/** One database-local activation marker, retained across restarts and publishes. */
+export const salesFinanceRolloutTable = pgTable("sales_finance_rollout", {
+  id: integer("id").primaryKey(),
+  activatedAt: timestamp("activated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const salesAccountingSettingsTable = pgTable("sales_accounting_settings", {
   dealerId: integer("dealer_id").primaryKey(),
   config: jsonb("config").$type<SalesAccountingConfigData>().notNull(),

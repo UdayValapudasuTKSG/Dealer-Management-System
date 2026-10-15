@@ -132,7 +132,7 @@ function ConfigWorkspace() {
       {hero}
       <Page className="pt-0 space-y-4 pb-28">
         <PreparationBanner />
-        {!c.eligible && <Unavailable title="Read-only — not available" body="Only CAM Motors Dummy may edit these mappings in this release." />}
+        {!c.eligible && <Unavailable title="Read-only — not available" body="Select an available dealership to edit its own account mappings." />}
         {!canEdit && c.eligible && <p className="text-xs text-muted-foreground">View-only: finance:edit is required to change mappings or run validation.</p>}
 
         <section className="glass-panel rounded-2xl p-5 space-y-2">

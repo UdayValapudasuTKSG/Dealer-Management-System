@@ -58,8 +58,8 @@ export function PreparationBanner({ children }: { children?: ReactNode }) {
           <p className="font-semibold tracking-tight">Preparation and review mode — nothing posts to the books.</p>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Workpapers here document funding and balanced GL lines only. Saving never creates invoices,
-            payments or VIN holds. Enrolled dummy deals have legacy ERP financial sync held. Pilot is limited
-            to CAM Motors Dummy; advance VAT policy is pending.
+            payments or VIN holds. Operational requests use separate Finance approvals.
+            New sales at all dealerships are covered; advance VAT policy remains pending.
           </p>
           {children}
         </div>

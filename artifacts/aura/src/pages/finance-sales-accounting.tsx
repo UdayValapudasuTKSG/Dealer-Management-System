@@ -52,7 +52,7 @@ function Workspace() {
 
   const hero = (
     <PageHero
-      eyebrow="Finance Desk · Pilot"
+      eyebrow="Finance Desk · Sales Approvals"
       title="Sales Finance Approvals"
       subtitle="Requests from the pipeline, approved by Finance, posted to ERPNext once — with the exact DR/CR on every line."
       className="pb-3"
@@ -76,7 +76,7 @@ function Workspace() {
     return <>{hero}<Page className="pt-0"><ErrorRetry msg={apiErrorMessage(config.error)} onRetry={() => config.refetch()} /></Page></>;
   }
   if (!config.data?.eligible) {
-    return <>{hero}<Page className="pt-0 space-y-4"><PreparationBanner /><Unavailable title="Not available for this dealership" body="Sales accounting preparation is enabled for CAM Motors Dummy only. All other dealers are read-only unavailable during this release." /></Page></>;
+    return <>{hero}<Page className="pt-0 space-y-4"><Unavailable title="Not available for this dealership" body="Select an available dealership to manage sales approvals." /></Page></>;
   }
 
   const list = deals.data ?? [];
@@ -87,7 +87,7 @@ function Workspace() {
         <div className="flex flex-wrap gap-2 text-[11px]">
           <span className="rounded-full border border-red-500/30 bg-red-500/[0.06] px-3 py-1 text-red-300">Advance VAT: {config.data.vatPolicy} · deposit postings blocked</span>
           <span className={`rounded-full border px-3 py-1 ${config.data.validation.state === "valid" ? "border-emerald-500/30 text-emerald-400" : "border-amber-500/30 text-amber-400"}`}>ERPNext mapping validation: {config.data.validation.state}</span>
-          <span className="rounded-full border border-white/10 px-3 py-1 text-muted-foreground">Pilot: CAM Motors Dummy only</span>
+          <span className="rounded-full border border-white/10 px-3 py-1 text-muted-foreground">All dealerships · New sales only</span>
         </div>
         <ApprovalQueue onOpen={setDealId} />
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
@@ -135,9 +135,13 @@ function ErrorRetry({ msg, onRetry }: { msg: string; onRetry: () => void }) {
 export function LeadSalesFinance({ dealId }: { dealId: number }) {
   const { can, activeDealer } = useAuthz();
   const config = useGetSalesAccountingConfig();
+  const scopedDeals = useListSalesAccountingDeals({ query: { queryKey: getListSalesAccountingDealsQueryKey(), enabled: !!config.data?.eligible } });
   if (config.isLoading) return <div className="h-24 rounded-2xl bg-white/[0.05] animate-pulse" />;
   if (config.isError) return <ErrorRetry msg={apiErrorMessage(config.error)} onRetry={() => config.refetch()} />;
   if (!config.data?.eligible) return null;
+  if (scopedDeals.isLoading) return <div className="h-24 rounded-2xl bg-white/[0.05] animate-pulse" />;
+  if (scopedDeals.isError) return <ErrorRetry msg={apiErrorMessage(scopedDeals.error)} onRetry={() => scopedDeals.refetch()} />;
+  if (!scopedDeals.data?.some(d => d.id === dealId)) return null;
   return <section className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5 space-y-4" aria-label="Sales finance desk" data-testid="lead-sales-finance">
     <div className="flex flex-wrap justify-between items-center gap-2">
       <div>
@@ -303,7 +307,7 @@ function EnrolCard({ dealId, canEdit }: { dealId: number; canEdit: boolean }) {
     <div className="glass-panel rounded-2xl p-6 space-y-3">
       <h3 className="font-semibold tracking-tight">Not enrolled</h3>
       <div className="space-y-2 text-sm text-muted-foreground">
-          <p>At this dealership every vehicle-sale receipt and ERPNext posting needs Finance approval. Until this deal is enrolled, the old payment form refuses it and legacy ERPNext sync holds its documents, so nothing is posted.</p>
+          <p>New sales at every dealership require Finance approval for receipts and ERPNext postings. Existing sales keep their previous process. This deal is covered: enrol it before requesting payments or postings.</p>
           <p><b className="text-foreground">Clean deals only.</b> Enrolment is allowed for single-vehicle deals that are not delivered or cancelled and have no recorded receipts or attempted ERPNext postings. Historical deals are never moved in; their held documents stay with Finance review.</p>
           <p>After enrolment, request each invoice, receipt and registration / fuel / PDI cost here; a different Finance approver approves before anything is recorded or posted.</p>
         </div>
@@ -312,7 +316,7 @@ function EnrolCard({ dealId, canEdit }: { dealId: number; canEdit: boolean }) {
       <AlertDialog open={open} onOpenChange={(o) => !start.isPending && setOpen(o)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Enrol deal #{dealId} in preparation mode?</AlertDialogTitle>
+            <AlertDialogTitle>Enrol deal #{dealId} in Finance approvals?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>This affects the selected deal only. Its legacy ERP financial sync will be held while enrolled.</p>

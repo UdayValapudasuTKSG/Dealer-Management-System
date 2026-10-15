@@ -910,7 +910,7 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
   if (await requiresSalesFinanceApproval(invoice)) {
     const enrolled = await isPilotEnrolledInvoice(activeDealerId(res), invoice.dealId);
     res.status(409).json({ error: "sales_finance_approval_required", unmet: [enrolled
-      ? "This deal is in the sales finance pilot. Submit the payment as a request on the lead's Sales Finance desk; Finance approval records and posts it."
+      ? "This deal requires Finance approval. Submit the payment as a request on the lead's Sales Finance desk; Finance approval records and posts it."
       : "Vehicle-sale receipts at this dealership need Finance approval. Enrol the deal on the lead's Sales Finance desk (clean deals only), then submit the payment as a request."] });
     return;
   }

@@ -1092,8 +1092,8 @@ export default function LeadDetail() {
   const pilotDeals = useListSalesAccountingDeals({
     query: { queryKey: getListSalesAccountingDealsQueryKey(), enabled: can("finance", "view"), retry: false, staleTime: 30_000 },
   });
-  // The list is non-empty only for the pilot dealership; there EVERY sales
-  // deal (enrolled or not) takes receipts through the desk.
+  // The server lists only covered sales. Pre-activation sales retain their
+  // original payment action; new sales take receipts through the desk.
   const pilotDealMap = useMemo(
     () => new Map((pilotDeals.data ?? []).map((d) => [d.id, d.enrolled] as const)),
     [pilotDeals.data],

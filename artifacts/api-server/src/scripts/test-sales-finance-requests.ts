@@ -13,6 +13,8 @@ const {
 } = await import("@workspace/db");
 const { eq, inArray, and } = await import("drizzle-orm");
 const svc = await import("../lib/sales-finance-requests");
+const { initializeSalesFinanceRollout } = await import("../lib/sales-finance-boundary");
+await initializeSalesFinanceRollout(db);
 
 const nonce = randomUUID().slice(0, 8);
 const dealerIds: number[] = []; const userIds: number[] = [];
@@ -53,7 +55,7 @@ try {
   const requester = await mk("Requester"), approver = await mk("Approver");
   const A = (u: { id: number; name: string | null }, approve = true) => ({ id: u.id, name: u.name ?? "", canEdit: true, canApprove: approve });
   const setup = async (label: string) => {
-    const [dealer] = await db.insert(dealersTable).values({ name: `CAM Motors Dummy (dev fixture ${label} ${nonce})`, status: "provisioning" }).returning();
+    const [dealer] = await db.insert(dealersTable).values({ name: label === "c" ? `SFR ordinary new-sale dealer ${nonce}` : `CAM Motors Dummy (dev fixture ${label} ${nonce})`, status: "provisioning" }).returning();
     dealerIds.push(dealer!.id);
     const [v] = await db.insert(vehiclesTable).values({ dealerId: dealer!.id, make: "BYD", model: "Atto", year: 2026, price: 1140, powertrain: "ev", mileageKm: 0, exteriorColor: "White", bodyType: "SUV", vin: `SFR${nonce}${label}` }).returning();
     const [deal] = await db.insert(dealsTable).values({ dealerId: dealer!.id, vehicleId: v!.id, customerName: "SFR Test", vehiclePrice: 1000, otdPrice: 1140, stage: "committed" }).returning();
@@ -257,7 +259,7 @@ try {
     const [plain] = await db.insert(dealersTable).values({ name: `SFR ordinary dealer ${nonce}`, status: "provisioning" }).returning();
     dealerIds.push(plain!.id);
     const [pv] = await db.insert(vehiclesTable).values({ dealerId: plain!.id, make: "BYD", model: "Atto", year: 2026, price: 500, powertrain: "ev", mileageKm: 0, exteriorColor: "Grey", bodyType: "SUV", vin: `SFRO${nonce}` }).returning();
-    const [pDeal] = await db.insert(dealsTable).values({ dealerId: plain!.id, vehicleId: pv!.id, customerName: "Other", vehiclePrice: 500, otdPrice: 500, stage: "committed" }).returning();
+    const [pDeal] = await db.insert(dealsTable).values({ dealerId: plain!.id, vehicleId: pv!.id, customerName: "Other", vehiclePrice: 500, otdPrice: 500, stage: "committed", createdAt: new Date("2000-01-01T00:00:00Z") }).returning();
     const otherInv = await mkInv(plain!.id, "O", { dealId: pDeal!.id });
     const refused = (e: unknown) => e instanceof PaymentGuardError && e.code === "sales_finance_approval_required";
     await assert.rejects(applyPayment({ invoice: uInv, amount: 10, method: "cash", reference: `u-${nonce}` }), refused);

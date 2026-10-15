@@ -10,6 +10,7 @@ import {
 import { activeDealerId } from "../middlewares/rbac";
 import { buildSalesPreview, EMPTY_SALES_CONFIG, SALES_STAGES, ACCOUNT_ROLES } from "../lib/sales-accounting-policy";
 import { fieldAccessFor } from "../lib/field-permissions";
+import { financeApprovalDealIds, requiresDealFinanceApproval } from "../lib/sales-finance-boundary";
 import { createRequest, decideRequest, retryRequest, dealFinanceSummary, listQueue, presentRequests, isPilotDealer, type Actor } from "../lib/sales-finance-requests";
 
 const router: IRouter = Router();
@@ -45,7 +46,7 @@ const inputSchema = z.object({
 function failure(message: string, status = 422): never {
   throw Object.assign(new Error(message), { status });
 }
-// Production scope is the explicitly approved dealer, not any renamed dealer.
+// All dealerships have access; the separate sale-origin boundary preserves existing sales.
 const eligible = isPilotDealer;
 async function configResponse(dealerId: number) {
   const [row] = await db.select().from(settings).where(eq(settings.dealerId, dealerId));
@@ -84,7 +85,7 @@ async function workflowResponse(dealerId: number, dealId: number) {
     entries: rows.map(r => ({ ...r, input: { ...r.input, revision: r.revision },
       blockers: [...r.blockers, ...(r.configRevision !== config.revision ? ["GL configuration changed: save and review this workpaper again."] : [])],
       updatedAt: r.updatedAt.toISOString(), ...(r.reviewedAt ? { reviewedAt: r.reviewedAt.toISOString() } : { reviewedAt: undefined }) })),
-    notice: "CAM Motors Dummy preparation mode. Financial workpapers are not receipts, invoices, VIN reservations or ERPNext postings. Enrolled deals' legacy invoice/payment sync is held pending finance-approved VAT and execution policy.",
+    notice: "Preparation history only: workpapers do not post. Submit operational requests through Sales Finance. New sales require approval; existing sales retain their current process. Advance VAT remains pending.",
   };
 }
 
@@ -100,7 +101,7 @@ router.use("/sales-accounting", async (req, res, next) => {
       res.status(403).json({ error: "Deal pricing access is required for sales accounting" }); return;
     }
     if (req.method !== "GET" && !(await eligible(activeDealerId(res)))) {
-      res.status(403).json({ error: "This workflow is enabled only for CAM Motors Dummy" }); return;
+      res.status(403).json({ error: "Dealership is not available" }); return;
     }
     next();
   } catch (err) { next(err); }
@@ -167,7 +168,8 @@ router.get("/sales-accounting/deals", async (_req, res) => {
     .leftJoin(workflows, and(eq(workflows.dealId, dealsTable.id), eq(workflows.dealerId, dealerId)))
     .leftJoin(vehiclesTable, and(eq(vehiclesTable.id, dealsTable.vehicleId), eq(vehiclesTable.dealerId, dealerId)))
     .where(eq(dealsTable.dealerId, dealerId)).orderBy(desc(dealsTable.id)).limit(500);
-  res.json(rows.map(({ deal, enrolledId, vehicle }) => ({ id: deal.id, customerName: deal.customerName ?? "Customer",
+  const scopedIds = await financeApprovalDealIds(db, dealerId);
+  res.json(rows.filter(({ deal }) => scopedIds.has(deal.id)).map(({ deal, enrolledId, vehicle }) => ({ id: deal.id, customerName: deal.customerName ?? "Customer",
     stage: deal.stage, amount: deal.otdPrice, enrolled: !!enrolledId, vehicle: vehicle ? `${vehicle.make} ${vehicle.model}` : "VIN not assigned", vin: vehicle?.vin ?? "" })));
 });
 router.get("/sales-accounting/deals/:dealId", async (req, res) => {
@@ -181,6 +183,7 @@ router.post("/sales-accounting/deals/:dealId", async (req, res) => {
     await tx.execute(sql`select pg_advisory_xact_lock(76042, ${dealerId})`);
     const { deal, enrolledId } = await dealRow(dealerId, dealId);
     if (enrolledId) return;
+    if (!(await requiresDealFinanceApproval(tx, dealerId, dealId))) failure("This sale predates activation and stays on its existing process. Historical sales cannot be enrolled in the new-sales rollout.", 409);
     if (["delivered", "cancelled"].includes(deal.stage)) failure("Historical/terminal deals cannot be enrolled");
     const items = await tx.select().from(dealItemsTable).where(and(eq(dealItemsTable.dealId, dealId), eq(dealItemsTable.dealerId, dealerId)));
     if (items.reduce((n, i) => n + i.quantity, 0) > 1) failure("This one-vehicle workflow does not support multi-vehicle deals. Keep this deal in the existing flow.");
@@ -196,7 +199,7 @@ router.post("/sales-accounting/deals/:dealId", async (req, res) => {
     }
     await tx.insert(workflows).values({ dealerId, dealId, startedBy: res.locals.user!.id });
     await tx.insert(auditLogsTable).values({ dealerId, actorUserId: res.locals.user!.id, action: "create", module: "finance",
-      entityType: "sales_accounting_workflow", entityId: String(dealId), summary: "Enrolled dummy deal in accounting preparation; ERP financial sync held" });
+      entityType: "sales_accounting_workflow", entityId: String(dealId), summary: "Enrolled sale in Finance approvals; legacy ERP financial sync held" });
   });
   res.json(await workflowResponse(dealerId, dealId));
 });

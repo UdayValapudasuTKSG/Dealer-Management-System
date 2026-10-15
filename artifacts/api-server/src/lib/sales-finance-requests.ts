@@ -67,7 +67,7 @@ export async function salesFinanceInvoiceFreeze(dealerId: number, invoiceId: num
   const [c] = r ? [] : await db.select({ id: requests.id }).from(requests).where(and(eq(requests.dealerId, dealerId), eq(requests.chargeInvoiceId, invoiceId))).limit(1);
   return r?.id ?? c?.id ?? null;
 }
-/** The dummy-dealer pilot boundary, shared with the routes. */
+/** Dealer availability. Sale-origin enforcement is a separate boundary. */
 export async function isPilotDealer(dealerId: number): Promise<boolean> {
   return isPilotDealerExec(db, dealerId);
 }
@@ -143,7 +143,7 @@ export async function createRequest(dealerId: number, dealId: number, actor: Act
     await tx.execute(sql`select pg_advisory_xact_lock(76044, ${dealerId})`);
     const { config, revision, valid } = await loadConfig(tx, dealerId);
     const loaded = await loadContext(tx, dealerId, dealId, body.invoiceId, body.legacyPaymentId);
-    if (!loaded.enrolled) fail("Enrol this deal in the sales finance pilot before submitting requests");
+    if (!loaded.enrolled) fail("Enrol this deal in Sales Finance before submitting requests");
     loaded.ctx.configValid = valid;
     if (body.legacyPaymentId) {
       const [p] = await tx.select().from(paymentsTable).where(and(eq(paymentsTable.id, body.legacyPaymentId), eq(paymentsTable.dealerId, dealerId)));
@@ -343,7 +343,7 @@ async function executeRequestPostingLocked(job: ErpnextSyncJob, remote: SalesFin
   }
   const r = claimed;
   try {
-    if (!(await isPilotDealer(r.dealerId))) throw new Error("Dealer is outside the sales finance pilot boundary; not posted.");
+    if (!(await isPilotDealer(r.dealerId))) throw new Error("Dealership is unavailable; not posted.");
     const held = await loadContext(db, r.dealerId, r.dealId, r.invoiceId, r.legacyPaymentId);
     if (held.ctx.legacyHeld) throw new Error("Linked legacy record is under Finance review hold; not posted.");
     if (held.ctx.invoice?.kind === "reservation") throw new Error("Advance VAT policy pending; not posted.");
@@ -397,7 +397,7 @@ async function executeRequestPostingLocked(job: ErpnextSyncJob, remote: SalesFin
 export async function assertAuthorizedPosting(dealerId: number, requestId: number, entity?: { type: string; id: number }): Promise<AuthorizedPosting> {
   const [r] = await db.select().from(requests).where(and(eq(requests.id, requestId), eq(requests.dealerId, dealerId)));
   if (!r || r.status !== "posting") throw new ErpnextError("Posting is not authorized: no claimed sales finance request", 422, "http");
-  if (!(await isPilotDealer(dealerId))) throw new ErpnextError("Posting is not authorized outside the sales finance pilot dealer", 422, "http");
+  if (!(await isPilotDealer(dealerId))) throw new ErpnextError("Posting dealership is unavailable", 422, "http");
   if (entity) {
     const allowed = entity.type === "invoice" ? [r.invoiceId, r.chargeInvoiceId] : entity.type === "payment" ? [r.paymentId, r.legacyPaymentId] : [requestId];
     if (!allowed.includes(entity.id)) throw new ErpnextError(`Posting is not authorized for ${entity.type} #${entity.id}`, 422, "http");
