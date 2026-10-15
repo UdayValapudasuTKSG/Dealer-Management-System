@@ -36,8 +36,11 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
   **Why:** The workflow PDF had only ranges, but the user subsequently populated the actual ledgers. Corresponding sales, stock and COGS accounts do not universally share matching numeric suffixes.
   **How to apply:** Validate explicit model/variant-to-account mappings against the live chart, including duty-free variants; never derive a stock or COGS account by replacing an income-account prefix. Revalidate saved AURA account names after chart changes.
 - Reuse compatible existing test-company accounts without renumbering them to the workflow's seven-digit codes; retain an explicit source-code-to-ERPNext-account cross-reference.
-  **Why:** The existing ERPNext company uses a four-digit chart and configured defaults. Replacing or renumbering it risks breaking those references; the user approved a limited dummy setup, not a chart replacement.
+  **Why:** The initial ERPNext company used a four-digit chart with configured defaults. The user subsequently populated a seven-digit chart; the live chart, not either historical numbering convention, is authoritative. Replacing or renumbering accounts risks breaking references.
   **How to apply:** Resolve by exact ERPNext account document name for AURA settings. Do not assume a workflow code is itself an ERPNext account identifier, or that created accounts implement the related posting flow.
+- Do not invent a duty-free income mapping merely to validate a normal-sale model.
+  **Why:** The connected chart has ordinary model ledgers without a corresponding duty-free income leaf for every model.
+  **How to apply:** Permit the unused duty-free mapping to remain blank, but block actual duty-free sales until Finance supplies an explicit applicable account. Never silently reuse normal income or another model's duty-free ledger.
 - The supplied GT Transaction Workflows v1.0 references a separate ERP Master Chart of Accounts v1.0; it does not define every model/brand ledger. Treat code ranges and `xx` placeholders as unresolved, not permission to invent accounts.
   **Why:** A workflow posting guide supplies account purposes and control accounts but lacks the leaf mappings needed for a complete ERPNext chart.
   **How to apply:** Keep prepared charts explicitly draft until the master list and existing ERPNext account export/template are reconciled. Never replace an existing company chart or load historical balances from narrative examples.

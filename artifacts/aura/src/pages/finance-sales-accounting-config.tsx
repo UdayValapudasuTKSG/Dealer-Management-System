@@ -22,7 +22,7 @@ import { PreparationBanner, Unavailable, apiErrorMessage, fieldCls } from "@/com
 
 type Form = Omit<SalesAccountingConfigInput, "revision">;
 const MODEL_FIELDS = ["income", "dutyFreeIncome", "inventory", "cogs", "discount"] as const;
-const MODEL_LABEL: Record<string, string> = { income: "Income", dutyFreeIncome: "Duty-free income", inventory: "Inventory", cogs: "COGS", discount: "Discount" };
+const MODEL_LABEL: Record<string, string> = { income: "Income", dutyFreeIncome: "Duty-free income (if applicable)", inventory: "Inventory", cogs: "COGS", discount: "Discount" };
 
 function fromConfig(c: GetSalesAccountingConfig200): Form {
   const acc = new Map(c.accounts.map((a) => [a.key, a.account]));
@@ -101,7 +101,7 @@ function ConfigWorkspace() {
       onSuccess: (c) => {
         qc.setQueryData(getGetSalesAccountingConfigQueryKey(), c);
         setPolling(true);
-        toast({ title: "Validation queued", description: "A read-only worker is checking accounts in ERPNext." });
+        toast({ title: "Validation queued", description: "ERPNext is read-only. Unique account numbers will be saved as exact names in AURA; reload the latest revision when validation finishes." });
       },
       onError: (err) => toast({ title: "Could not queue validation", description: apiErrorMessage(err), variant: "destructive" }),
     });
@@ -155,7 +155,7 @@ function ConfigWorkspace() {
 
         <section className="glass-panel rounded-2xl p-5 space-y-3">
           <h2 className="font-semibold tracking-tight">Control accounts</h2>
-          <p className="text-xs text-muted-foreground">Enter exact ERPNext Account names including the company suffix (e.g. "Debtors - CMD"). Suggested codes are references only, not validated accounts.</p>
+          <p className="text-xs text-muted-foreground">Enter an exact ERPNext Account name or account number. Validation resolves a unique number within the connected company and saves its full name in AURA. Suggested codes must still exist in your chart. Use Load latest after validation changes the revision.</p>
           <div className="grid gap-3 md:grid-cols-2">
             {form.accounts.map((a, i) => {
               const r = roleOf.get(a.key);
@@ -219,6 +219,7 @@ function ConfigWorkspace() {
             <Button data-testid="button-add-model" size="sm" variant="outline" className="rounded-full gap-1" disabled={!editable}
               onClick={() => setForm((f) => f && { ...f, models: [...f.models, { make: "", model: "", income: "", dutyFreeIncome: "", inventory: "", cogs: "", discount: "" }] })}><Plus className="h-3.5 w-3.5" /> Model</Button>
           </div>
+          <p className="text-xs text-muted-foreground">Map each make and model to its actual sales, inventory, COGS and discount accounts. Leave duty-free income blank only when not applicable; duty-free sales remain blocked until mapped. Never substitute another model's ledger.</p>
           {form.models.length === 0 && <p className="py-4 text-center text-xs text-muted-foreground">No model rows. Legacy codes on the Vehicle Model GL page are not copied or changed.</p>}
           {form.models.map((m, i) => (
             <div key={i} className="rounded-xl border border-white/10 p-3 space-y-2">
