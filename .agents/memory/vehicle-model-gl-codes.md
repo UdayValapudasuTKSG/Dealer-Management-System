@@ -11,3 +11,10 @@ description: Conventions for the Finance vehicle-model GL code mapping and how E
 
 **Why:** Finance tracks model-level accounting; silent fallback to a wrong code or rewritten history would corrupt postings.
 **How to apply:** any new consumer of model-level GL codes must reuse `normalizeModelKey` and read the job-payload snapshot for historical values.
+
+## Dummy model master-data scope
+On 2026-10-16 the user explicitly chose all 27 CAM Motors Dummy make/model entries as separate models, including `faraz / i7` and the differently recorded Foton G7 entries.
+
+**Why:** The user selected separate accounting identities rather than excluding samples or merging apparent duplicates.
+
+**How to apply:** Do not automatically merge these entries or remove their model accounts. Reuse explicitly matching existing accounts; missing dummy model accounts belong to the clearly labelled additional-model groups. Duty-free mappings remain blank unless an applicable explicit ledger exists. Master-data setup does not authorize VAT-policy changes, connection toggles, transaction posting or releasing legacy holds.

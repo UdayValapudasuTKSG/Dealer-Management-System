@@ -461,3 +461,17 @@ mtime_ms = 1791755150948
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/991d113b-ed81-4754-872c-40198109f754/49f13d6d-c29b-46bd-a9ba-70d8a3f39720"
 storage_version_token = "1791755175832438"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "Q_A3NqBBlZ4hfDmWU7OJv"
+uri = "file://generated-artifacts/dummy-model-accounts/cam-motors-dummy-model-gl-mappings.csv"
+type = "table"
+title = "CAM Motors Dummy — 27 Vehicle Model GL Mappings"
+description = "Verified ERPNext income, inventory, COGS, discount and available duty-free accounts for each separately mapped vehicle model."
+logical_id = "bff060f7-9c5c-478d-9d6a-8c4664b834d7"
+content_hash = "sha256:969688bf96332df369fb22bc416cedbb78f437b21b7d68b840cdf796163ab412"
+size = 4923
+mtime_ms = 1792089429196
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/bff060f7-9c5c-478d-9d6a-8c4664b834d7/5a8788b0-0021-4b62-b3bb-d64a2bcbc081"
+storage_version_token = "1792089432112132"
+content_type = "text/csv"
