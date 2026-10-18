@@ -27,6 +27,8 @@ export type FinancePolicyContext = {
   configValid: boolean;
   vehicle?: { make: string; model: string; dutyFree: boolean; vin: string | null } | null;
   dealStage?: string;
+  /** Active, unexpired reservation of this exact VIN for this deal. */
+  hasInvoiceReservation?: boolean;
   invoice?: { kind: string; status: string; amountCents: number; taxCents: number } | null;
   invoiceOutstandingCents?: number;
   invoicePosted?: boolean;
@@ -91,8 +93,9 @@ export function evaluateFinanceRequest(
       if (inv.kind === "reservation") policyBlocks.push(ADVANCE_VAT_BLOCK);
       if (inv.amountCents !== input.amountCents) blockers.push("Amount must equal the prepared invoice total.");
       if (!ctx.vehicle?.vin) blockers.push("Assign the VIN through the existing allocation controls before invoicing.");
-      if (ctx.dealStage && !["committed", "delivered"].includes(ctx.dealStage)) {
-        blockers.push("The deal must be committed (existing inventory/VIN gate) before the tax invoice posts.");
+      if (ctx.dealStage && !["committed", "delivered"].includes(ctx.dealStage) &&
+          !(ctx.dealStage === "desking" && ctx.hasInvoiceReservation)) {
+        blockers.push("Reserve this VIN for this deal before invoicing. Commitment and handover still require settlement.");
       }
       const model = ctx.vehicle ? config.models.find((m) =>
         normalizeModelKey(m.make) === normalizeModelKey(ctx.vehicle!.make) &&

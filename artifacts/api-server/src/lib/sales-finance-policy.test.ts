@@ -19,6 +19,14 @@ test("final invoice derives balanced DR receivable / CR income + VAT", () => {
   assert.equal(r.debitCents, 114000); assert.equal(r.creditCents, 114000);
   assert.ok(r.lines.some((l) => l.account === "SALES" && l.credit === 1000));
 });
+test("reserved desking sale can invoice before payment, without bypassing advance VAT", () => {
+  const input = { kind: "invoice" as const, amountCents: 114000, reference: "PRE-COMMIT" };
+  const ctx = { ...base, dealStage: "desking", invoice: { kind: "final", status: "issued", amountCents: 114000, taxCents: 14000 } };
+  assert.ok(evaluateFinanceRequest(config, input, ctx).blockers.some(b => b.includes("Reserve this VIN")));
+  assert.equal(evaluateFinanceRequest(config, input, { ...ctx, hasInvoiceReservation: true }).blockers.length, 0);
+  assert.ok(evaluateFinanceRequest(config, input, { ...ctx, dealStage: "cancelled", hasInvoiceReservation: true }).blockers.length);
+  assert.ok(evaluateFinanceRequest(config, input, { ...ctx, hasInvoiceReservation: true, invoice: { ...ctx.invoice, kind: "reservation" } }).policyBlocks.includes(ADVANCE_VAT_BLOCK));
+});
 test("pending advance VAT blocks reservation invoices and deposit payments", () => {
   const inv = { kind: "reservation", status: "issued", amountCents: 5000, taxCents: 0 };
   assert.ok(evaluateFinanceRequest(config, { kind: "invoice", amountCents: 5000, reference: "R" }, { ...base, invoice: inv }).policyBlocks.includes(ADVANCE_VAT_BLOCK));

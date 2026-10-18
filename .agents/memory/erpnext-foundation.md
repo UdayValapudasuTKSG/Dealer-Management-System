@@ -14,6 +14,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - ERPNext doc names live in a generic external-refs mapping (dealer+entity+doctype unique); updates must resolve the mapped doc name, never guess.
 
 ## Entity sync durable invariants
+- Final-invoice posting may precede deal commitment only for a desking deal with its own active, unexpired reservation of the exact VIN. Payment still follows invoice posting; commitment and handover retain settlement checks.
+  **Why:** Requiring commitment before the invoice, while commitment requires full payment and payment requires a posted invoice, makes a new sale impossible. The user authorized repairing this ordering after the end-to-end test exposed it.
+  **How to apply:** Never remove reservation ownership, VIN, independent Finance approval or delivery settlement checks to resolve this cycle. Recheck reservation eligibility at posting, not only submission. Advance-VAT policy remains a separate blocked path.
 - Every customer-write path must bump `updatedAt` and enqueue outbound sync, or inbound last-write-wins overwrites newer AURA data.
 - ERPNext allocations/amounts are non-negative; direction lives in payment_type ("Pay" for refunds).
 - Remote-create + local-ref is a crash window: persist the ref before submit and reconcile orphans by a deterministic remarks key before creating financial docs, or retries duplicate them.
@@ -61,6 +64,9 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - The test site's stock and compliance features affect API payloads: serial support must be enabled before serialised Item creation, and its installed HSN validator requires an existing six/eight-digit code even for dummy items.
   **Why:** Company country/currency alone does not control installed compliance extensions. The site rejected otherwise-valid test Items.
   **How to apply:** Inspect actual enabled features and metadata; do not disable compliance validation or copy dummy classifications into live items. Customer names must also differ from Customer Group names.
+- Do not apply the dummy EV classification to the shared generic AURA sales item to make an end-to-end run pass.
+  **Why:** The real application posting path uses a shared non-stock sales item for vehicles and other invoices, unlike the old standalone serialised EV fixture. A classification appropriate for one EV does not establish the classification for every invoice.
+  **How to apply:** Resolve validated dealer/model-specific ERP item and classification mappings before claiming live ERP posting works. Keep stock/COGS verification separate: a non-stock invoice is not evidence of a VIN stock-out.
 - On 2026-10-14 the user restricted the Sales & F&I rollout to CAM Motors Dummy and explicitly chose to keep advance-VAT posting blocked pending finance approval. This supersedes the earlier provisional dummy delivery-only VAT choice.
   **Why:** The new workflow's tax policy is awaiting approval; the presence of a deposit or VAT account does not authorize posting.
   **How to apply:** Do not activate advance posting or broaden rollout to live dealerships without approval. Production's approved dummy dealership is ID 2. Never retroactively enrol transactions with existing receipts or attempted ERP postings. Current workpapers are preparation/review, not financial execution.

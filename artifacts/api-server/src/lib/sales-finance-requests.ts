@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db, dealersTable, dealsTable, vehiclesTable, invoicesTable, paymentsTable, erpnextRefsTable, erpnextSyncJobsTable,
-  auditLogsTable, usersTable, salesAccountingSettingsTable as settings, salesAccountingWorkflowsTable as workflows,
+  auditLogsTable, usersTable, bookingsTable, salesAccountingSettingsTable as settings, salesAccountingWorkflowsTable as workflows,
   salesFinanceRequestsTable as requests, type SalesFinanceRequest, type SalesFinanceRequestSnapshot,
   type ErpnextSyncJob, type SalesAccountingConfigData,
 } from "@workspace/db";
@@ -94,6 +94,14 @@ async function loadContext(tx: Exec, dealerId: number, dealId: number, invoiceId
     configValid: false, dealStage: row.deal.stage,
     vehicle: row.vehicle ? { make: row.vehicle.make, model: row.vehicle.model, dutyFree: row.deal.dutyFreeApproved, vin: row.vehicle.vin ?? null } : null,
   };
+  if (row.deal.stage === "desking" && row.vehicle?.vin && row.vehicle.status === "reserved") {
+    const [reservation] = await tx.select({ id: bookingsTable.id }).from(bookingsTable).where(and(
+      eq(bookingsTable.dealerId, dealerId), eq(bookingsTable.dealId, dealId),
+      eq(bookingsTable.vehicleId, row.vehicle.id), eq(bookingsTable.status, "active"),
+      sql`(${bookingsTable.expiresAt} IS NULL OR ${bookingsTable.expiresAt} > now())`,
+    )).limit(1);
+    ctx.hasInvoiceReservation = !!reservation;
+  }
   let invoice: typeof invoicesTable.$inferSelect | undefined;
   if (invoiceId) {
     [invoice] = await tx.select().from(invoicesTable).where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.dealerId, dealerId), eq(invoicesTable.dealId, dealId)));
@@ -347,6 +355,10 @@ async function executeRequestPostingLocked(job: ErpnextSyncJob, remote: SalesFin
     const held = await loadContext(db, r.dealerId, r.dealId, r.invoiceId, r.legacyPaymentId);
     if (held.ctx.legacyHeld) throw new Error("Linked legacy record is under Finance review hold; not posted.");
     if (held.ctx.invoice?.kind === "reservation") throw new Error("Advance VAT policy pending; not posted.");
+    if (r.kind === "invoice" && !["committed", "delivered"].includes(held.ctx.dealStage ?? "") &&
+        !(held.ctx.dealStage === "desking" && held.ctx.hasInvoiceReservation)) {
+      throw new Error("The deal no longer holds its invoiced VIN; nothing was posted. Review the reservation.");
+    }
     const lines = r.snapshot.lines;
     const acct = r.snapshot.accounts;
     let docName: string | null = null;

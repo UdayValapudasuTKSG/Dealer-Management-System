@@ -7,6 +7,7 @@ import {
   customersTable,
   leadsTable,
   dealsTable,
+  dealItemsTable,
   gatesTable,
   tasksTable,
   timelineEventsTable,
@@ -40,6 +41,7 @@ import {
   logCancellationEvent,
 } from "../lib/cancellation";
 import { logger } from "../lib/logger";
+import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { ensureAccountForLead } from "../lib/accounts";
 import { applyPayment, issueInvoice, logPaymentEvent } from "../lib/invoicing";
 import { recordAgentRun } from "../lib/agent-governance";
@@ -249,7 +251,9 @@ async function preBookFollowThrough(
             ),
           );
         if (vehicle) {
-          const [autoDeal] = await db
+          const pricing = computeTaxes(vehicle.price, await ensureDealerTaxes(dealerId), { powertrain: vehicle.powertrain });
+          const autoDeal = await db.transaction(async tx => {
+          const [created] = await tx
             .insert(dealsTable)
             .values({
               dealerId,
@@ -258,6 +262,8 @@ async function preBookFollowThrough(
               customerName: lead.name,
               vehicleId: vehicle.id,
               vehiclePrice: vehicle.price,
+              otdPrice: pricing.totalWithTax,
+              taxSnapshot: pricing.lines,
               discount: 0,
               divisionId:
                 vehicle.divisionId ?? (await defaultDivisionId(dealerId)),
@@ -274,6 +280,16 @@ async function preBookFollowThrough(
               depositPaid: lead.reservationFeePaid ?? false,
             })
             .returning();
+          await tx.insert(dealItemsTable).values({
+            dealerId, dealId: created.id, vehicleId: vehicle.id,
+            make: vehicle.make, model: vehicle.model, modelYear: vehicle.year,
+            color: vehicle.exteriorColor, quantity: 1, position: 0,
+            vehiclePrice: vehicle.price, discount: 0,
+            taxSnapshot: pricing.lines, total: pricing.totalWithTax,
+          });
+          await tx.update(bookingsTable).set({ dealId: created.id }).where(eq(bookingsTable.id, booking.id));
+          return created;
+          });
           if (autoDeal) {
             dealId = autoDeal.id;
             await db
