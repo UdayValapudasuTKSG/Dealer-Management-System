@@ -44,7 +44,7 @@ export const GetSalesAccountingConfigResponse = zod.object({
   "approvalReference": zod.string()
 })).optional(),
   "eligible": zod.boolean(),
-  "vatPolicy": zod.enum(['pending']),
+  "vatPolicy": zod.enum(['pending', 'final_invoice_14']),
   "revision": zod.number(),
   "accounts": zod.array(zod.object({
   "key": zod.string(),
@@ -123,7 +123,7 @@ export const SaveSalesAccountingConfigResponse = zod.object({
   "approvalReference": zod.string()
 })).optional(),
   "eligible": zod.boolean(),
-  "vatPolicy": zod.enum(['pending']),
+  "vatPolicy": zod.enum(['pending', 'final_invoice_14']),
   "revision": zod.number(),
   "accounts": zod.array(zod.object({
   "key": zod.string(),
@@ -170,7 +170,7 @@ export const ValidateSalesAccountingConfigResponse = zod.object({
   "approvalReference": zod.string()
 })).optional(),
   "eligible": zod.boolean(),
-  "vatPolicy": zod.enum(['pending']),
+  "vatPolicy": zod.enum(['pending', 'final_invoice_14']),
   "revision": zod.number(),
   "accounts": zod.array(zod.object({
   "key": zod.string(),
@@ -243,7 +243,7 @@ export const GetSalesAccountingWorkflowResponse = zod.object({
   "approvalReference": zod.string()
 })).optional(),
   "eligible": zod.boolean(),
-  "vatPolicy": zod.enum(['pending']),
+  "vatPolicy": zod.enum(['pending', 'final_invoice_14']),
   "revision": zod.number(),
   "accounts": zod.array(zod.object({
   "key": zod.string(),
@@ -346,7 +346,7 @@ export const StartSalesAccountingWorkflowResponse = zod.object({
   "approvalReference": zod.string()
 })).optional(),
   "eligible": zod.boolean(),
-  "vatPolicy": zod.enum(['pending']),
+  "vatPolicy": zod.enum(['pending', 'final_invoice_14']),
   "revision": zod.number(),
   "accounts": zod.array(zod.object({
   "key": zod.string(),
@@ -856,7 +856,7 @@ export const SaveSalesAccountingEntryResponse = zod.object({
   "approvalReference": zod.string()
 })).optional(),
   "eligible": zod.boolean(),
-  "vatPolicy": zod.enum(['pending']),
+  "vatPolicy": zod.enum(['pending', 'final_invoice_14']),
   "revision": zod.number(),
   "accounts": zod.array(zod.object({
   "key": zod.string(),
@@ -964,7 +964,7 @@ export const ReviewSalesAccountingEntryResponse = zod.object({
   "approvalReference": zod.string()
 })).optional(),
   "eligible": zod.boolean(),
-  "vatPolicy": zod.enum(['pending']),
+  "vatPolicy": zod.enum(['pending', 'final_invoice_14']),
   "revision": zod.number(),
   "accounts": zod.array(zod.object({
   "key": zod.string(),

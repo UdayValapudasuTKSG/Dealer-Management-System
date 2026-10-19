@@ -616,6 +616,18 @@ export async function postAuthorizedJournal(
   // fail before creating anything if it is missing.
   const company = await client.getDoc<{ cost_center?: string | null }>("Company", conn.companyName);
   const accounts = authorizedJournalAccounts(auth, company.cost_center);
+  if (auth.journalInvoiceId) {
+    const [invoice] = await db.select().from(invoicesTable).where(and(
+      eq(invoicesTable.dealerId, dealerId), eq(invoicesTable.id, auth.journalInvoiceId)));
+    if (!invoice) throw configError("Deposit application invoice not found");
+    const salesInvoice = await getErpnextRef(dealerId, "invoice", invoice.id, "Sales Invoice");
+    if (!salesInvoice) throw configError("Post the final sales invoice before applying its deposit");
+    const customer = await resolveInvoiceCustomer(dealerId, invoice.customerId, invoice.customerName, client);
+    const receivableRow = accounts.find(row => row.account === auth.receivable && row.credit_in_account_currency > 0);
+    if (!receivableRow) throw configError("Deposit application has no approved receivable credit");
+    Object.assign(receivableRow, { party_type: "Customer", party: customer,
+      reference_type: "Sales Invoice", reference_name: salesInvoice });
+  }
   const created = await client.insertDoc("Journal Entry", {
     voucher_type: "Journal Entry", company: conn.companyName, posting_date: auth.date, user_remark: remoteKey, accounts,
   });

@@ -13,6 +13,8 @@ export type AuthorizedPosting = {
   /** Income account for the specific invoice being posted, if any. */
   incomeAccount: string | null;
   paidTo: string | null;
+  /** Final invoice settled by a non-cash deposit journal. */
+  journalInvoiceId?: number | null;
   journalLines: { account: string; debit: number; credit: number; purpose: string }[];
 };
 

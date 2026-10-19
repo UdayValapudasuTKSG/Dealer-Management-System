@@ -70,6 +70,8 @@ export const salesAccountingEntriesTable = pgTable("sales_accounting_entries", {
  * event (many per deal). Amounts are integer cents. Posting state is distinct
  * from approval state; `posted` only after confirmed ERPNext success. */
 export type SalesFinanceRequestSnapshot = {
+  advancePolicy?: "final_invoice_14";
+  advanceApplications?: { requestId: number; amountCents: number }[];
   input: Record<string, unknown>;
   lines: SalesAccountingLine[];
   configRevision: number;

@@ -11,6 +11,7 @@ import { applyPayment, PaymentGuardError } from "./invoicing";
 import { ErpnextError } from "./erpnext/client";
 import type { AuthorizedPosting } from "./erpnext/authorized-payload";
 import { isPilotDealerExec, isPilotSalesInvoice } from "./sales-finance-boundary";
+import { allocateAdvances, hasApprovedAdvancePolicy, FINAL_INVOICE_VAT_POLICY } from "./sales-advance-policy";
 
 export const SALES_FINANCE_DOCTYPE = "AURA Sales Finance Posting";
 const ACTIVE = ["pending", "approved", "posting", "posted", "failed"];
@@ -91,9 +92,12 @@ async function loadContext(tx: Exec, dealerId: number, dealId: number, invoiceId
     .where(and(eq(dealsTable.id, dealId), eq(dealsTable.dealerId, dealerId)));
   if (!row) fail("Deal not found", 404);
   const ctx: FinancePolicyContext = {
+    advancePolicy: await hasApprovedAdvancePolicy(dealerId) ? FINAL_INVOICE_VAT_POLICY : undefined,
     configValid: false, dealStage: row.deal.stage,
     vehicle: row.vehicle ? { make: row.vehicle.make, model: row.vehicle.model, dutyFree: row.deal.dutyFreeApproved, vin: row.vehicle.vin ?? null } : null,
   };
+  const saleBaseCents = Math.round(Math.max(row.deal.vehiclePrice - row.deal.discount + row.deal.accessories, 0) * 100);
+  ctx.fullSaleAmountCents = saleBaseCents + Math.round(saleBaseCents * 0.14);
   if (row.deal.stage === "desking" && row.vehicle?.vin && row.vehicle.status === "reserved") {
     const [reservation] = await tx.select({ id: bookingsTable.id }).from(bookingsTable).where(and(
       eq(bookingsTable.dealerId, dealerId), eq(bookingsTable.dealId, dealId),
@@ -119,6 +123,31 @@ async function loadContext(tx: Exec, dealerId: number, dealId: number, invoiceId
     const [ref] = await tx.select({ id: erpnextRefsTable.id }).from(erpnextRefsTable).where(and(eq(erpnextRefsTable.dealerId, dealerId),
       eq(erpnextRefsTable.entityType, "invoice"), eq(erpnextRefsTable.entityId, invoice.id), eq(erpnextRefsTable.doctype, "Sales Invoice")));
     ctx.invoicePosted = !!ref;
+    if (ctx.advancePolicy && invoice.kind === "reservation") {
+      const [finalSale] = await tx.select({ id: requests.id }).from(requests).where(and(
+        eq(requests.dealerId, dealerId), eq(requests.dealId, dealId), eq(requests.kind, "invoice"),
+        inArray(requests.status, ["approved", "posting", "posted", "failed"]),
+        sql`${requests.snapshot}->'invoice'->>'kind' = 'final'`)).limit(1);
+      ctx.finalSaleStarted = !!finalSale;
+    }
+    if (ctx.advancePolicy && invoice.kind === "final") {
+      const related = await tx.select().from(requests).where(and(eq(requests.dealerId, dealerId), eq(requests.dealId, dealId)));
+      ctx.unresolvedAdvance = related.some(r => r.kind === "payment" &&
+        r.snapshot.invoice?.kind === "reservation" && ["approved", "posting", "failed"].includes(r.status));
+      ctx.invoicePosted = related.some(r => r.kind === "invoice" && r.invoiceId === invoice!.id && r.status === "posted");
+      const receipts = related.filter(r => r.kind === "payment" && r.status === "posted" &&
+        r.snapshot.advancePolicy === FINAL_INVOICE_VAT_POLICY && r.snapshot.invoice?.kind === "reservation");
+      const used = related.filter(r => r.id !== excludeRequestId && ACTIVE.includes(r.status))
+        .flatMap(r => r.snapshot.advanceApplications ?? []);
+      // A retry may already have its own non-cash credit locally. Add only
+      // that exact credit back to the cap so reconciliation is repeatable.
+      const [ownCredit] = excludeRequestId ? await tx.select().from(paymentsTable).where(and(
+        eq(paymentsTable.dealerId, dealerId), eq(paymentsTable.invoiceId, invoice.id),
+        eq(paymentsTable.method, "account_credit"),
+        eq(paymentsTable.reference, `AURA SFR-${dealerId}-${excludeRequestId} | NON-CASH DEPOSIT APPLICATION`))) : [];
+      const cap = Math.max(0, ctx.invoiceOutstandingCents! + Math.round((ownCredit?.amount ?? 0) * 100));
+      ctx.advanceApplications = allocateAdvances(receipts, used, cap);
+    }
   }
   const heldIds: { type: string; id: number }[] = [];
   if (invoice) heldIds.push({ type: "invoice", id: invoice.id });
@@ -132,10 +161,10 @@ async function loadContext(tx: Exec, dealerId: number, dealId: number, invoiceId
   return { deal: row.deal, vehicle: row.vehicle, enrolled: !!row.enrolledId, invoice, ctx };
 }
 
-function policyInput(r: { kind: string; amountCents: number; category: string | null; sourceId: string | null; payerType: string | null; billingTreatment: string | null; customerChargeCents: number | null; reference: string }): FinancePolicyInput {
+function policyInput(r: { kind: string; amountCents: number; category: string | null; sourceId: string | null; payerType: string | null; billingTreatment: string | null; customerChargeCents: number | null; reference: string; paymentMethod?: string | null }): FinancePolicyInput {
   return { kind: r.kind as FinancePolicyInput["kind"], amountCents: r.amountCents, category: r.category as FinancePolicyInput["category"],
     sourceId: r.sourceId, payerType: r.payerType as FinancePolicyInput["payerType"], billingTreatment: r.billingTreatment as FinancePolicyInput["billingTreatment"],
-    customerChargeCents: r.customerChargeCents, reference: r.reference };
+    customerChargeCents: r.customerChargeCents, reference: r.reference, paymentMethod: r.paymentMethod };
 }
 
 export async function createRequest(dealerId: number, dealId: number, actor: Actor, body: CreateRequestBody) {
@@ -171,11 +200,13 @@ export async function createRequest(dealerId: number, dealId: number, actor: Act
       if (dupe) fail(`Receipt already has an active request (#${dupe.id})`, 409);
     }
     const input = policyInput({ kind: body.kind, amountCents, category: body.category ?? null, sourceId: body.sourceId ?? null,
-      payerType: body.payerType ?? null, billingTreatment: body.billingTreatment ?? null, customerChargeCents, reference: body.reference });
+      payerType: body.payerType ?? null, billingTreatment: body.billingTreatment ?? null, customerChargeCents, reference: body.reference, paymentMethod: body.paymentMethod });
     const result = evaluateFinanceRequest(config, input, loaded.ctx);
     const source = config.sources.find((s) => s.id === body.sourceId) ?? null;
     const rule = body.kind === "expense" ? config.customerCharges?.find((r) => r.category === body.category) ?? null : null;
     const snapshot: SalesFinanceRequestSnapshot = {
+      advancePolicy: loaded.ctx.advancePolicy,
+      advanceApplications: body.kind === "invoice" ? loaded.ctx.advanceApplications : undefined,
       input: { ...body, amountCents, customerChargeCents, chargeNetCents: result.chargeNetCents, chargeVatCents: result.chargeVatCents },
       lines: result.lines, configRevision: revision, source,
       chargeRule: rule && body.billingTreatment === "customer_billed" ? { category: rule.category, incomeAccount: rule.incomeAccount, taxTreatment: rule.taxTreatment,
@@ -224,6 +255,9 @@ export async function decideRequest(dealerId: number, requestId: number, actor: 
     const norm = (ls: { account: string; debit: number; credit: number; purpose: string }[]) => ls.map((l) => `${l.account}|${Math.round(l.debit * 100)}|${Math.round(l.credit * 100)}|${l.purpose}`).join("\n");
     if (norm(result.lines) !== norm(r.snapshot.lines)) {
       fail("The GL lines no longer match the submitted snapshot (invoice or mapping changed). Submit a new request.", 409);
+    }
+    if (JSON.stringify(loaded.ctx.advanceApplications ?? []) !== JSON.stringify(r.snapshot.advanceApplications ?? []) && r.kind === "invoice") {
+      fail("Available deposits changed after submission. Reject and resubmit to review the updated deposit application.", 409);
     }
     if (r.snapshot.invoice) {
       const drift = invoiceDrift(r.snapshot.invoice, loaded.invoice);
@@ -354,7 +388,10 @@ async function executeRequestPostingLocked(job: ErpnextSyncJob, remote: SalesFin
     if (!(await isPilotDealer(r.dealerId))) throw new Error("Dealership is unavailable; not posted.");
     const held = await loadContext(db, r.dealerId, r.dealId, r.invoiceId, r.legacyPaymentId);
     if (held.ctx.legacyHeld) throw new Error("Linked legacy record is under Finance review hold; not posted.");
-    if (held.ctx.invoice?.kind === "reservation") throw new Error("Advance VAT policy pending; not posted.");
+    const isAdvance = held.ctx.invoice?.kind === "reservation";
+    if (isAdvance && (!held.ctx.advancePolicy || r.snapshot.advancePolicy !== held.ctx.advancePolicy || r.kind !== "payment")) {
+      throw new Error("This advance request has no approved deposit posting basis. Reject and resubmit; nothing was posted.");
+    }
     if (r.kind === "invoice" && !["committed", "delivered"].includes(held.ctx.dealStage ?? "") &&
         !(held.ctx.dealStage === "desking" && held.ctx.hasInvoiceReservation)) {
       throw new Error("The deal no longer holds its invoiced VIN; nothing was posted. Review the reservation.");
@@ -367,14 +404,48 @@ async function executeRequestPostingLocked(job: ErpnextSyncJob, remote: SalesFin
       return name;
     };
     if (r.kind === "invoice") {
+      if (r.snapshot.advancePolicy) {
+        if (held.ctx.unresolvedAdvance) throw new Error("Reconcile unresolved deposit postings before posting the final invoice.");
+        const expected = held.ctx.fullSaleAmountCents;
+        if (r.snapshot.invoice?.amountCents !== expected) throw new Error("Sale value changed after approval; Finance must reconcile before posting.");
+      }
       const income = lines.find((l) => l.credit > 0 && l.purpose === "Vehicle sale income")?.account;
       if (!income) throw new Error("Snapshot is missing the income line");
       await assertInvoiceUnchanged(r, r.invoiceId!, r.snapshot.invoice);
+      const applications = r.snapshot.advanceApplications ?? [];
+      if (applications.length) {
+        const refreshed = await loadContext(db, r.dealerId, r.dealId, r.invoiceId, null, r.id);
+        if (JSON.stringify(refreshed.ctx.advanceApplications ?? []) !== JSON.stringify(applications)) {
+          throw new Error("Approved deposit allocation changed; Finance reconciliation is required before applying deposits.");
+        }
+      }
       docName = need(await remote.postInvoice(job, r.invoiceId!, { incomeAccount: income, taxAccount: acct["vatOutput"] || null }), "Sales Invoice");
+      if (applications.length) {
+        const journal = await remote.postJournal(r.dealerId, r.id, remoteKey(r), r.date,
+          lines.filter(l => ["Customer deposit applied", "Deposit credit against final invoice"].includes(l.purpose)));
+        await ensureDepositCredit(r);
+        docName = `${docName} + ${need(journal, "deposit application Journal Entry")}`;
+      }
     } else if (r.kind === "payment") {
       await assertInvoiceUnchanged(r, r.invoiceId!, r.snapshot.invoice);
-      const paymentId = await ensureLocalPayment(r);
-      docName = need(await remote.postPayment(job, paymentId, { paidTo: r.snapshot.source!.account, receivable: acct["receivables"]! }), "Payment Entry");
+      if (isAdvance) {
+        // Remote first: never mark a reservation paid/hold stock on a failed
+        // ERP journal. Retrying adopts the deterministic journal and receipt.
+        const current = await loadContext(db, r.dealerId, r.dealId, r.invoiceId, r.legacyPaymentId, r.id);
+        const [adoptable] = await db.select().from(paymentsTable).where(and(eq(paymentsTable.dealerId, r.dealerId),
+          eq(paymentsTable.invoiceId, r.invoiceId!), eq(paymentsTable.reference, paymentReference(r))));
+        if (current.ctx.finalSaleStarted && !adoptable && !r.paymentId && !r.legacyPaymentId) {
+          throw new Error("The final sale has started. Reconcile this request and record further receipts against the final invoice.");
+        }
+        if (!r.paymentId && !r.legacyPaymentId && !adoptable && current.ctx.invoiceOutstandingCents! < r.amountCents) {
+          throw new Error("Deposit balance changed; this receipt would overpay the reservation.");
+        }
+        docName = need(await remote.postJournal(r.dealerId, r.id, remoteKey(r), r.date, lines), "deposit Journal Entry");
+        await ensureLocalPayment(r);
+      } else {
+        const paymentId = await ensureLocalPayment(r);
+        docName = need(await remote.postPayment(job, paymentId, { paidTo: r.snapshot.source!.account, receivable: acct["receivables"]! }), "Payment Entry");
+      }
     } else {
       docName = need(await remote.postJournal(r.dealerId, r.id, remoteKey(r), r.date, lines.slice(0, 2)), "Journal Entry");
       if (r.billingTreatment === "customer_billed") {
@@ -384,7 +455,7 @@ async function executeRequestPostingLocked(job: ErpnextSyncJob, remote: SalesFin
       }
     }
     // Remote success is the truth: a concurrent loser may have marked failed.
-    await db.update(requests).set({ status: "posted", postedAt: new Date(), erpDocName: docName, erpDoctype: ERP_DOCTYPE[r.kind],
+    await db.update(requests).set({ status: "posted", postedAt: new Date(), erpDocName: docName, erpDoctype: isAdvance ? "Journal Entry" : ERP_DOCTYPE[r.kind],
       lastError: null, updatedAt: new Date() }).where(and(eq(requests.id, r.id), inArray(requests.status, ["posting", "failed"])));
     await audit(db, r.dealerId, null, "post", r.id, `Posted request #${r.id} to ERPNext (${docName})`);
     return { docName: docName.split(" + ")[0] ?? null };
@@ -424,8 +495,27 @@ export async function assertAuthorizedPosting(dealerId: number, requestId: numbe
     incomeAccount: entity?.type !== "invoice" ? null : isCharge ? snap.chargeRule?.incomeAccount ?? null
       : snap.lines.find((l) => l.credit > 0 && l.purpose === "Vehicle sale income")?.account ?? null,
     paidTo: snap.source?.account ?? null,
-    journalLines: r.kind === "expense" ? snap.lines.slice(0, 2) : [],
+    journalInvoiceId: r.kind === "invoice" && snap.advanceApplications?.length ? r.invoiceId : null,
+    journalLines: r.kind === "expense" ? snap.lines.slice(0, 2)
+      : r.kind === "payment" && snap.advancePolicy && snap.invoice?.kind === "reservation" ? snap.lines
+      : r.kind === "invoice" && snap.advanceApplications?.length
+        ? snap.lines.filter(l => ["Customer deposit applied", "Deposit credit against final invoice"].includes(l.purpose)) : [],
   };
+}
+
+async function ensureDepositCredit(r: SalesFinanceRequest) {
+  const amountCents = (r.snapshot.advanceApplications ?? []).reduce((s, a) => s + a.amountCents, 0);
+  const reference = `${remoteKey(r)} | NON-CASH DEPOSIT APPLICATION`;
+  const [existing] = await db.select().from(paymentsTable).where(and(eq(paymentsTable.dealerId, r.dealerId), eq(paymentsTable.reference, reference)));
+  if (existing) {
+    if (existing.invoiceId !== r.invoiceId || Math.round(existing.amount * 100) !== amountCents || existing.method !== "account_credit") {
+      throw new Error("Existing deposit application does not match its approved basis.");
+    }
+    return;
+  }
+  const [invoice] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.dealerId, r.dealerId), eq(invoicesTable.id, r.invoiceId!)));
+  if (!invoice) throw new Error("Final invoice missing");
+  await applyPayment({ invoice, amount: amountCents / 100, method: "account_credit", reference, receivedBy: "Finance — deposit application", erpSync: false });
 }
 
 export async function dealFinanceSummary(dealerId: number, dealId: number) {
@@ -435,8 +525,10 @@ export async function dealFinanceSummary(dealerId: number, dealId: number) {
   const payments = live.length ? await db.select().from(paymentsTable).where(and(eq(paymentsTable.dealerId, dealerId), inArray(paymentsTable.invoiceId, live.map((i) => i.id)))) : [];
   const rows = await db.select().from(requests).where(and(eq(requests.dealerId, dealerId), eq(requests.dealId, dealId))).orderBy(desc(requests.id));
   const refs = live.length ? await db.select().from(erpnextRefsTable).where(and(eq(erpnextRefsTable.dealerId, dealerId), eq(erpnextRefsTable.entityType, "invoice"), inArray(erpnextRefsTable.entityId, live.map((i) => i.id)))) : [];
-  const invoicedCents = live.reduce((s, i) => s + Math.round(i.amount * 100), 0);
-  const paidCents = payments.reduce((s, p) => s + Math.round(p.amount * 100), 0);
+  const balanceInvoices = loaded.ctx.advancePolicy && live.some(i => i.kind === "final")
+    ? live.filter(i => i.kind === "final") : live;
+  const invoicedCents = balanceInvoices.reduce((s, i) => s + Math.round(i.amount * 100), 0);
+  const paidCents = payments.filter(p => balanceInvoices.some(i => i.id === p.invoiceId)).reduce((s, p) => s + Math.round(p.amount * 100), 0);
   const pending = (kind: string) => rows.filter((r) => r.kind === kind && ["pending", "approved", "posting"].includes(r.status)).reduce((s, r) => s + r.amountCents, 0);
   return {
     deal: { id: loaded.deal.id, customerName: loaded.deal.customerName ?? "Customer", stage: loaded.deal.stage, enrolled: loaded.enrolled,
@@ -474,6 +566,9 @@ export async function presentRequests(dealerId: number, rows: SalesFinanceReques
         const result = evaluateFinanceRequest(config, policyInput(r), loaded.ctx);
         lines = result.lines;
         blockers = [...result.policyBlocks, ...result.blockers];
+        if (loaded.ctx.advancePolicy && r.kind === "payment") {
+          blockers.push("This request was submitted before the advance policy was approved. A different Finance approver must reject it; submit a replacement payment request with the correct receiving source for independent approval.");
+        }
       }
     }
     return ({

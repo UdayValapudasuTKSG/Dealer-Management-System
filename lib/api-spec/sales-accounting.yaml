@@ -200,7 +200,7 @@ schemas:
         items:
           $ref: "#/schemas/CustomerExpenseChargeRule"
       eligible: { type: boolean }
-      vatPolicy: { type: string, enum: [pending] }
+      vatPolicy: { type: string, enum: [pending, final_invoice_14] }
       revision: { type: integer }
       accounts:
         type: array

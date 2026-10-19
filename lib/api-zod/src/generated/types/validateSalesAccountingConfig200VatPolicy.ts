@@ -11,4 +11,5 @@ export type ValidateSalesAccountingConfig200VatPolicy = typeof ValidateSalesAcco
 
 export const ValidateSalesAccountingConfig200VatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;

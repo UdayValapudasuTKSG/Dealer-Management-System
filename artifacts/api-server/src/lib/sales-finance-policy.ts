@@ -14,6 +14,7 @@ import { normalizeModelKey } from "@workspace/db";
 export type RequestKind = "invoice" | "payment" | "expense";
 export type ExpenseCategory = "registration" | "fuel" | "detailing";
 export type FinancePolicyInput = {
+  paymentMethod?: string | null;
   kind: RequestKind;
   amountCents: number;
   category?: ExpenseCategory | null;
@@ -24,6 +25,11 @@ export type FinancePolicyInput = {
   reference: string;
 };
 export type FinancePolicyContext = {
+  advancePolicy?: "final_invoice_14";
+  advanceApplications?: { requestId: number; amountCents: number }[];
+  fullSaleAmountCents?: number;
+  finalSaleStarted?: boolean;
+  unresolvedAdvance?: boolean;
   configValid: boolean;
   vehicle?: { make: string; model: string; dutyFree: boolean; vin: string | null } | null;
   dealStage?: string;
@@ -90,11 +96,14 @@ export function evaluateFinanceRequest(
     if (!inv) blockers.push("Select the prepared AURA invoice for this deal.");
     else {
       if (inv.status === "void") blockers.push("The selected invoice is void.");
-      if (inv.kind === "reservation") policyBlocks.push(ADVANCE_VAT_BLOCK);
+      if (inv.kind === "reservation") policyBlocks.push(ctx.advancePolicy
+        ? "A deposit request is not a sales invoice and does not post revenue. Submit a Payment request against this reservation invoice instead."
+        : ADVANCE_VAT_BLOCK);
       if (inv.amountCents !== input.amountCents) blockers.push("Amount must equal the prepared invoice total.");
       // An advance is not a vehicle sale. Until its tax policy is approved,
       // do not invent revenue/VAT entries or require final-sale prerequisites.
       if (inv.kind !== "reservation") {
+      if (ctx.advancePolicy && ctx.unresolvedAdvance) blockers.push("Finish or reconcile approved/failed deposit postings before approving the final invoice.");
       if (!ctx.vehicle?.vin) blockers.push("Assign the VIN through the existing allocation controls before invoicing.");
       if (ctx.dealStage && !["committed", "delivered"].includes(ctx.dealStage) &&
           !(ctx.dealStage === "desking" && ctx.hasInvoiceReservation)) {
@@ -108,9 +117,20 @@ export function evaluateFinanceRequest(
         ? "Configure this model's duty-free income account; normal income is never reused."
         : "Configure this vehicle model's income account in Finance mappings.");
       const tax = inv.taxCents;
+      if (ctx.advancePolicy && ctx.fullSaleAmountCents != null && inv.amountCents !== ctx.fullSaleAmountCents) {
+        blockers.push("This is not the full 14%-VAT vehicle invoice. Do not deduct the deposit from the invoice value; regenerate the correct final invoice before resubmitting.");
+      }
+      if (ctx.advancePolicy && Math.abs(tax - Math.round((inv.amountCents - tax) * 0.14)) > 1) {
+        blockers.push("The final invoice must contain the full sale value and 14% VAT before applying deposits. Correct the invoice tax basis before resubmitting.");
+      }
       line(account("receivables", "customer receivables"), inv.amountCents, 0, "Customer receivable (invoice total)");
       line(income, 0, inv.amountCents - tax, "Vehicle sale income");
       if (tax > 0) line(account("vatOutput", "VAT output"), 0, tax, "VAT output on delivery invoice");
+      const applied = (ctx.advanceApplications ?? []).reduce((s, a) => s + a.amountCents, 0);
+      if (applied > 0) {
+        line(account("deposits", "customer deposits"), applied, 0, "Customer deposit applied");
+        line(account("receivables", "customer receivables"), 0, applied, "Deposit credit against final invoice");
+      }
       }
     }
   }
@@ -119,7 +139,7 @@ export function evaluateFinanceRequest(
     const inv = ctx.invoice;
     if (!inv) blockers.push("Select the invoice this payment settles.");
     else {
-      if (inv.kind === "reservation") policyBlocks.push(ADVANCE_VAT_BLOCK);
+      if (inv.kind === "reservation" && !ctx.advancePolicy) policyBlocks.push(ADVANCE_VAT_BLOCK);
       if (inv.status === "void") blockers.push("The selected invoice is void.");
       if (ctx.invoiceOutstandingCents != null && input.amountCents > ctx.invoiceOutstandingCents) {
         blockers.push("Amount exceeds the invoice's outstanding balance (overpayment).");
@@ -131,7 +151,13 @@ export function evaluateFinanceRequest(
     if (input.payerType === "financier") policyBlocks.push(FINANCIER_BLOCK);
     if (!source) blockers.push("Select a configured receiving source.");
     else if (!["bank", "cash"].includes(source.kind)) blockers.push("Receipts require a bank or cash source.");
-    if (inv?.kind !== "reservation") {
+    if (inv?.kind === "reservation" && ctx.advancePolicy) {
+      if (ctx.finalSaleStarted) blockers.push("The final sale is already approved or posted. Record further receipts against the final invoice, not as another deposit.");
+      if (input.paymentMethod === "bank_transfer" && source?.kind !== "bank") blockers.push("Bank transfers must use the actual receiving bank account, not petty cash.");
+      if (input.paymentMethod === "cash" && source?.kind !== "cash") blockers.push("Cash receipts must use a cash receiving source.");
+      line(source?.account ?? "", input.amountCents, 0, "Customer advance received");
+      line(account("deposits", "customer deposits"), 0, input.amountCents, "Customer deposit liability (no VAT on receipt)");
+    } else if (inv?.kind !== "reservation") {
       line(source?.account ?? "", input.amountCents, 0, `Receipt into ${source?.label ?? "source"}`);
       line(account("receivables", "customer receivables"), 0, input.amountCents, "Customer receivable settled");
     }

@@ -11,4 +11,5 @@ export type ReviewSalesAccountingEntry200ConfigVatPolicy = typeof ReviewSalesAcc
 
 export const ReviewSalesAccountingEntry200ConfigVatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;

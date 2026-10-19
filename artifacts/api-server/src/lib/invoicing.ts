@@ -728,6 +728,12 @@ export async function ensureFinalInvoiceForDeal(
       ? await approvedFinanceAppForDeal(deal)
       : null;
   const financedCredit = financedApp?.amount ?? 0;
+  const { hasApprovedAdvancePolicy } = await import("./sales-advance-policy");
+  const grossAdvanceFlow = await hasApprovedAdvancePolicy(deal.dealerId) &&
+    await isPilotSalesInvoice(db, { dealerId: deal.dealerId, dealId: deal.id });
+  if (grossAdvanceFlow && (deal.tradeInValue > 0 || financedCredit > 0)) {
+    throw new Error("The approved dummy advance flow requires a separately approved trade-in/financier transfer policy before invoicing these credits.");
+  }
 
   const [vehicle] = await db
     .select()
@@ -746,6 +752,13 @@ export async function ensureFinalInvoiceForDeal(
   const { lines } = computeTaxes(taxBase, taxRules, {
     powertrain: vehicle?.powertrain ?? null,
   });
+  if (grossAdvanceFlow && lines.some(l => l.amount > 0 && l.code.toUpperCase() !== "VAT")) {
+    throw new Error("The dummy 14% VAT flow cannot silently replace other invoice taxes or levies. Finance must reconcile the dealership tax rules before generating this invoice.");
+  }
+  const approvedVat = Math.round(taxBase * 14) / 100;
+  const invoiceTaxLines = grossAdvanceFlow
+    ? [{ code: "VAT", name: "VAT (approved dummy policy)", kind: "percent" as const, rate: 14, amount: approvedVat }]
+    : lines;
 
   const net = Math.max(
     Math.round(
@@ -772,15 +785,15 @@ export async function ensureFinalInvoiceForDeal(
     dealerId: deal.dealerId,
     kind: "final",
     customerName: deal.customerName ?? "Customer",
-    amount: net,
+    amount: grossAdvanceFlow ? Math.round((taxBase + approvedVat) * 100) / 100 : net,
     customerId: deal.customerId,
     dealId: deal.id,
     applicationId: financedApp?.id ?? null,
     description:
-      `Final settlement — ${vehicleName} (deal #${deal.id}). ` +
+      (grossAdvanceFlow ? `Full vehicle sale — ${vehicleName} (deal #${deal.id}). 14% VAT; posted deposits are applied separately after Finance approval. ` : `Final settlement — ${vehicleName} (deal #${deal.id}). `) +
       `OTD $${deal.otdPrice.toLocaleString("en-US")}` +
-      (credits.length ? ` less ${credits.join(", ")}` : ""),
-    taxLines: lines,
+      (!grossAdvanceFlow && credits.length ? ` less ${credits.join(", ")}` : ""),
+    taxLines: invoiceTaxLines,
   });
 }
 

@@ -85,7 +85,7 @@ function Workspace() {
       {hero}
       <Page className="pt-0 space-y-4">
         <div className="flex flex-wrap gap-2 text-[11px]">
-          <span className="rounded-full border border-red-500/30 bg-red-500/[0.06] px-3 py-1 text-red-300">Advance VAT: {config.data.vatPolicy} · deposit postings blocked</span>
+          <span className="rounded-full border border-amber-500/30 bg-amber-500/[0.06] px-3 py-1 text-amber-700">{config.data.vatPolicy === "final_invoice_14" ? "Deposits: liability · VAT 14% at final invoice · independent approval required" : "Advance VAT: pending · deposit postings blocked"}</span>
           <span className={`rounded-full border px-3 py-1 ${config.data.validation.state === "valid" ? "border-emerald-500/30 text-emerald-400" : "border-amber-500/30 text-amber-400"}`}>ERPNext mapping validation: {config.data.validation.state}</span>
           <span className="rounded-full border border-white/10 px-3 py-1 text-muted-foreground">All dealerships · New sales only</span>
         </div>

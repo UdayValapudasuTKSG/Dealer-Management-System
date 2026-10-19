@@ -59,7 +59,7 @@ export function PreparationBanner({ children }: { children?: ReactNode }) {
           <p className="text-muted-foreground text-xs leading-relaxed">
             Workpapers here document funding and balanced GL lines only. Saving never creates invoices,
             payments or VIN holds. Operational requests use separate Finance approvals.
-            New sales at all dealerships are covered; advance VAT policy remains pending.
+            New sales at all dealerships are covered. Deposit posting depends on the dealership's approved advance-VAT policy.
           </p>
           {children}
         </div>

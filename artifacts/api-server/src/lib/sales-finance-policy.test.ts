@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { evaluateFinanceRequest, splitVat, ADVANCE_VAT_BLOCK, FINANCIER_BLOCK, SUPPLIER_PARTY_BLOCK } from "./sales-finance-policy";
 import type { SalesAccountingConfigData } from "@workspace/db";
+import { allocateAdvances, isApprovedAdvanceDealer } from "./sales-advance-policy";
 
 const config: SalesAccountingConfigData = {
   accounts: ["receivables", "vatOutput", "registration", "fuel", "detailing", "deposits"].map((k) => ({ key: k, account: k.toUpperCase() })),
@@ -11,6 +12,45 @@ const config: SalesAccountingConfigData = {
 };
 const vehicle = { make: "byd", model: "atto", dutyFree: false, vin: "VIN1" };
 const base = { configValid: true, vehicle, dealStage: "committed" };
+
+test("approved policy is restricted to the exact dummy dealership", () => {
+  assert.equal(isApprovedAdvanceDealer(2, "CAM Motors Dummy"), true);
+  assert.equal(isApprovedAdvanceDealer(3, "CAM Motors Dummy"), false);
+  assert.equal(isApprovedAdvanceDealer(2, "GT Automotive"), false);
+});
+test("approved advance is a liability, without VIN, sale revenue or VAT", () => {
+  const ctx = { configValid: true, advancePolicy: "final_invoice_14" as const,
+    invoice: { kind: "reservation", status: "issued", amountCents: 50000000, taxCents: 0 } };
+  const input = { kind: "payment" as const, amountCents: 50000000, reference: "D", sourceId: "bank", paymentMethod: "bank_transfer" };
+  const result = evaluateFinanceRequest(config, input, ctx);
+  assert.deepEqual(result.blockers, []);
+  assert.deepEqual(result.policyBlocks, []);
+  assert.deepEqual(result.lines.map(l => [l.account, l.debit, l.credit]), [["BANK", 500000, 0], ["DEPOSITS", 0, 500000]]);
+  assert.ok(evaluateFinanceRequest(config, { ...input, kind: "invoice" }, ctx).policyBlocks.length);
+  assert.ok(evaluateFinanceRequest(config, { ...input, sourceId: "float" }, ctx).blockers.length);
+  assert.ok(evaluateFinanceRequest(config, input, { ...ctx, finalSaleStarted: true }).blockers.some(b => b.includes("final sale")));
+});
+test("final invoice taxes full sale then applies deposits without new cash", () => {
+  const result = evaluateFinanceRequest(config, { kind: "invoice", amountCents: 114000, reference: "F" },
+    { ...base, advancePolicy: "final_invoice_14", advanceApplications: [{ requestId: 1, amountCents: 50000 }],
+      invoice: { kind: "final", status: "issued", amountCents: 114000, taxCents: 14000 } });
+  assert.deepEqual(result.blockers, []);
+  assert.deepEqual(result.policyBlocks, []);
+  assert.equal(result.lines.find(l => l.account === "SALES")?.credit, 1000);
+  assert.equal(result.lines.find(l => l.account === "VATOUTPUT")?.credit, 140);
+  assert.equal(result.lines.find(l => l.purpose === "Customer deposit applied")?.debit, 500);
+  assert.equal(result.debitCents, result.creditCents);
+});
+test("deposit applications reserve available cents and never reuse exhausted receipts", () => {
+  const receipts = [{ id: 2, amountCents: 500 }, { id: 1, amountCents: 300 }];
+  const a = allocateAdvances(receipts, [], 600);
+  assert.deepEqual(a, [{ requestId: 1, amountCents: 300 }, { requestId: 2, amountCents: 300 }]);
+  assert.deepEqual(allocateAdvances(receipts, a, 600), [{ requestId: 2, amountCents: 200 }]);
+  // A partially paid final invoice can only consume its remaining balance.
+  assert.deepEqual(allocateAdvances(receipts, [], 100), [{ requestId: 1, amountCents: 100 }]);
+  assert.deepEqual(allocateAdvances(receipts, [], 0), []);
+  assert.throws(() => allocateAdvances(receipts, [{ requestId: 1, amountCents: 301 }], 1));
+});
 
 test("final invoice derives balanced DR receivable / CR income + VAT", () => {
   const r = evaluateFinanceRequest(config, { kind: "invoice", amountCents: 114000, reference: "INV" },

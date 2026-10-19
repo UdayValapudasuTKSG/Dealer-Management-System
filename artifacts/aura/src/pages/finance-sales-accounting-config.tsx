@@ -143,7 +143,7 @@ function ConfigWorkspace() {
                 {polling && <Loader2 className="h-4 w-4 animate-spin" />}{v.state}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {v.company ? `Company: ${v.company}` : "Company not resolved"}{v.checkedAt && ` · checked ${formatGuyanaDateTime(v.checkedAt)}`} · rev {c.revision} · VAT policy {c.vatPolicy}
+                {v.company ? `Company: ${v.company}` : "Company not resolved"}{v.checkedAt && ` · checked ${formatGuyanaDateTime(v.checkedAt)}`} · rev {c.revision} · VAT policy {c.vatPolicy === "final_invoice_14" ? "14% at final invoice; deposits held as liabilities" : "pending"}
               </div>
             </div>
             <Button data-testid="button-validate" variant="outline" className="rounded-full gap-1.5" disabled={!editable || validate.isPending || polling} onClick={doValidate}>

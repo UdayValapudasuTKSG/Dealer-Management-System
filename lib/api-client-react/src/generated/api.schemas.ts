@@ -13141,6 +13141,7 @@ export type GetSalesAccountingConfig200VatPolicy = typeof GetSalesAccountingConf
 
 export const GetSalesAccountingConfig200VatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;
 
 export type GetSalesAccountingConfig200AccountsItem = {
@@ -13235,6 +13236,7 @@ export type SaveSalesAccountingConfig200VatPolicy = typeof SaveSalesAccountingCo
 
 export const SaveSalesAccountingConfig200VatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;
 
 export type SaveSalesAccountingConfig200AccountsItem = {
@@ -13329,6 +13331,7 @@ export type ValidateSalesAccountingConfig200VatPolicy = typeof ValidateSalesAcco
 
 export const ValidateSalesAccountingConfig200VatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;
 
 export type ValidateSalesAccountingConfig200AccountsItem = {
@@ -13443,6 +13446,7 @@ export type GetSalesAccountingWorkflow200ConfigVatPolicy = typeof GetSalesAccoun
 
 export const GetSalesAccountingWorkflow200ConfigVatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;
 
 export type GetSalesAccountingWorkflow200ConfigAccountsItem = {
@@ -13625,6 +13629,7 @@ export type StartSalesAccountingWorkflow200ConfigVatPolicy = typeof StartSalesAc
 
 export const StartSalesAccountingWorkflow200ConfigVatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;
 
 export type StartSalesAccountingWorkflow200ConfigAccountsItem = {
@@ -13811,6 +13816,7 @@ export type SaveSalesAccountingEntry200ConfigVatPolicy = typeof SaveSalesAccount
 
 export const SaveSalesAccountingEntry200ConfigVatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;
 
 export type SaveSalesAccountingEntry200ConfigAccountsItem = {
@@ -13993,6 +13999,7 @@ export type ReviewSalesAccountingEntry200ConfigVatPolicy = typeof ReviewSalesAcc
 
 export const ReviewSalesAccountingEntry200ConfigVatPolicy = {
   pending: 'pending',
+  final_invoice_14: 'final_invoice_14',
 } as const;
 
 export type ReviewSalesAccountingEntry200ConfigAccountsItem = {

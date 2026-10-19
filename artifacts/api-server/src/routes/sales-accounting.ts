@@ -50,7 +50,8 @@ function failure(message: string, status = 422): never {
 const eligible = isPilotDealer;
 async function configResponse(dealerId: number) {
   const [row] = await db.select().from(settings).where(eq(settings.dealerId, dealerId));
-  return { eligible: await eligible(dealerId), vatPolicy: "pending", revision: row?.revision ?? 0,
+  const { hasApprovedAdvancePolicy } = await import("../lib/sales-advance-policy");
+  return { eligible: await eligible(dealerId), vatPolicy: await hasApprovedAdvancePolicy(dealerId) ? "final_invoice_14" : "pending", revision: row?.revision ?? 0,
     ...(row?.config ?? EMPTY_SALES_CONFIG), accountRoles: ACCOUNT_ROLES,
     validation: row?.validation ?? { state: "unchecked", errors: [] } };
 }
