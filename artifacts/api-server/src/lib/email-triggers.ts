@@ -676,10 +676,10 @@ export async function queueServiceAppointmentConfirmation(
     .limit(1);
   if (!card?.scheduledAt) return null;
   const [dealer] = await db
-    .select({ id: dealersTable.id, name: dealersTable.name, address: dealersTable.address, whatsappShowroomAddress: dealersTable.whatsappShowroomAddress })
+    .select({ id: dealersTable.id, name: dealersTable.name, address: dealersTable.address, whatsappShowroomAddress: dealersTable.whatsappShowroomAddress, whatsappServiceAddress: dealersTable.whatsappServiceAddress })
     .from(dealersTable)
     .where(eq(dealersTable.id, order.dealerId));
-  const location = dealer ? resolveShowroomAddress(dealer) : null;
+  const location = dealer ? dealer.whatsappServiceAddress?.trim() || resolveShowroomAddress(dealer) : null;
   const tz = await dealerTimezone(order.dealerId);
   const base: TemplateData = {
     ...(c.name ? { name: c.name } : {}),

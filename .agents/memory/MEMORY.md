@@ -91,3 +91,4 @@
 - [Test-drive customer branding](test-drive-customer-branding.md) — public invitations use GT/CAM identity and user-confirmed showroom locations, not AURA OS.
 - [Shipment allocation approval](shipment-allocation-approval.md) — BRD approval required before implementation; resolve VIN commitment and shortage fairness against existing holds.
 - [Automatic survey policy](automatic-survey-policy.md) — forward-only activation, elapsed-day delays and one invitation per delivery or service visit.
+- [Service appointment location](service-location-policy.md) — dealer-specific workshop addresses are independent of showroom addresses, with the showroom as the unset fallback.

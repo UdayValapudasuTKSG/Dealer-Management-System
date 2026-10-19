@@ -94,6 +94,7 @@ export default function SettingsWhatsapp() {
 
   const { data: settings, isLoading, error: settingsError } = useGetWhatsappSettings();
   const [showroomAddress, setShowroomAddress] = useState("");
+  const [serviceAddress, setServiceAddress] = useState("");
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -110,6 +111,7 @@ export default function SettingsWhatsapp() {
   useEffect(() => {
     if (settings) {
       setShowroomAddress(settings.showroomAddress ?? "");
+      setServiceAddress(settings.serviceAddress ?? "");
       form.reset({
         wabaId: settings.wabaId ?? "",
         phoneNumberId: settings.phoneNumberId ?? "",
@@ -256,6 +258,23 @@ export default function SettingsWhatsapp() {
             >Save address</Button>
           </div>
           {!isGm && <p className="text-xs text-muted-foreground">Only the general manager or an authorized platform administrator can change these settings.</p>}
+          <div className="space-y-2 max-w-xl">
+            <label htmlFor="service-address" className="text-sm font-semibold">WhatsApp service appointment address</label>
+            <Input id="service-address" data-testid="input-whatsapp-service-address"
+              value={serviceAddress} maxLength={300}
+              onChange={(event) => setServiceAddress(event.target.value)}
+              disabled={!isGm || !settings || save.isPending}
+              placeholder="Service centre / workshop address" />
+            <p className="text-xs text-muted-foreground">
+              Used for this dealership’s service appointments and WhatsApp service-location replies.
+              Leave blank to use the showroom address. Other dealerships and document addresses are unchanged.
+            </p>
+            <Button variant="outline" size="sm" data-testid="button-save-whatsapp-service-address"
+              disabled={!isGm || !settings || save.isPending}
+              onClick={() => save.mutate({ data: { serviceAddress: serviceAddress.trim() || null } })}>
+              Save service address
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Status Panel */}

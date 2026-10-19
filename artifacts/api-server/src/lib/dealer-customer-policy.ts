@@ -7,6 +7,7 @@ export const TEST_DRIVES_DISABLED =
 export type DealerCustomerPolicy = {
   testDrivesEnabled: boolean;
   showroomAddress: string | null;
+  serviceAddress?: string | null;
 };
 
 /** The supplied correction belongs to GT Automotive's verified address only.
@@ -38,6 +39,7 @@ export async function dealerCustomerPolicy(
     name: dealersTable.name,
     address: dealersTable.address,
     whatsappShowroomAddress: dealersTable.whatsappShowroomAddress,
+    whatsappServiceAddress: dealersTable.whatsappServiceAddress,
     testDrivesEnabled: dealersTable.testDrivesEnabled,
   }).from(dealersTable).where(eq(dealersTable.id, dealerId));
   const [dealer] = await (lock ? statement.for("share") : statement);
@@ -45,5 +47,6 @@ export async function dealerCustomerPolicy(
   return {
     testDrivesEnabled: dealer.testDrivesEnabled,
     showroomAddress: resolveShowroomAddress(dealer),
+    serviceAddress: dealer.whatsappServiceAddress?.trim() || null,
   };
 }

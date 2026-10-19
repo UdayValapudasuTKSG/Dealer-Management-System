@@ -12785,10 +12785,11 @@ components:
               originalName: { type: ["string", "null"] }
     WhatsappSettings:
       type: object
-      required: [configured, enabled, hasAccessToken, hasAppSecret, serviceTemplateLanguage, testDrivesEnabled, showroomAddress]
+      required: [configured, enabled, hasAccessToken, hasAppSecret, serviceTemplateLanguage, testDrivesEnabled, showroomAddress, serviceAddress]
       properties:
         testDrivesEnabled: { type: boolean, description: "Dealership-wide new test-drive booking gate. Defaults to enabled; existing bookings remain." }
         showroomAddress: { type: ["string", "null"], description: "Dealer-scoped WhatsApp showroom address" }
+        serviceAddress: { type: ["string", "null"], description: "Service appointment address override; null uses the showroom address" }
         configured: { type: boolean }
         enabled: { type: boolean }
         wabaId: { type: ["string", "null"] }
@@ -12805,6 +12806,7 @@ components:
     UpdateWhatsappSettingsRequest:
       type: object
       properties:
+        serviceAddress: { type: ["string", "null"], minLength: 1, maxLength: 300, description: "Service appointment address; null restores the showroom address fallback" }
         testDrivesEnabled: { type: boolean }
         showroomAddress: { type: ["string", "null"], minLength: 1, maxLength: 300, description: "Customer-facing WhatsApp showroom address; null uses this dealer's document address" }
         wabaId: { type: string, minLength: 5, maxLength: 64, pattern: "^[0-9]+$" }

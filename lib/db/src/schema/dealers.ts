@@ -90,6 +90,7 @@ export const dealersTable = pgTable(
   testDrivesEnabled: boolean("test_drives_enabled").notNull().default(true),
   /** Customer-facing WhatsApp showroom address, independent of document address. */
   whatsappShowroomAddress: text("whatsapp_showroom_address"),
+  whatsappServiceAddress: text("whatsapp_service_address"),
   servicePhone: text("service_phone"),
   emergencyPhone: text("emergency_phone"),
   status: text("status").notNull().default("active"),

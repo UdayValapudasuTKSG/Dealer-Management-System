@@ -42,7 +42,9 @@ export function customerPolicyReply(
     return { reply: TEST_DRIVES_DISABLED, resetTestDriveFlow: isTestDriveStep(step) };
   if (isShowroomAddressQuestion(text))
     return {
-      reply: policy.showroomAddress ?? "Our showroom address hasn't been configured. Please ask our team for the address.",
+      reply: /\b(?:service|workshop|servicing)\b/i.test(text)
+        ? (policy.serviceAddress ?? policy.showroomAddress ?? "Our service appointment address hasn't been configured. Please ask our team for the address.")
+        : (policy.showroomAddress ?? "Our showroom address hasn't been configured. Please ask our team for the address."),
       resetTestDriveFlow: false,
     };
   return null;

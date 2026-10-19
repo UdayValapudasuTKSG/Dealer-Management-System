@@ -56,3 +56,5 @@ psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f lib/db/migrations/2026-10-10-lead-complaints.sql
 psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f lib/db/migrations/20261019_parts_pos.sql
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f lib/db/migrations/20261019_whatsapp_service_address.sql

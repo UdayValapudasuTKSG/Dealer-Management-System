@@ -20041,6 +20041,7 @@ export const GetStorageObjectResponse = zod.unknown()
 export const GetWhatsappSettingsResponse = zod.object({
   "testDrivesEnabled": zod.boolean().describe('Dealership-wide new test-drive booking gate. Defaults to enabled; existing bookings remain.'),
   "showroomAddress": zod.string().nullable().describe('Dealer-scoped WhatsApp showroom address'),
+  "serviceAddress": zod.string().nullable().describe('Service appointment address override; null uses the showroom address'),
   "configured": zod.boolean(),
   "enabled": zod.boolean(),
   "wabaId": zod.string().nullish(),
@@ -20060,6 +20061,8 @@ export const GetWhatsappSettingsResponse = zod.object({
 /**
  * @summary Create or update the WhatsApp channel for the active dealership
  */
+export const updateWhatsappSettingsBodyServiceAddressMax = 300;
+
 export const updateWhatsappSettingsBodyShowroomAddressMax = 300;
 
 export const updateWhatsappSettingsBodyWabaIdMin = 5;
@@ -20092,6 +20095,7 @@ export const updateWhatsappSettingsBodyServiceTemplateLanguageRegExp = new RegEx
 
 
 export const UpdateWhatsappSettingsBody = zod.object({
+  "serviceAddress": zod.string().min(1).max(updateWhatsappSettingsBodyServiceAddressMax).nullish().describe('Service appointment address; null restores the showroom address fallback'),
   "testDrivesEnabled": zod.boolean().optional(),
   "showroomAddress": zod.string().min(1).max(updateWhatsappSettingsBodyShowroomAddressMax).nullish().describe('Customer-facing WhatsApp showroom address; null uses this dealer\'s document address'),
   "wabaId": zod.string().min(updateWhatsappSettingsBodyWabaIdMin).max(updateWhatsappSettingsBodyWabaIdMax).regex(updateWhatsappSettingsBodyWabaIdRegExp).optional(),
@@ -20106,6 +20110,7 @@ export const UpdateWhatsappSettingsBody = zod.object({
 export const UpdateWhatsappSettingsResponse = zod.object({
   "testDrivesEnabled": zod.boolean().describe('Dealership-wide new test-drive booking gate. Defaults to enabled; existing bookings remain.'),
   "showroomAddress": zod.string().nullable().describe('Dealer-scoped WhatsApp showroom address'),
+  "serviceAddress": zod.string().nullable().describe('Service appointment address override; null uses the showroom address'),
   "configured": zod.boolean(),
   "enabled": zod.boolean(),
   "wabaId": zod.string().nullish(),

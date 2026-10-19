@@ -14,6 +14,11 @@ export interface WhatsappSettings {
      * @nullable
      */
   showroomAddress: string | null;
+  /**
+     * Service appointment address override; null uses the showroom address
+     * @nullable
+     */
+  serviceAddress: string | null;
   configured: boolean;
   enabled: boolean;
   /** @nullable */

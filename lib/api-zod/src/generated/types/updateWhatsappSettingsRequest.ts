@@ -7,6 +7,13 @@
  */
 
 export interface UpdateWhatsappSettingsRequest {
+  /**
+     * Service appointment address; null restores the showroom address fallback
+     * @minLength 1
+     * @maxLength 300
+     * @nullable
+     */
+  serviceAddress?: string | null;
   testDrivesEnabled?: boolean;
   /**
      * Customer-facing WhatsApp showroom address; null uses this dealer's document address

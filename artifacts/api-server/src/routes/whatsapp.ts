@@ -55,6 +55,7 @@ async function settingsPayload(dealerId: number) {
   const customerSettings = {
     testDrivesEnabled: policy.testDrivesEnabled,
     showroomAddress: policy.showroomAddress,
+    serviceAddress: policy.serviceAddress ?? null,
   };
   const [row] = await db
     .select()
@@ -143,12 +144,18 @@ router.put("/whatsapp/settings", async (req, res): Promise<void> => {
     }
     policyUpdates.whatsappShowroomAddress = body.data.showroomAddress?.trim() ?? null;
   }
-  const hasPolicyUpdates = Object.keys(policyUpdates).length > 0;
+  if (body.data.serviceAddress !== undefined) {
+    if (body.data.serviceAddress !== null && !body.data.serviceAddress.trim()) {
+      res.status(400).json({ error: "Service address cannot be blank; use null to restore the showroom address" });
+      return;
+    }
+    policyUpdates.whatsappServiceAddress = body.data.serviceAddress?.trim() ?? null;
+  }
   // Policy settings do not require a connected channel or Meta credentials.
   const channelKeys = ["wabaId", "phoneNumberId", "accessToken", "appSecret", "enabled", "serviceTemplateName", "serviceTemplateLanguage"] as const;
   const hasChannelUpdates = channelKeys.some((key) => body.data[key] !== undefined);
   if (!hasChannelUpdates) {
-    if (hasPolicyUpdates)
+    if (Object.keys(policyUpdates).length > 0)
       await db.update(dealersTable).set(policyUpdates).where(eq(dealersTable.id, dealerId));
     res.json(UpdateWhatsappSettingsResponse.parse(await settingsPayload(dealerId)));
     return;
@@ -299,7 +306,7 @@ router.put("/whatsapp/settings", async (req, res): Promise<void> => {
     return;
   }
 
-  if (hasPolicyUpdates)
+  if (Object.keys(policyUpdates).length > 0)
     await db.update(dealersTable).set(policyUpdates).where(eq(dealersTable.id, dealerId));
   res.json(UpdateWhatsappSettingsResponse.parse(await settingsPayload(dealerId)));
 });

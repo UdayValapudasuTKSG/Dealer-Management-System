@@ -19,6 +19,10 @@ import leadsRouter from "../routes/leads";
 // Do not import the application's entry point or start its outbox worker.
 const enabled = { testDrivesEnabled: true, showroomAddress: "220 Camp St, Georgetown" };
 const disabled = { ...enabled, testDrivesEnabled: false };
+const servicePolicy = { ...disabled, serviceAddress: "Workshop test address" };
+assert.equal(customerPolicyReply(servicePolicy, "Where should I come for service?")?.reply, "Workshop test address");
+assert.equal(customerPolicyReply(servicePolicy, "What is your showroom address?")?.reply, enabled.showroomAddress);
+assert.match(buildSystemPrompt("Dealer", {}, false, servicePolicy), /Workshop test address/);
 const staleSummary = "Customer interested in scheduling a test drive for the BYD Dolphin Mini. Test drives not currently available; confirming name to update enquiry.";
 assert.doesNotMatch(stripHistoricalTestDrivePolicy(staleSummary), /not currently available/);
 assert.match(stripHistoricalTestDrivePolicy(staleSummary), /Dolphin Mini/);
@@ -184,6 +188,14 @@ try {
   assert.equal((saved.body as typeof enabled).testDrivesEnabled, true);
   assert.equal((saved.body as typeof enabled).showroomAddress, "Exact fixture address");
   assert.equal(fixtures.dealers![1]!.whatsappShowroomAddress, null);
+  const serviceSaved = await invoke(whatsappRouter, "/whatsapp/settings", "put", { body: { serviceAddress: "  Dealer seven workshop  " } });
+  assert.equal(serviceSaved.statusCode, 200);
+  assert.equal((serviceSaved.body as { serviceAddress: string }).serviceAddress, "Dealer seven workshop");
+  assert.equal((await dealerCustomerPolicy(8)).serviceAddress, null);
+  const serviceBlank = await invoke(whatsappRouter, "/whatsapp/settings", "put", { body: { serviceAddress: "  " } });
+  assert.equal(serviceBlank.statusCode, 400);
+  await invoke(whatsappRouter, "/whatsapp/settings", "put", { body: { serviceAddress: null } });
+  assert.equal((await dealerCustomerPolicy(7)).serviceAddress, null);
   await invoke(whatsappRouter, "/whatsapp/settings", "put", { body: { showroomAddress: "New exact address" } });
   assert.equal(fixtures.dealers![0]!.testDrivesEnabled, true, "omitted toggle preserves existing state");
   const created = await invoke(drivesRouter, "/test-drives", "post", { body: { leadId: 17, scheduledAt: "2030-01-02T13:00:00Z" } });
