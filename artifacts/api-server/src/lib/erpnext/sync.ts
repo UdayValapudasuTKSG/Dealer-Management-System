@@ -266,7 +266,7 @@ export async function processQueue(dealerId?: number): Promise<void> {
         ),
       )
       .orderBy(
-        sql`case when ${erpnextSyncJobsTable.doctype} = 'AURA Sales GL Validation' then 0 else 1 end`,
+        sql`case when ${erpnextSyncJobsTable.doctype} in ('AURA Sales GL Validation', 'AURA Parts POS Validation') then 0 else 1 end`,
         asc(erpnextSyncJobsTable.createdAt),
         asc(erpnextSyncJobsTable.id),
       )

@@ -71,6 +71,35 @@ tags:
   - name: whatsapp
     description: Per-dealer Meta WhatsApp Business channel settings
 paths:
+  /parts-pos:
+    get:
+      operationId: getPartsPos
+      tags: [Parts]
+      responses:
+        "200":
+          description: Dealer-scoped POS configuration, requests and catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      operationId: actOnPartsPos
+      tags: [Parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartsPosAction"
+      responses:
+        "200":
+          description: Action completed or queued; ERP posting is asynchronous
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /parts/operations/issuance:
     get:
       operationId: getPartsIssuanceReport
@@ -12293,6 +12322,27 @@ paths:
               schema: { $ref: "#/components/schemas/ShipmentMatchingView" }
 components:
   schemas:
+    PartsPosAction:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [save_config, validate, submit, approve, reject, retry, reconcile, seed]
+        requestKey:
+          type: string
+        requestId:
+          type: integer
+        revision:
+          type: integer
+        note:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+        input:
+          type: object
+          additionalProperties: true
     SalesAccountingConfigInput:
       type: object
       required: [accounts, sources, models, revision]

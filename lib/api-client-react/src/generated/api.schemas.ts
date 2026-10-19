@@ -5,6 +5,34 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export type PartsPosActionAction = typeof PartsPosActionAction[keyof typeof PartsPosActionAction];
+
+
+export const PartsPosActionAction = {
+  save_config: 'save_config',
+  validate: 'validate',
+  submit: 'submit',
+  approve: 'approve',
+  reject: 'reject',
+  retry: 'retry',
+  reconcile: 'reconcile',
+  seed: 'seed',
+} as const;
+
+export type PartsPosActionConfig = { [key: string]: unknown };
+
+export type PartsPosActionInput = { [key: string]: unknown };
+
+export interface PartsPosAction {
+  action: PartsPosActionAction;
+  requestKey?: string;
+  requestId?: number;
+  revision?: number;
+  note?: string;
+  config?: PartsPosActionConfig;
+  input?: PartsPosActionInput;
+}
+
 export type SalesAccountingConfigInputCustomerChargesItemCategory = typeof SalesAccountingConfigInputCustomerChargesItemCategory[keyof typeof SalesAccountingConfigInputCustomerChargesItemCategory];
 
 
@@ -13072,6 +13100,10 @@ export interface SupplierInvoiceVarianceInput {
      */
   reason: string;
 }
+
+export type GetPartsPos200 = { [key: string]: unknown };
+
+export type ActOnPartsPos200 = { [key: string]: unknown };
 
 export type GetPartsIssuanceReportParams = {
 from?: string;

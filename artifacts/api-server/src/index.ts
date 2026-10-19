@@ -10,6 +10,7 @@ import { startRetentionSweeps } from "./lib/retention-sweeps";
 import { startErpnextSyncWorker } from "./lib/erpnext/sync";
 import { startAmberSyncWorker } from "./lib/amber/sync";
 import { registerErpnextPartsSync } from "./lib/erpnext/parts-sync";
+import { registerPartsPosSync } from "./lib/erpnext/parts-pos";
 import { migrateLegacyAttachments } from "./lib/documents-migrate";
 import { startMetricsFlusher } from "./lib/metrics";
 import { logPendingInfraSeams } from "./lib/infra-seams";
@@ -48,6 +49,7 @@ app.listen(port, (err) => {
   startNotificationSweeps();
   startRetentionSweeps();
   registerErpnextPartsSync();
+  registerPartsPosSync();
   registerErpnextEntitySync();
   registerSalesFinancePosting();
   registerSalesGlValidation();

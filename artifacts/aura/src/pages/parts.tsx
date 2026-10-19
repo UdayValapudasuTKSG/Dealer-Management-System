@@ -67,7 +67,8 @@ import {
   Lock,
   ClipboardCheck,
   BarChart3,
-  Bell
+  Bell,
+  Receipt
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
@@ -110,6 +111,7 @@ const TABS = [
   { key: "reconciliation", label: "Reconciliation", icon: FileSpreadsheet },
   { key: "reporting", label: "Analysis", icon: BarChart3 },
   { key: "notifications", label: "Outbox", icon: Bell },
+  { key: "pos", label: "Parts POS", icon: Receipt },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -207,8 +209,12 @@ import { POReviewTab } from "@/components/parts/po-review-tab";
 import { PoDraftEditor } from "@/components/parts/po-draft-editor";
 import { NotificationsTab } from "@/components/parts/notifications-tab";
 import { ReportingWorkspace } from "@/components/parts/reporting-workspace";
+import { PartsPosTab } from "@/components/parts/pos/parts-pos-tab";
 
 export default function Parts() {
+  const { can } = useAuthz();
+  const canPos = can("parts", "view") && can("finance", "view");
+  const visibleTabs = TABS.filter((t) => t.key !== "pos" || canPos);
   const [tab, setTab] = useState<TabKey>(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
     return TABS.some((item) => item.key === requested)
@@ -247,8 +253,8 @@ export default function Parts() {
     />
     <Page className="space-y-5">
 
-      <div className="flex items-center gap-1 border-b border-white/10">
-        {TABS.map((t) => (
+      <div className="flex items-center gap-1 border-b border-white/10 overflow-x-auto no-scrollbar">
+        {visibleTabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -292,6 +298,7 @@ export default function Parts() {
           {tab === "reconciliation" && <ReconciliationTab />}
           {tab === "reporting" && <ReportingWorkspace />}
           {tab === "notifications" && <NotificationsTab />}
+          {tab === "pos" && canPos && <PartsPosTab />}
         </motion.div>
       </AnimatePresence>
     </Page>

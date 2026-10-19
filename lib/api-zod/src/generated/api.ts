@@ -8,6 +8,22 @@
 import * as zod from 'zod';
 
 
+export const GetPartsPosResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const ActOnPartsPosBody = zod.object({
+  "action": zod.enum(['save_config', 'validate', 'submit', 'approve', 'reject', 'retry', 'reconcile', 'seed']),
+  "requestKey": zod.string().optional(),
+  "requestId": zod.number().optional(),
+  "revision": zod.number().optional(),
+  "note": zod.string().optional(),
+  "config": zod.record(zod.string(), zod.unknown()).optional(),
+  "input": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+export const ActOnPartsPosResponse = zod.record(zod.string(), zod.unknown())
+
+
 export const GetPartsIssuanceReportQueryParams = zod.object({
   "from": zod.date().optional(),
   "to": zod.date().optional(),

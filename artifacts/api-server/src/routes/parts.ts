@@ -1,4 +1,5 @@
 import { partsSearchTerms, literalPartPattern } from "../lib/parts-search";
+import { posSettings } from "../lib/parts-pos";
 import { Router, type IRouter } from "express";
 import { createHash } from "node:crypto";
 import { assignPartStorage, ensureInventory, moveStock } from "../lib/parts-inventory";
@@ -103,6 +104,9 @@ const router: IRouter = Router();
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 router.post("/parts/otc-invoices", idempotent("parts.otc-invoice"), async (req, res): Promise<void> => {
+  if ((await posSettings(db, activeDealerId(res))).config.enabled) {
+    res.status(409).json({ error: "This dealer uses Finance-approved Parts POS. Create the sale in Parts → Parts POS instead." }); return;
+  }
   if (!res.locals.user || !hasPermission(res.locals.user, "finance", "create")) {
     res.status(403).json({ error: "Finance invoice-create permission is required" }); return;
   }

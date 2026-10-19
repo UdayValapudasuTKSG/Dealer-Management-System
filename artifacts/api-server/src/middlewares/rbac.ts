@@ -813,6 +813,10 @@ const PATH_MODULES: Record<string, RouteRule> = {
     category: (req) => req.method === "GET" ? "view"
       : /\/(review|decision|retry)\/?$/.test(req.path) ? "approve" : "edit",
   },
+  "parts-pos": {
+    module: "finance",
+    category: (req) => req.method === "GET" ? "view" : req.body?.action === "submit" ? "edit" : "approve",
+  },
   "service-orders": {
     module: "service",
     category: (req) => {
@@ -1203,6 +1207,7 @@ const MODULE_ENTITLEMENTS: Record<string, EntitlementKey> = {
   gra: "gra_module",
   service: "service_module",
   parts: "parts_module",
+  "parts-pos": "parts_module",
   amber: "amber_connect",
 };
 function segmentEntitlement(
