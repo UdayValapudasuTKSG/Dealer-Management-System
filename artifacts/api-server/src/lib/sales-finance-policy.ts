@@ -92,6 +92,9 @@ export function evaluateFinanceRequest(
       if (inv.status === "void") blockers.push("The selected invoice is void.");
       if (inv.kind === "reservation") policyBlocks.push(ADVANCE_VAT_BLOCK);
       if (inv.amountCents !== input.amountCents) blockers.push("Amount must equal the prepared invoice total.");
+      // An advance is not a vehicle sale. Until its tax policy is approved,
+      // do not invent revenue/VAT entries or require final-sale prerequisites.
+      if (inv.kind !== "reservation") {
       if (!ctx.vehicle?.vin) blockers.push("Assign the VIN through the existing allocation controls before invoicing.");
       if (ctx.dealStage && !["committed", "delivered"].includes(ctx.dealStage) &&
           !(ctx.dealStage === "desking" && ctx.hasInvoiceReservation)) {
@@ -108,6 +111,7 @@ export function evaluateFinanceRequest(
       line(account("receivables", "customer receivables"), inv.amountCents, 0, "Customer receivable (invoice total)");
       line(income, 0, inv.amountCents - tax, "Vehicle sale income");
       if (tax > 0) line(account("vatOutput", "VAT output"), 0, tax, "VAT output on delivery invoice");
+      }
     }
   }
 
@@ -127,8 +131,10 @@ export function evaluateFinanceRequest(
     if (input.payerType === "financier") policyBlocks.push(FINANCIER_BLOCK);
     if (!source) blockers.push("Select a configured receiving source.");
     else if (!["bank", "cash"].includes(source.kind)) blockers.push("Receipts require a bank or cash source.");
-    line(source?.account ?? "", input.amountCents, 0, `Receipt into ${source?.label ?? "source"}`);
-    line(account("receivables", "customer receivables"), 0, input.amountCents, "Customer receivable settled");
+    if (inv?.kind !== "reservation") {
+      line(source?.account ?? "", input.amountCents, 0, `Receipt into ${source?.label ?? "source"}`);
+      line(account("receivables", "customer receivables"), 0, input.amountCents, "Customer receivable settled");
+    }
   }
 
   if (input.kind === "expense") {

@@ -33,6 +33,17 @@ test("pending advance VAT blocks reservation invoices and deposit payments", () 
   assert.ok(evaluateFinanceRequest(config, { kind: "payment", amountCents: 5000, sourceId: "bank", payerType: "customer", reference: "R" },
     { ...base, invoice: inv, invoiceOutstandingCents: 5000 }).policyBlocks.includes(ADVANCE_VAT_BLOCK));
 });
+test("advance without a VIN has no sale-income preview or final-sale prerequisites", () => {
+  const ctx = { configValid: true, dealStage: "desking", vehicle: null,
+    invoice: { kind: "reservation", status: "issued", amountCents: 50000000, taxCents: 0 } };
+  for (const kind of ["invoice", "payment"] as const) {
+    const result = evaluateFinanceRequest({ ...config, models: [] },
+      { kind, amountCents: 50000000, sourceId: "bank", reference: "DEPOSIT" }, ctx);
+    assert.deepEqual(result.lines, []);
+    assert.deepEqual(result.blockers, []);
+    assert.deepEqual(result.policyBlocks, [ADVANCE_VAT_BLOCK]);
+  }
+});
 test("financier payment and supplier sources stay policy-blocked", () => {
   const inv = { kind: "final", status: "issued", amountCents: 5000, taxCents: 0 };
   assert.ok(evaluateFinanceRequest(config, { kind: "payment", amountCents: 100, sourceId: "bank", payerType: "financier", reference: "R" },

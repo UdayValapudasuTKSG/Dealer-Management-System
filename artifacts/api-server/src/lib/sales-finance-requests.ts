@@ -460,18 +460,34 @@ export async function presentRequests(dealerId: number, rows: SalesFinanceReques
   const ids = rows.map((r) => String(r.id));
   const logs = ids.length ? await db.select().from(auditLogsTable).where(and(eq(auditLogsTable.dealerId, dealerId), eq(auditLogsTable.entityType, "sales_finance_request"), inArray(auditLogsTable.entityId, ids))).orderBy(auditLogsTable.createdAt) : [];
   const name = (id: number | null) => { const u = users.find((x) => x.id === id); return u ? (u.name || u.email || `User #${id}`) : null; };
-  const { revision } = await loadConfig(db, dealerId);
-  return rows.map((r) => ({
+  const { revision, config, valid } = await loadConfig(db, dealerId);
+  return Promise.all(rows.map(async (r) => {
+    // Refresh only blocked advance guidance. Preserve the original submission
+    // snapshot/audit and every approved or posted request unchanged.
+    let lines = r.snapshot.lines;
+    let blockers = r.blockers;
+    if (r.status === "blocked" && r.snapshot.invoice?.kind === "reservation" &&
+        ["invoice", "payment"].includes(r.kind)) {
+      const loaded = await loadContext(db, dealerId, r.dealId, r.invoiceId, r.legacyPaymentId, r.id);
+      if (loaded.ctx.invoice?.kind === "reservation") {
+        loaded.ctx.configValid = valid;
+        const result = evaluateFinanceRequest(config, policyInput(r), loaded.ctx);
+        lines = result.lines;
+        blockers = [...result.policyBlocks, ...result.blockers];
+      }
+    }
+    return ({
     id: r.id, dealId: r.dealId, invoiceId: r.invoiceId, kind: r.kind, category: r.category, date: r.date, amountCents: r.amountCents,
     paymentMethod: r.paymentMethod, sourceId: r.sourceId, sourceLabel: r.snapshot.source?.label ?? null, sourceKind: r.snapshot.source?.kind ?? null,
     payerType: r.payerType, reference: r.reference, evidence: r.evidence, billingTreatment: r.billingTreatment, customerChargeCents: r.customerChargeCents,
-    legacyPaymentId: r.legacyPaymentId, invoiceNumber: r.snapshot.invoice?.invoiceNumber ?? null, lines: r.snapshot.lines, blockers: r.blockers,
+    legacyPaymentId: r.legacyPaymentId, invoiceNumber: r.snapshot.invoice?.invoiceNumber ?? null, lines, blockers,
     stale: r.status === "pending" && r.configRevision !== revision, configRevision: r.configRevision, status: r.status,
     requestedBy: r.requestedBy, requestedByName: name(r.requestedBy), requestedAt: r.requestedAt.toISOString(),
     reviewedBy: r.reviewedBy, reviewedByName: name(r.reviewedBy), reviewedAt: r.reviewedAt?.toISOString() ?? null, rejectionReason: r.rejectionReason,
     paymentId: r.paymentId, chargeInvoiceId: r.chargeInvoiceId, erpJobId: r.erpJobId, erpDoctype: r.erpDoctype, erpDocName: r.erpDocName,
     erpRemoteKey: r.erpRemoteKey, postAttempts: r.postAttempts, lastError: r.lastError, postedAt: r.postedAt?.toISOString() ?? null,
     audit: logs.filter((l) => l.entityId === String(r.id)).map((l) => ({ id: l.id, action: l.action, summary: l.summary, actorName: l.actorName ?? name(l.actorUserId) ?? "System", at: l.createdAt.toISOString() })),
+    });
   }));
 }
 

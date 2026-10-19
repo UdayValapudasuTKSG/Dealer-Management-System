@@ -235,7 +235,11 @@ function RequestCard({ r, dealId, canApprove, meId }: { r: SalesFinanceRequest; 
             {r.erpRemoteKey && <Fact k="Remote key" v={r.erpRemoteKey} mono />}
           </dl>
 
-          <div className="overflow-x-auto rounded-xl border border-white/10">
+          {r.lines.length === 0 ? (
+            <p className="rounded-xl border border-white/10 p-3 text-xs text-muted-foreground">
+              No posting preview is available while the accounting policy is pending. Current requirements are shown below; the original submission remains in the audit history.
+            </p>
+          ) : <div className="overflow-x-auto rounded-xl border border-white/10">
             <table className="w-full text-xs">
               <thead className="bg-white/[0.03] text-[10px] uppercase tracking-widest text-muted-foreground">
                 <tr><th className="px-3 py-2 text-left font-medium">Account</th><th className="px-3 py-2 text-left font-medium">Purpose</th><th className="px-3 py-2 text-right font-medium">Debit</th><th className="px-3 py-2 text-right font-medium">Credit</th></tr>
@@ -252,7 +256,7 @@ function RequestCard({ r, dealId, canApprove, meId }: { r: SalesFinanceRequest; 
                 <tr className="border-t border-white/10 font-semibold"><td className="px-3 py-1.5" colSpan={2}>Totals {Math.round(debit * 100) === Math.round(credit * 100) ? "· balanced" : "· UNBALANCED"}</td><td className="px-3 py-1.5 text-right font-mono">{money.gyd(debit)}</td><td className="px-3 py-1.5 text-right font-mono">{money.gyd(credit)}</td></tr>
               </tbody>
             </table>
-          </div>
+          </div>}
 
           {r.blockers.length > 0 && r.status !== "posted" && (
             <ul className="space-y-1 rounded-xl border border-red-500/20 bg-red-500/[0.04] p-3 text-xs text-red-300">
