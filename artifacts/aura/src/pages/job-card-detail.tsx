@@ -441,6 +441,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: getGetJobCardQueryKey(card.id) }),
       queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
       queryClient.invalidateQueries({ queryKey: getListJobCardPartsQueryKey(card.id) }),
       queryClient.invalidateQueries({ queryKey: getListJobCardExternalPartsQueryKey(card.id) }),
       queryClient.invalidateQueries({ queryKey: getListJobCardPartRequisitionsQueryKey(card.id) }),
@@ -1661,6 +1664,12 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
           </DialogContent>
         </Dialog>
 
+        {["open", "in_progress", "on_hold"].includes(card.status) && card.notes?.includes("Reopened:") && (
+          <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            <strong>Urgent action required — reopened job</strong>
+            <p>Update work progress, labour hours and job-card notes promptly. Complete the job card when work is finished so the booking can resolve.</p>
+          </div>
+        )}
         {(card.serviceAnalysis || card.workPerformed) && (
           <div className="rounded-xl bg-white/5 p-3 space-y-1.5 text-xs">
             {card.serviceAnalysis && (
@@ -1738,7 +1747,7 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
                   await invalidate();
                   toast({
                     title: "Job card reopened",
-                    description: "The job is back in progress and the timer is running.",
+                    description: "The job and booking are back in progress. An urgent update task was created and the assigned technician was notified.",
                   });
                 } catch (e: unknown) {
                   const msg =

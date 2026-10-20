@@ -67,6 +67,7 @@ import {
   jobCardTechnicianNotesTable,
   externalJobCardPartsTable,
   tasksTable,
+  notificationsTable,
   emailLogsTable,
   technicianTimesheetEntriesTable,
   collisionClaimsTable,
@@ -2060,6 +2061,13 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
 
   const [before] = [order];
   const [updated] = await db.transaction(async tx => {
+    if (target === "resolved" || target === "closed") {
+      // Serialize readiness/pickup with reopen: neither may finish around active work.
+      const cards = await tx.select({ status: jobCardsTable.status }).from(jobCardsTable)
+        .where(and(eq(jobCardsTable.serviceOrderId, order.id), eq(jobCardsTable.dealerId, dealerId)))
+        .orderBy(jobCardsTable.id).for("update");
+      if (cards.some((card) => !["completed", "closed", "cancelled"].includes(card.status))) return [];
+    }
     if (target === "cancelled") {
       const cards = await tx.select().from(jobCardsTable).where(and(
         eq(jobCardsTable.serviceOrderId, order.id), eq(jobCardsTable.dealerId, dealerId),
@@ -2083,11 +2091,16 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
       and(
         eq(serviceOrdersTable.id, order.id),
         eq(serviceOrdersTable.dealerId, dealerId),
+        eq(serviceOrdersTable.status, order.status),
       ),
     )
     .returning();
   });
 
+  if (!updated) {
+    res.status(409).json({ error: "Booking changed or has unfinished job cards. Reload and complete the work before resolving or closing." });
+    return;
+  }
   if (updated && before) onServiceOrderStatusChanged(before, updated);
 
   // Closing the case writes the pickup into the customer's service history.
@@ -3301,6 +3314,11 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     if (updatedCard?.status === "cancelled") {
       await releaseJobPartHolds(tx, existing.dealerId, updatedCard.id);
     }
+    if (updatedCard && ["completed", "closed", "cancelled"].includes(updatedCard.status)) {
+      await tx.update(tasksTable).set({ status: "done", completedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(tasksTable.dealerId, updatedCard.dealerId), eq(tasksTable.kind, "service_reopened"),
+          eq(tasksTable.title, `Urgent action required · Reopened JC #${updatedCard.id}`), eq(tasksTable.status, "open")));
+    }
     if (
       updatedCard &&
       (parsed.data.technicianUserId !== undefined ||
@@ -3313,11 +3331,14 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
         eq(serviceOrdersTable.id, updatedCard.serviceOrderId),
         eq(serviceOrdersTable.dealerId, updatedCard.dealerId),
       ));
+      await tx.update(tasksTable).set({ assigneeUserId: updatedCard.technicianUserId, updatedAt: new Date() })
+        .where(and(eq(tasksTable.dealerId, updatedCard.dealerId), eq(tasksTable.kind, "service_reopened"),
+          eq(tasksTable.title, `Urgent action required · Reopened JC #${updatedCard.id}`), eq(tasksTable.status, "open")));
     }
     if (
       updatedCard &&
-      parsed.data.status === "completed" &&
-      existing.status !== "completed"
+      ["completed", "closed"].includes(parsed.data.status ?? "") &&
+      !["completed", "closed"].includes(existing.status)
     ) {
       const unfinished = await tx.select({ id: jobCardsTable.id }).from(jobCardsTable).where(and(
         eq(jobCardsTable.serviceOrderId, updatedCard.serviceOrderId),
@@ -3344,7 +3365,7 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
         }).where(and(
           eq(serviceOrdersTable.id, updatedCard.serviceOrderId),
           eq(serviceOrdersTable.dealerId, updatedCard.dealerId),
-          sql`${serviceOrdersTable.status} in ('acknowledged', 'in_progress', 'on_hold')`,
+          sql`${serviceOrdersTable.status} in ('open', 'acknowledged', 'in_progress', 'on_hold')`,
         )).returning({ id: serviceOrdersTable.id });
         becameReady = Boolean(resolved);
       }
@@ -3699,21 +3720,27 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
     res.status(409).json({ error: "Complete the pending rollover approvals before reopening this job card." });
     return;
   }
+  const reopenedDay = zonedDayKey(new Date(), await dealerTimezone(existing.dealerId));
   let card: JobCard | undefined;
   try {
-    [card] = await db
+    [card] = await db.transaction(async (tx) => {
+      const [lockedCard] = await tx.select().from(jobCardsTable).where(and(
+        eq(jobCardsTable.id, existing.id),
+        eq(jobCardsTable.dealerId, existing.dealerId),
+      )).for("update");
+      if (!lockedCard || lockedCard.status !== existing.status || !canActOnJobCard(res.locals.user, lockedCard)) return [];
+      const [booking] = await tx.select().from(serviceOrdersTable).where(and(
+        eq(serviceOrdersTable.id, lockedCard.serviceOrderId),
+        eq(serviceOrdersTable.dealerId, lockedCard.dealerId),
+      )).for("update");
+      if (!booking || booking.status === "cancelled") return [];
+      const reopened = await tx
       .update(jobCardsTable)
       .set({
         status: "in_progress",
         completedAt: null,
         timerStartedAt: new Date(),
-        ...(body.data?.reason
-          ? {
-              notes: existing.notes
-                ? `${existing.notes}\nReopened: ${body.data.reason}`
-                : `Reopened: ${body.data.reason}`,
-            }
-          : {}),
+        notes: [lockedCard.notes, `Reopened: ${body.data.reason?.trim() || "Additional work required"}`].filter(Boolean).join("\n"),
       })
       .where(and(
         eq(jobCardsTable.id, existing.id),
@@ -3729,6 +3756,40 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
         )`,
       ))
       .returning();
+      if (!reopened[0]) return [];
+      await tx.update(serviceOrdersTable).set({
+        status: "in_progress",
+        closedAt: null,
+        stageHistory: sql`coalesce(${serviceOrdersTable.stageHistory}, '[]'::jsonb) || ${JSON.stringify([{
+          from: booking.status, to: "in_progress",
+          justification: `Reopened with job card #${lockedCard.id}: ${body.data.reason?.trim() || "Additional work required"}`,
+          byUserId: res.locals.user?.id ?? null,
+          byName: res.locals.user?.name ?? "Service",
+          at: new Date().toISOString(),
+        }])}::jsonb`,
+      }).where(and(eq(serviceOrdersTable.id, booking.id), eq(serviceOrdersTable.dealerId, booking.dealerId)));
+      const taskTitle = `Urgent action required · Reopened JC #${lockedCard.id}`;
+      await tx.update(tasksTable).set({ status: "done", completedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(tasksTable.dealerId, lockedCard.dealerId), eq(tasksTable.kind, "service_reopened"),
+          eq(tasksTable.title, taskTitle), eq(tasksTable.status, "open")));
+      await tx.insert(tasksTable).values({
+        dealerId: lockedCard.dealerId,
+        title: taskTitle,
+        description: `Booking #${booking.id} and job card #${lockedCard.id} were reopened. Please update work progress, labour hours and job-card notes promptly, and complete the card when finished. /service/job-cards/${lockedCard.id}`,
+        assigneeUserId: lockedCard.technicianUserId ?? res.locals.user?.id ?? null,
+        createdByUserId: res.locals.user?.id ?? null,
+        kind: "service_reopened", priority: "high", dueDate: reopenedDay, dueAt: new Date(),
+      });
+      if (lockedCard.technicianUserId != null) {
+        await tx.insert(notificationsTable).values({
+          userId: lockedCard.technicianUserId, dealerId: lockedCard.dealerId, type: "assignment",
+          title: `Urgent action required: job card #${lockedCard.id} reopened`,
+          body: `Booking #${booking.id} was reopened. Please update work progress, labour hours and job-card notes on time, and complete the card when work is finished. ${lockedCard.title}`,
+          link: `/service/job-cards/${lockedCard.id}`,
+        });
+      }
+      return reopened;
+    });
   } catch (err) {
     const pg = err as {
       code?: string;
@@ -3759,6 +3820,10 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
     }
     throw err;
   }
+  if (!card) {
+    res.status(409).json({ error: "Job card or booking changed, or the booking is cancelled. Reload and retry." });
+    return;
+  }
   if (card) {
     const [order] = await db
       .select()
@@ -3773,16 +3838,6 @@ router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
       detail: body.data?.reason ?? null,
       actor: res.locals.user?.name ?? "Service",
     });
-    if (card.technicianUserId != null) {
-      void notifyUser({
-        userId: card.technicianUserId,
-        dealerId: card.dealerId,
-        type: "assignment",
-        title: `Job card #${card.id} reopened`,
-        body: card.title,
-        link: "/workshop",
-      });
-    }
   }
   res.json(ReopenJobCardResponse.parse(card));
 });

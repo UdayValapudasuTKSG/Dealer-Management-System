@@ -92,3 +92,4 @@
 - [Shipment allocation approval](shipment-allocation-approval.md) — BRD approval required before implementation; resolve VIN commitment and shortage fairness against existing holds.
 - [Automatic survey policy](automatic-survey-policy.md) — forward-only activation, elapsed-day delays and one invitation per delivery or service visit.
 - [Service appointment location](service-location-policy.md) — dealer-specific workshop addresses are independent of showroom addresses, with the showroom as the unset fallback.
+- [Reopened service work](service-reopen-policy.md) — reopen booking and job together; urgent technician follow-up ends when the job finishes, while pickup remains a separate closure.

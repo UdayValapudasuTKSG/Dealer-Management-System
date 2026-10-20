@@ -1891,6 +1891,10 @@ function BookingDetailsDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const remind = useSendServiceReminder();
+  const linkedCards = useListJobCards(
+    { serviceOrderId: order?.id ?? 0 },
+    { query: { queryKey: getListJobCardsQueryKey({ serviceOrderId: order?.id ?? 0 }), enabled: open && !!order, refetchInterval: 15000 } },
+  );
   const { data: csatReviews } = useListReviews({ source: "service_csat" });
   const review = order
     ? csatReviews?.find(
@@ -1939,6 +1943,23 @@ function BookingDetailsDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {["open", "acknowledged", "in_progress", "on_hold"].includes(order.status) &&
+            order.stageHistory?.some((event) => event.justification.startsWith("Reopened with job card")) && (
+            <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <strong>Urgent action required — reopened booking</strong>
+              <p>The technician must update and complete the linked job card.</p>
+            </div>
+          )}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">Job cards</h3>
+            {linkedCards.isLoading ? <p className="text-sm text-muted-foreground">Loading job cards…</p>
+              : linkedCards.isError ? <Button variant="outline" onClick={() => linkedCards.refetch()}>Retry loading job cards</Button>
+              : linkedCards.data?.length ? linkedCards.data.map((card) => (
+                <Button key={card.id} asChild variant="outline" size="sm" className="mr-2">
+                  <Link href={`/service/job-cards/${card.id}`}>Open job card #{card.id} · {card.status.replace(/_/g, " ")}</Link>
+                </Button>
+              )) : <p className="text-sm text-muted-foreground">No job card has been created for this booking yet.</p>}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-1">
@@ -2557,7 +2578,7 @@ function BookingsTab() {
     </div>
 
     <BookingDetailsDialog
-      order={selectedOrder}
+      order={orders?.find((order) => order.id === selectedOrder?.id) ?? selectedOrder}
       open={!!selectedOrder}
       onOpenChange={(open) => !open && setSelectedOrder(null)}
       onOrderUpdated={setSelectedOrder}
