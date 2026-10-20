@@ -19,3 +19,9 @@ The user authorized defining fictional products for the five dummy parts when as
 **Why:** Generic brand-only sample names could not establish a classification, and ERPNext requires HSN on item creation.
 
 **How to apply:** Use specific fictional product descriptions with matching entries verified against the ERP HSN catalogue. Treat brands as test accounting buckets, not verified fitment. This authorization does not approve real-stock classifications, tax rules, opening balances or accounting postings.
+
+The user subsequently authorized opening stock for the five isolated dummy parts at the quantities and moving-average costs already held in AURA, and processing the existing independently approved dummy sale.
+
+**Why:** ERP master items alone do not provide saleable stock; the POS posting guard correctly requires matching ERP quantity and valuation.
+
+**How to apply:** Reconcile existing stock ledgers and submitted opening vouchers before any further setup. Never repeat opening balances or alter real inventory. This narrow authorization does not release older Finance-held transactions.
