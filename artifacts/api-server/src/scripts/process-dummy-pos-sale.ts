@@ -1,4 +1,5 @@
 // Explicit one-request operational recovery. No bulk queue drains or hold releases.
+export {};
 if (process.env.PROCESS_DUMMY_POS_SALE !== "1" || !process.env.PROD_DATABASE_URL) throw Error("Explicit opt-in required");
 process.env.DATABASE_URL = process.env.PROD_DATABASE_URL;
 process.env.EXTERNAL_DATABASE_URL = process.env.PROD_DATABASE_URL;

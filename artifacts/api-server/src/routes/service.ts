@@ -1397,7 +1397,8 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
     .from(dealersTable)
     .where(eq(dealersTable.id, order.dealerId))
     .limit(1);
-  const serviceAddress = (await dealerCustomerPolicy(order.dealerId)).showroomAddress;
+  const customerPolicy = await dealerCustomerPolicy(order.dealerId);
+  const serviceAddress = customerPolicy.serviceAddress ?? customerPolicy.showroomAddress;
   const timezone = await dealerTimezone(order.dealerId);
   const customerName = order.customerName?.trim() || contact.name?.trim();
   const dealershipName = dealer?.name?.trim();

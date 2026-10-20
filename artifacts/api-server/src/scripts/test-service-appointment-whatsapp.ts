@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { leadReportWhatsappTemplate } from "../lib/lead-report-whatsapp";
 import { renderEmail } from "../lib/email";
 import {
@@ -9,6 +10,15 @@ import {
 assert.equal(serviceAppointmentVenue("GT Automotive", "220 Camp St, Georgetown"), "GT Automotive — 220 Camp St, Georgetown");
 assert.equal(serviceAppointmentVenue("Other Dealer", "Other\n configured address"), "Other Dealer — Other configured address");
 assert.equal(serviceAppointmentVenue("Other Dealer", null), "Other Dealer");
+// Guard the staff reminder path, not only the conversational bot/email paths:
+// it must resolve the current dealer's service override before the showroom.
+const serviceRoute = readFileSync(new URL("../routes/service.ts", import.meta.url), "utf8");
+assert.match(serviceRoute, /const customerPolicy = await dealerCustomerPolicy\(order\.dealerId\);/);
+assert.match(serviceRoute, /const serviceAddress = customerPolicy\.serviceAddress \?\? customerPolicy\.showroomAddress;/);
+assert.equal(
+  serviceAppointmentVenue("GT Automotive", "5 Vlissengen Road and Dowding Street, Georgetown"),
+  "GT Automotive — 5 Vlissengen Road and Dowding Street, Georgetown",
+);
 for (const template of ["service.appointment.confirmed", "service.appointment.reminder"] as const) {
   const email = renderEmail(template, { location: "220 Camp St, Georgetown", date: "October 10, 2026", time: "9:00 AM" });
   assert.ok(email.html.includes("220 Camp St, Georgetown"));
