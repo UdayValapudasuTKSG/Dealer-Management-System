@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildQuotePdf, type QuotePdfData } from "../lib/quote-pdf";
+import { COMMERCIAL_DOCUMENT_TERMS } from "../lib/commercial-document-terms";
 
 const OUT_DIR = "/tmp/quote-pdf-regression";
 const TIMEZONE = "America/Guyana";
@@ -147,6 +148,7 @@ function assertCommonText(pdf: ExtractedPdf, context: string): void {
   requireText(pdf, TOTAL_TEXT, `${context} money`);
   requireText(pdf, `GYD ${TOTAL_TEXT}`, `${context} GYD total`);
   requireText(pdf, DUTIES_NOTICE, `${context} duties notice`);
+  for (const term of COMMERCIAL_DOCUMENT_TERMS) requireText(pdf, term, `${context} commercial terms`);
 }
 
 function assertLayout(pdf: ExtractedPdf, context: string): void {

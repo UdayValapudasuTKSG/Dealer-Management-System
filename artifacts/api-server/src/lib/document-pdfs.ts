@@ -7,6 +7,7 @@ import type {
   Vehicle,
 } from "@workspace/db";
 import { formatDealerDate } from "./timezone";
+import { COMMERCIAL_DOCUMENT_TERMS, hasCommercialTerms } from "./commercial-document-terms";
 
 /**
  * AURA-branded printable documents: payment receipt, vehicle handover form,
@@ -264,8 +265,9 @@ export function buildInvoicePdfFromPayload(
   return collect((doc) => {
     const amount = Number(payload.amount) || 0;
     const estimate = payload.documentType === "estimate";
-    let y = header(doc, estimate ? "ESTIMATE" : "INVOICE", [
-      `${estimate ? "Estimate" : "Invoice"} ${payload.invoiceNumber ?? ""}`,
+    const title = estimate ? "Estimate" : payload.documentType === "proforma" ? "Proforma invoice" : payload.documentType === "quotation" ? "Quotation" : "Invoice";
+    let y = header(doc, title.toUpperCase(), [
+      `${title} ${payload.invoiceNumber ?? ""}`,
       `${estimate ? "Prepared" : "Issued"} ${fmtDate(payload.issuedAt || new Date(), tz)}`,
     ], branding);
 
@@ -310,6 +312,21 @@ export function buildInvoicePdfFromPayload(
     }
     y = detailRows(doc, rows, y);
 
+    // Keep the entire terms block above the fixed footer; never clip it or
+    // let PDFKit implicitly create sparse continuation pages.
+    if (hasCommercialTerms(payload)) {
+      const terms = COMMERCIAL_DOCUMENT_TERMS.map(term => `• ${term}`).join("\n\n");
+      doc.font("Helvetica").fontSize(9);
+      const termsHeight = doc.heightOfString(terms, { width: contentW, lineGap: 2 });
+      if (y + 20 + termsHeight + 70 > doc.page.height - 100) {
+        doc.addPage(); y = 54;
+      }
+      y = sectionLabel(doc, "TERMS AND CONDITIONS", y);
+      doc.font("Helvetica").fontSize(9).fillColor("#555555")
+        .text(terms, LEFT, y, { width: contentW, lineGap: 2 });
+      y += termsHeight + 20;
+    }
+    if (y + 45 > doc.page.height - 100) { doc.addPage(); y = 54; }
     doc
       .font("Helvetica")
       .fontSize(9)

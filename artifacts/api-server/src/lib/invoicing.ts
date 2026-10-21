@@ -141,7 +141,16 @@ async function notifyInvoiceIssued(invoice: Invoice): Promise<void> {
         )
     : [];
 
+  // Snapshot applicability at issue time, not at retry time. A later delivery
+  // must not silently rewrite the terms of an already-issued invoice.
+  const [salesDeal] = invoice.dealId == null ? [] : await db
+    .select({ stage: dealsTable.stage })
+    .from(dealsTable)
+    .where(and(eq(dealsTable.id, invoice.dealId), eq(dealsTable.dealerId, invoice.dealerId)));
+  const salesTermsApplicable = invoice.kind === "reservation" ||
+    Boolean(salesDeal && !["delivered", "cancelled"].includes(salesDeal.stage));
   const data: Record<string, string> = {
+    salesTermsApplicable: String(salesTermsApplicable),
     invoiceNumber: invoice.invoiceNumber,
     customerName: invoice.customerName,
     amount: String(invoice.amount),

@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { zonedParts } from "./timezone";
+import { COMMERCIAL_DOCUMENT_TERMS } from "./commercial-document-terms";
 
 export type QuotePdfData = Record<string, string>;
 
@@ -499,8 +500,8 @@ export function buildQuotePdf(
       `All vehicles are subject to availability at the time of order confirmation. ` +
       `Allocation is on a first-come, first-served basis and is not guaranteed until a ` +
       `deposit or bank letter of undertaking is received and confirmed by ${dealerName}. ` +
-      `Pricing, availability, and colors may change without notice. This quotation ` +
-      `${validityClause} and does not constitute a binding agreement.`;
+      `This quotation ${validityClause} and does not constitute a binding agreement.\n\n` +
+      COMMERCIAL_DOCUMENT_TERMS.map(term => `• ${term}`).join("\n\n");
     doc.font("Helvetica").fontSize(8);
     const disclaimerHeight = Math.max(
       10,
@@ -647,7 +648,7 @@ export function buildQuotePdf(
       closeY += 32;
 
       doc.font("Helvetica-Bold").fontSize(8.5).fillColor(LABEL_GREY)
-        .text("DISCLAIMER", left, closeY, { characterSpacing: 0.5 });
+        .text("TERMS AND CONDITIONS", left, closeY, { characterSpacing: 0.5 });
       doc.font("Helvetica").fontSize(8).fillColor(LABEL_GREY)
         .text(disclaimer, left, closeY + 14, {
           width: contentW,

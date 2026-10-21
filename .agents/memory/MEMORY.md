@@ -65,6 +65,7 @@
 - [Vehicle interests are specifications](vehicle-interest-specifications.md) — leads capture desired vehicle specs and price; physical VINs are assigned only when a deal commits.
 - [Dealership timezone conventions](dealer-timezone.md) — UTC storage, zoned presentation only; resolve dealerTimezone(dealerId) server-side, dealerDayKey client-side; date-only strings never shift a day.
 - [PDFKit bounded layouts](pdfkit-bounded-layouts.md) — narrow columns and explicit coordinates beyond A4 can explode one quote into many sparse pages; stress-test maximum payloads.
+- [Commercial document terms](commercial-document-terms.md) — approved terms apply to quotes, estimates, proformas and pre-delivery sales invoices, not receipts, reports or uploaded originals.
 - [Dev-only verify guards](dev-only-verify-guards.md) — fixture verify suites must allowlist the dev DB, guard before DB imports, scope sweeps to fixture dealers, and disable the outbox worker.
 - [Amber Connect module](amber-connect-module.md) — first OPT-IN entitlement (missing = disabled) via isEntitlementEnabled + mirrored client lists; provider adapter seam, no invented Amber endpoints.
 - [Collision claims module](collision-claims.md) — claims layer over repair orders; in-route approver checks, FOR UPDATE settlement caps, drizzle 23505 lives in err.cause.
