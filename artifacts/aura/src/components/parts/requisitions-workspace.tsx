@@ -28,7 +28,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SearchableSelect } from "@/components/create-record-dialog";
+import { InventoryPartSelect } from "./inventory-part-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Search, Loader2, FileText, CheckCircle, XCircle, ShoppingCart, Truck, Ban, Link as LinkIcon, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -178,7 +178,6 @@ function CreateInventoryRequisitionDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const create = useCreateInventoryPartRequisition();
-  const { data: parts } = useListParts();
   const [urgency, setUrgency] = useState<PartRequisitionUrgency>("routine");
   const [needBy, setNeedBy] = useState("");
   const [notes, setNotes] = useState("");
@@ -271,11 +270,10 @@ function CreateInventoryRequisitionDialog({
             </div>
             {lines.map((line, index) => (
               <div key={index} className="grid grid-cols-[1fr_110px_40px] gap-3 items-center">
-                <SearchableSelect
+                <InventoryPartSelect
                   value={line.partId}
                   onChange={(value) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, partId: value } : item))}
-                  options={parts?.filter((part) => part.status === "active").map((part) => ({ value: String(part.id), label: `${part.sku} — ${part.name} (${part.stock} on hand)` })) ?? []}
-                  placeholder="Select inventory part"
+                  activeOnly
                   ariaLabel={`Inventory part ${index + 1}`}
                 />
                 <Input type="number" min={1} value={line.quantity} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Number(event.target.value) } : item))} className="border-white/10 bg-white/[0.03]" />

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useCreateJobCardPartRequisition, useListParts } from "@workspace/api-client-react";
+import { useCreateJobCardPartRequisition } from "@workspace/api-client-react";
+import { InventoryPartSelect } from "@/components/parts/inventory-part-select";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,6 @@ export function PartRequisitionForm({ cardId, serviceOrderId, onSuccess }: { car
   const [lines, setLines] = useState<any[]>([{ id: 1, source: "INTERNAL", partId: "", quantity: 1 }]);
   const create = useCreateJobCardPartRequisition();
   
-  const { data: parts } = useListParts();
 
   const addLine = () => setLines([...lines, { id: Date.now(), source: "INTERNAL", partId: "", quantity: 1 }]);
   const removeLine = (id: number) => setLines(lines.filter(l => l.id !== id));
@@ -121,18 +121,7 @@ export function PartRequisitionForm({ cardId, serviceOrderId, onSuccess }: { car
                 </div>
                 
                 {l.source === "INTERNAL" ? (
-                  <Select value={l.partId} onValueChange={v => updateLine(l.id, "partId", v)}>
-                    <SelectTrigger className="bg-white/[0.03] border-white/10">
-                      <SelectValue placeholder="Search inventory..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {parts?.map(p => (
-                        <SelectItem key={p.id} value={p.id.toString()}>
-                          {p.sku} — {p.name} ({p.stock} in stock)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <InventoryPartSelect value={l.partId} onChange={v => updateLine(l.id, "partId", v)} ariaLabel={`Requested part ${i + 1}`} />
                 ) : (
                   <div className="space-y-3">
                     <Input placeholder="Part description / Part Number" value={l.description || ""} onChange={e => updateLine(l.id, "description", e.target.value)} className="bg-white/[0.03] border-white/10" />

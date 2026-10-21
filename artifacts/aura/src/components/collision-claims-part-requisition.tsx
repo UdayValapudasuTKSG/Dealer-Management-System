@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   useCreateCollisionClaimPartRequisition,
-  useListParts,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, X } from "lucide-react";
+import { InventoryPartSelect } from "@/components/parts/inventory-part-select";
 
 export function CollisionPartRequisitionForm({ claimId, serviceOrderId, onSuccess }: { claimId: number, serviceOrderId: number, onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
@@ -20,7 +20,6 @@ export function CollisionPartRequisitionForm({ claimId, serviceOrderId, onSucces
   const [lines, setLines] = useState<any[]>([{ id: 1, source: "INTERNAL", partId: "", quantity: 1 }]);
   
   const create = useCreateCollisionClaimPartRequisition();
-  const { data: parts } = useListParts();
 
   const addLine = () => setLines([...lines, { id: Date.now(), source: "INTERNAL", partId: "", quantity: 1 }]);
   const removeLine = (id: number) => setLines(lines.filter(l => l.id !== id));
@@ -124,18 +123,7 @@ export function CollisionPartRequisitionForm({ claimId, serviceOrderId, onSucces
                 </div>
                 
                 {l.source === "INTERNAL" ? (
-                  <Select value={l.partId} onValueChange={v => updateLine(l.id, "partId", v)}>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Search inventory..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {parts?.map(p => (
-                        <SelectItem key={p.id} value={p.id.toString()}>
-                          {p.sku} — {p.name} ({p.stock} in stock)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <InventoryPartSelect value={l.partId} onChange={v => updateLine(l.id, "partId", v)} ariaLabel={`Requested part ${i + 1}`} />
                 ) : (
                   <div className="space-y-3">
                     <Input placeholder="Part description / Part Number" value={l.description || ""} onChange={e => updateLine(l.id, "description", e.target.value)} className="bg-background" />
