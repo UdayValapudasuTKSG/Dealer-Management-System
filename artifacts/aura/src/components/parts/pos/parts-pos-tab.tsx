@@ -7,6 +7,7 @@ import { PosSaleForm } from "./pos-sale-form";
 import { PosReturnForm } from "./pos-return-form";
 import { PosPaymentForm, PosShiftCloseForm } from "./pos-payment-close-forms";
 import { PosRequestsList } from "./pos-requests-list";
+import { useAuthz } from "@/lib/auth";
 
 const VIEWS = [
   { key: "sale", label: "New sale" },
@@ -19,6 +20,7 @@ const VIEWS = [
 type View = (typeof VIEWS)[number]["key"];
 
 export function PartsPosTab() {
+  const { activeDealer } = useAuthz();
   const { data, isLoading, isError, refetch } = usePartsPos();
   const [view, setView] = useState<View>("sale");
 
@@ -41,7 +43,7 @@ export function PartsPosTab() {
           </button>
         ))}
       </div>
-      {view === "sale" && <PosSaleForm state={data} />}
+      {view === "sale" && <PosSaleForm key={activeDealer?.dealerId} state={data} />}
       {view === "return" && <PosReturnForm state={data} />}
       {view === "payment" && <PosPaymentForm state={data} />}
       {view === "close" && <PosShiftCloseForm state={data} />}

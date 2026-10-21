@@ -28,7 +28,9 @@ export function PartBarcodeScanner({ onScan, disabled = false }: PartBarcodeScan
   const [open, setOpen] = React.useState(false);
   const [manualValue, setManualValue] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [camera, setCamera] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
   const controlsRef = React.useRef<IScannerControls | null>(null);
   const lastReadRef = React.useRef<{ value: string; at: number } | null>(null);
 
@@ -62,7 +64,7 @@ export function PartBarcodeScanner({ onScan, disabled = false }: PartBarcodeScan
   );
 
   React.useEffect(() => {
-    if (!open) {
+    if (!open || !camera) {
       stopCamera();
       return;
     }
@@ -98,13 +100,13 @@ export function PartBarcodeScanner({ onScan, disabled = false }: PartBarcodeScan
       cancelled = true;
       stopCamera();
     };
-  }, [deliver, open, stopCamera]);
+  }, [deliver, open, camera, stopCamera]);
 
   React.useEffect(() => () => stopCamera(), [stopCamera]);
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)} disabled={disabled} aria-label="Scan part barcode">
+      <Button type="button" variant="outline" onClick={() => { setCamera(false); setManualValue(""); setError(null); lastReadRef.current = null; setOpen(true); }} disabled={disabled} aria-label="Scan part barcode">
         <ScanBarcode aria-hidden="true" />
         Scan barcode
       </Button>
@@ -116,35 +118,39 @@ export function PartBarcodeScanner({ onScan, disabled = false }: PartBarcodeScan
           setOpen(nextOpen);
         }}
       >
-        <DialogContent className="w-[calc(100%-2rem)] max-w-md">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md" onOpenAutoFocus={event => { event.preventDefault(); inputRef.current?.focus(); }}>
           <DialogHeader>
             <DialogTitle>Scan part barcode</DialogTitle>
-            <DialogDescription>Point the camera at a UPC or Code 128 barcode, or enter it manually.</DialogDescription>
+            <DialogDescription>Scan with your USB or Bluetooth scanner in keyboard (HID) mode, then press Enter if needed. You can also type a code or use a camera.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-black">
+            <Button type="button" variant="outline" onClick={() => setCamera(!camera)}>{camera ? "Stop camera" : "Use camera instead"}</Button>
+            {camera && <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-black">
               <video ref={videoRef} className="h-full w-full object-cover" autoPlay muted playsInline aria-label="Barcode camera preview" />
               <div className="pointer-events-none absolute inset-[18%_8%] rounded border-2 border-primary/80" aria-hidden="true" />
-            </div>
+            </div>}
             {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-            <form
-              className="flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                deliver(manualValue);
-              }}
-            >
+            <div className="flex gap-2">
               <Input
+                ref={inputRef}
                 value={manualValue}
                 onChange={(event) => setManualValue(event.target.value)}
-                placeholder="Enter barcode"
+                autoFocus
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    deliver(manualValue);
+                  }
+                }}
+                placeholder="Scan or enter barcode / SKU"
                 aria-label="Barcode value"
                 autoComplete="off"
-                inputMode="numeric"
+                inputMode="text"
               />
-              <Button type="submit" disabled={!manualValue.trim()}>Use code</Button>
-            </form>
+              <Button type="button" onClick={() => deliver(manualValue)} disabled={!manualValue.trim()}>Use code</Button>
+            </div>
           </div>
 
           <DialogFooter>

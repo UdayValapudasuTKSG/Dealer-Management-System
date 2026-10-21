@@ -78,6 +78,7 @@
 - [Historical delivery settlement](historical-delivery-settlement.md) — user confirmed the approved ten-vehicle GT history batch was paid and handed over externally; never fabricate local receipts or dates.
 - [Parts stock timing](parts-stock-timing.md) — reserve on attachment, deduct at physical issue, bill only unissued quantities; never deduct historical issues twice.
 - [Parts POS F2](parts-pos-f2.md) — shift cash transfers and actual variances are separate; dummy parts stay isolated and ERP stock must move only once.
+- [Parts scanner scope](parts-scanner-scope.md) — Inateck HID scans autofill dealer-scoped catalogue/POS drafts, never auto-submit or alter stock; vehicle scanning is deferred.
 - [ERP queue fairness](erp-queue-fairness.md) — unreachable enabled dealers can monopolize oldest-first retries and delay approved jobs for healthy dealers.
 - [Parts import compatibility](parts-import-compatibility.md) — supplied pricing layouts extend the catalog template; they must not replace or drop broader parts fields.
 - [PO template branding](po-template-branding.md) — use active-dealership branding; sample contacts and payment terms are not universal defaults.

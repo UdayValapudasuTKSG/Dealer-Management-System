@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useListPagination } from "@/components/parts/list-pagination";
 import {
   useListParts,
+  listParts,
   useUpdatePart,
   type Part,
   type PartUpdate,
@@ -76,6 +77,7 @@ import { CreatePartDialog } from "@/components/parts/create-part-dialog";
 import { PartStorageDialog } from "@/components/parts/part-storage-dialog";
 import { PurchaseOrderImportDialog } from "@/components/parts/purchase-order-import-dialog";
 import { PartBarcodeScanner } from "@/components/parts/part-barcode-scanner";
+import { matchingParts } from "@/components/parts/barcode-match";
 import {
   PricingBreakdownDialog,
   PricingDetailsEditor,
@@ -239,7 +241,7 @@ export default function Parts() {
       subtitle="Stock, suppliers and purchasing — the workshop's supply line."
       action={
         tab === "parts" ? (
-          <CreatePartDialog />
+          <div className="flex flex-wrap items-center gap-2"><CatalogueBarcodeLookup />{can("parts", "create") && <CreatePartDialog />}</div>
         ) : tab === "requisitions" ? (
           <CreateInventoryRequisitionButton />
         ) : tab === "suppliers" ? (
@@ -306,7 +308,35 @@ export default function Parts() {
   );
 }
 
-function EditPartDialog({ part }: { part: Part & { barcode?: string; description?: string; costingMethod?: string; reorderMax?: number; active?: boolean; quantityAvailable?: number; quantityReserved?: number } }) {
+function CatalogueBarcodeLookup() {
+  const { can, activeDealer } = useAuthz();
+  return <DealerCatalogueBarcodeLookup key={activeDealer?.dealerId} canEdit={can("parts", "edit")} canCreate={can("parts", "create")} />;
+}
+
+function DealerCatalogueBarcodeLookup({ canEdit, canCreate }: { canEdit: boolean; canCreate: boolean }) {
+  const [part, setPart] = useState<Part | null>(null);
+  const [unknown, setUnknown] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  return <div className="space-y-2">
+    <PartBarcodeScanner disabled={busy || !canEdit} onScan={async code => {
+      setBusy(true); setError(""); setUnknown(""); setPart(null);
+      try {
+        const matches = matchingParts(await listParts({ search: code }), code);
+        if (matches.length === 1) setPart(matches[0]);
+        else if (matches.length > 1) setError("Multiple parts match this code. Find and select the correct part in the catalogue.");
+        else setUnknown(code);
+      } catch { setError("Could not look up this barcode. Please retry."); }
+      finally { setBusy(false); }
+    }} />
+    {busy && <p role="status" className="text-sm">Looking up part…</p>}
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {unknown && <div className="text-sm">No part found for <strong>{unknown}</strong>. {canCreate ? <CreatePartDialog key={unknown} initialBarcode={unknown} /> : "Ask a parts administrator to add it."}</div>}
+    {part && <EditPartDialog key={part.id} part={part} open onOpenChange={open => { if (!open) setPart(null); }} />}
+  </div>;
+}
+
+function EditPartDialog({ part, open, onOpenChange }: { part: Part; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const update = useUpdatePart();
@@ -314,6 +344,8 @@ function EditPartDialog({ part }: { part: Part & { barcode?: string; description
   return (
     <CreateRecordDialog
       title={`Edit ${part.name}`}
+      open={open}
+      onOpenChange={onOpenChange}
       description="Update pricing, stock and details for this part."
       pending={update.isPending}
       submitLabel="Save changes"
@@ -330,7 +362,8 @@ function EditPartDialog({ part }: { part: Part & { barcode?: string; description
       }
       fields={[
         { name: "sku", label: "Part no.", type: "text", required: true, span: "half", defaultValue: part.sku },
-        { name: "barcode", label: "Barcode", type: "text", span: "half", defaultValue: part.barcode ?? "" },
+        { name: "barcode", label: "Barcode", type: "custom", span: "full", defaultValue: part.barcode ?? "",
+          render: (value, set) => <div className="flex gap-2"><Input aria-label="Part barcode" value={value} onChange={e => set(e.target.value)} onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }} /><PartBarcodeScanner onScan={set} /></div> },
         { name: "name", label: "Part name", type: "text", required: true, span: "half", defaultValue: part.name },
         { name: "make", label: "Vehicle make", type: "text", span: "half", defaultValue: part.make ?? "" },
         { name: "description", label: "Description", type: "text", span: "half", defaultValue: part.description ?? "" },
@@ -403,6 +436,7 @@ function EditPartDialog({ part }: { part: Part & { barcode?: string; description
         });
         queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
         toast({ title: "Part updated" });
+        queryClient.invalidateQueries({ queryKey: ["parts-pos"] });
       }}
     />
   );

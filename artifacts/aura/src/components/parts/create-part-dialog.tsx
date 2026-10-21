@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { PricingDetailsEditor, pricingDetailsDraftError, pricingDetailsFromDraft } from "./pricing-details";
+import { PartBarcodeScanner } from "./part-barcode-scanner";
+import { Input } from "@/components/ui/input";
 
-export function CreatePartDialog() {
+export function CreatePartDialog({ initialBarcode = "" }: { initialBarcode?: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const create = useCreatePart();
@@ -34,7 +36,8 @@ export function CreatePartDialog() {
       }
       fields={[
         { name: "sku", label: "Part no.", type: "text", required: true, span: "half", placeholder: "13691814-00" },
-        { name: "barcode", label: "Barcode", type: "text", span: "half", placeholder: "Scan or enter..." },
+        { name: "barcode", label: "Barcode", type: "custom", span: "full", defaultValue: initialBarcode,
+          render: (value, set) => <div className="flex gap-2"><Input aria-label="Part barcode" value={value} onChange={e => set(e.target.value)} onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }} /><PartBarcodeScanner onScan={set} /></div> },
         { name: "name", label: "Part name", type: "text", required: true, span: "half", placeholder: "Engine oil filter" },
         { name: "make", label: "Vehicle make", type: "text", span: "half", placeholder: "Toyota" },
         { name: "description", label: "Description", type: "text", span: "half" },
@@ -83,6 +86,7 @@ export function CreatePartDialog() {
         };
         await create.mutateAsync({ data });
         queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["parts-pos"] });
         toast({ title: "Part added" });
       }}
     />

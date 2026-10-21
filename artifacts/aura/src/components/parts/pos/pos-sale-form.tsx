@@ -8,10 +8,17 @@ import { useMoney } from "@/lib/format";
 import { errorText, round2, usePosAction, useRequestKey, type PosState, type Tender } from "./pos-api";
 import { ErrorBox, Field, TenderRows, fieldCls, tenderTotal, validTenders } from "./pos-shared";
 import { PartBarcodeScanner } from "../part-barcode-scanner";
+import { matchingParts } from "../barcode-match";
+import { CreatePartDialog } from "../create-part-dialog";
+import { useAuthz } from "@/lib/auth";
+import { listParts } from "@workspace/api-client-react";
 
 type Row = { partId: string; quantity: number };
 
 export function PosSaleForm({ state }: { state: PosState }) {
+  const { can } = useAuthz();
+  const [unknownBarcode, setUnknownBarcode] = useState("");
+  const [lookingUp, setLookingUp] = useState(false);
   const money = useMoney();
   const { toast } = useToast();
   const act = usePosAction();
@@ -50,15 +57,31 @@ export function PosSaleForm({ state }: { state: PosState }) {
 
   return (
     <div className="glass-panel rounded-2xl p-4 space-y-4">
-      <PartBarcodeScanner disabled={!state.canEdit || act.isPending} onScan={value => {
-        const matches = state.parts.filter(p => p.sku.toLowerCase() === value.toLowerCase() || p.barcode === value);
-        if (matches.length !== 1) { setErr(matches.length ? "Barcode matches multiple parts; select the correct part manually." : "No part matches this barcode or SKU."); return; }
+      <PartBarcodeScanner disabled={!state.canEdit || act.isPending || lookingUp} onScan={async value => {
+        setUnknownBarcode("");
+        const matches = matchingParts(state.parts, value);
+        if (matches.length !== 1) {
+          if (matches.length) { setErr("Barcode matches multiple parts; select the correct part manually."); return; }
+          setLookingUp(true);
+          try {
+            const catalogueMatches = matchingParts(await listParts({ search: value }), value);
+            if (catalogueMatches.length) setErr("This code exists in the catalogue but is not available in this POS list. Check its active status or refresh the parts counter.");
+            else { setUnknownBarcode(value); setErr("No part matches this barcode or SKU in this dealership."); }
+          } catch { setErr("Could not check the catalogue. Please retry the scan."); }
+          finally { setLookingUp(false); }
+          return;
+        }
         const id = String(matches[0].id);
         setRows(current => current.some(r => r.partId === id)
           ? current.map(r => r.partId === id ? { ...r, quantity: r.quantity + 1 } : r)
           : [...current.filter(r => r.partId), { partId: id, quantity: 1 }]);
         setErr(null);
       }} />
+      {lookingUp && <p role="status" className="text-sm">Checking the parts catalogue…</p>}
+      {unknownBarcode && can("parts", "create") && <div className="space-y-2 text-sm">
+        <p>Add a missing part with barcode <strong>{unknownBarcode}</strong>. New parts need stock and ERP mappings before they can be posted through POS.</p>
+        <CreatePartDialog key={unknownBarcode} initialBarcode={unknownBarcode} />
+      </div>}
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Reference"><Input value={reference} onChange={(e) => setReference(e.target.value)} className={fieldCls} placeholder="Counter slip no." data-testid="input-sale-reference" /></Field>
         <Field label="Account customer" hint="Required when not fully paid"><SearchableSelect value={customerId} onChange={setCustomerId} options={[{ value: "", label: "Walk-in (no account)" }, ...state.customers.map((c) => ({ value: String(c.id), label: c.name }))]} placeholder="Walk-in" ariaLabel="Customer" className="rounded-xl" /></Field>
@@ -73,6 +96,7 @@ export function PosSaleForm({ state }: { state: PosState }) {
               <Input type="number" min={1} step={1} value={r.quantity} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, quantity: Number(e.target.value) } : x)))} className={`${fieldCls} text-right`} data-testid={`input-sale-qty-${i}`} />
               <span className="text-right text-sm tabular-nums text-muted-foreground">{p ? money.gyd((p.unitPrice ?? 0) * (r.quantity || 0)) : "—"}</span>
               <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setRows(rows.filter((_, j) => j !== i))} aria-label="Remove line"><Trash2 className="h-3.5 w-3.5" /></Button>
+              {p && <p className="sm:col-span-4 text-xs text-muted-foreground">{p.make || "Brand not recorded"} · Unit price {money.gyd(p.unitPrice)} · {p.quantityAvailable != null ? `Available ${p.quantityAvailable}` : `Stock on hand ${p.stock ?? "not available"}`}</p>}
             </div>
           );
         })}
